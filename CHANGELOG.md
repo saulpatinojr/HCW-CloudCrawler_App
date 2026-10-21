@@ -13,6 +13,20 @@ once, merge one before rebasing the next.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Security
+
+## [0.1.0] - 2026-10-21
+
+The first release of the engine `cloud-crawler-core` 0.1.0 and the App edition 0.1.0, as merged in
+[saulpatinojr/HCW-CloudCrawler_App#2](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/2). The release
+workflows attach the engine wheel the AddOn adopts (ADR 0002).
+
+### Added
+
 - **First implementation slice of Cloud Crawler, App edition** (website
   proposal *Azure Architecture MCP Appliance on Azure MCP Server 3.0*,
   section 28).
