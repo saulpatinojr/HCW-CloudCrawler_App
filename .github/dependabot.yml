@@ -1,0 +1,53 @@
+# Dependabot baseline
+#
+# Keep only update blocks whose manifest or definition files exist. A block
+# for a missing path causes configuration noise and does not provide coverage.
+# Review labels and ownership against the target repository before installation.
+
+version: 2
+updates:
+  # GitHub Actions under .github/workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+  # Python workspace: pyproject.toml and uv.lock at the root (the engine package is a workspace member).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    ignore:
+      # The Azure MCP contract is pinned by ADR 0001; the mcp SDK is bumped by hand with the snapshot re-run.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
+
+# Optional additional directories. Copy and adapt only when the paths exist.
+#
+#  - package-ecosystem: "npm"
+#    directory: "/apps/example"
+#    schedule:
+#      interval: "weekly"
+#    open-pull-requests-limit: 5
+#
+#  - package-ecosystem: "terraform"
+#    directory: "/infra/example"
+#    schedule:
+#      interval: "weekly"
+#    open-pull-requests-limit: 5
