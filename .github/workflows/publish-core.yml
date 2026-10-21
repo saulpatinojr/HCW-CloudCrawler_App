@@ -1,8 +1,10 @@
-# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem) proposes updates.
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
+# proposes updates.
 # On every v* tag: build the cloud-crawler-core wheel and sdist, verify the wheel carries the detector registry, no
 # cloud SDK import and no Azure endpoint, attach both to the GitHub Release (release.yml creates it), attest
 # provenance. The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by
-# URL on its CORE_REF line (https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl)
+# URL on its CORE_REF line
+# (https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl)
 # and by the sha256 `uv lock` records; its core-update.yml bumps the tag. A git+https pin cannot be verified by the
 # AddOn image's `pip install --require-hashes`, which is why the asset, not the tag, is the contract.
 # PyPI trusted publishing is gated on the repository variable PYPI_ENABLED == 'true': `uv publish --trusted-publishing

@@ -105,7 +105,11 @@ once, merge one before rebasing the next.
   `gte`/`lte` expectations refuse booleans; `evidence_ingest` and
   `drift_evaluate` declare `idempotentHint: false`; every workflow checkout
   sets `persist-credentials: false`; the Dockerfile tolerates only the pip
-  uninstall; the storage account naming exception is documented.
+  uninstall; the storage account naming exception is documented. The
+  repository's own linters, as Qlty runs them, pass locally: bandit (the
+  assert in `adr_accept` is an explicit check, the bind is annotated),
+  yamllint (spaced one-line mappings allowed by `.yamllint.yaml`, long
+  workflow lines wrapped), markdownlint and shellcheck.
 
 ### Fixed
 

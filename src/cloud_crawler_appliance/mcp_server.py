@@ -377,7 +377,8 @@ def build_mcp_server(
         actor = _actor(actorId)
         record = decision_or_error(decisionId)
         if record.status is DecisionStatus.ACCEPTED:
-            assert record.acceptedBy is not None and record.acceptedAt is not None  # by construction below
+            if record.acceptedBy is None or record.acceptedAt is None:
+                raise ToolError("invalid_state: the decision is accepted but carries no acceptance record")
             return DecisionAccepted(
                 decisionId=record.decisionId,
                 version=record.version,

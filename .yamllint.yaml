@@ -11,3 +11,8 @@ rules:
     allowed-values: ["true", "false", "on"]   # GitHub Actions uses `on:`
   comments:
     min-spaces-from-content: 1
+  # The workflows write one-line mappings as `with: { key: value }`, the style every repository of the program
+  # uses; the default rule allows no space inside the braces.
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1

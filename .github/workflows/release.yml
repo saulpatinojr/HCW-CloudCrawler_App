@@ -1,4 +1,5 @@
-# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem) proposes updates.
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
+# proposes updates.
 # Creates the GitHub Release for a v* tag from the matching CHANGELOG.md section (publish-core.yml attaches the
 # engine wheel and sdist to it). Uses gh with GITHUB_TOKEN; no third-party action. The tag's version must match the
 # engine package version in packages/cloud-crawler-core/pyproject.toml, or the AddOn's CORE_REF line would name a
@@ -21,8 +22,11 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF#refs/tags/}"
-          version="$(grep -E '^version = ' packages/cloud-crawler-core/pyproject.toml | head -1 | sed -E 's/version = "(.*)"/\1/')"
-          if [ "v$version" != "$tag" ]; then echo "::error::tag $tag does not match cloud-crawler-core version $version"; exit 1; fi
+          line="$(grep -E '^version = ' packages/cloud-crawler-core/pyproject.toml | head -1)"
+          version="$(printf '%s' "$line" | sed -E 's/version = "(.*)"/\1/')"
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::tag $tag does not match cloud-crawler-core version $version"; exit 1
+          fi
       - name: Release notes from CHANGELOG.md
         id: notes
         run: |
@@ -30,7 +34,10 @@ jobs:
           tag="${GITHUB_REF#refs/tags/}"
           version="${tag#v}"
           awk -v v="$version" '
-            /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, v " ") || index($0, "— " v)) { found = 1; next } }
+            /^## / {
+              if (found) exit
+              if (index($0, "[" v "]") || index($0, v " ") || index($0, "— " v)) { found = 1; next }
+            }
             found { print }
           ' CHANGELOG.md > /tmp/notes.md
           if ! [ -s /tmp/notes.md ]; then echo "See CHANGELOG.md for $tag." > /tmp/notes.md; fi

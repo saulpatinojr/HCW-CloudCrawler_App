@@ -26,7 +26,7 @@ def main() -> int:
 
     uvicorn.run(
         app,
-        host="0.0.0.0",  # noqa: S104 - the container ingress is the only listener in front of this port
+        host="0.0.0.0",  # noqa: S104 # nosec B104 - the container ingress is the only listener in front of this port
         port=settings.port,
         access_log=False,
         proxy_headers=False,
