@@ -1,0 +1,50 @@
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
+# proposes updates.
+# On every v* tag: build the cloud-crawler-core wheel and sdist, verify the wheel carries the detector registry, no
+# cloud SDK import and no Azure endpoint, attach both to the GitHub Release (release.yml creates it), attest
+# provenance. The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by
+# URL on its CORE_REF line
+# (https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl)
+# and by the sha256 `uv lock` records; its core-update.yml bumps the tag. A git+https pin cannot be verified by the
+# AddOn image's `pip install --require-hashes`, which is why the asset, not the tag, is the contract.
+# PyPI trusted publishing is gated on the repository variable PYPI_ENABLED == 'true': `uv publish --trusted-publishing
+# always` exchanges the job's OIDC token with PyPI; no registry token exists anywhere.
+name: publish-core
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-verify-attach:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with: { python-version: "3.14" }
+      - run: python -m pip install "uv==0.11.32"
+      - run: uv build --package cloud-crawler-core --out-dir dist
+      - name: The wheel carries the engine, no cloud SDK import, no HTTP client and no Azure endpoint
+        run: uv run --no-project --with pydantic python scripts/verify-core-wheel.py dist/cloud_crawler_core-*.whl
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with: { subject-path: "dist/*" }
+      - name: Attach the wheel and sdist to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          for i in 1 2 3 4 5 6; do gh release view "$tag" >/dev/null 2>&1 && break; sleep 10; done
+          gh release upload "$tag" dist/* --clobber
+      - name: PyPI trusted publishing (repository variable PYPI_ENABLED)
+        if: startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'
+        run: uv publish --trusted-publishing always dist/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: cloud-crawler-core-dist, path: dist, if-no-files-found: error }

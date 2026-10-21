@@ -1,0 +1,57 @@
+[project]
+name = "cloud-crawler-appliance"
+version = "0.1.0"
+description = "Hybrid Cloud Works Cloud Crawler, App edition: an evidence ledger, architecture decision records, deterministic drift detection and review proposals over Azure MCP Server 3.0."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14.6,<3.15"
+dependencies = [
+  "cloud-crawler-core",
+  "fastapi==0.143.3",
+  "uvicorn==0.54.0",
+  "pydantic==2.14.0",
+  "mcp==2.3.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.17.1",
+  "httpx==0.28.1",
+  "pip-audit==2.10.1",
+]
+
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cloud_crawler_appliance"]
+
+[tool.uv]
+workspace = { members = ["packages/cloud-crawler-core"] }
+
+[tool.uv.sources]
+cloud-crawler-core = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages/cloud-crawler-core/tests"]
+addopts = "-ra -m 'not azmcp'"
+markers = [
+  "azmcp: starts the real Azure MCP Server 3.0.0 through npx (needs Node.js and network; no Azure sign-in)",
+]
+filterwarnings = [
+  "error::DeprecationWarning:cloud_crawler_core",
+  "error::DeprecationWarning:cloud_crawler_appliance",
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+
+[tool.coverage.run]
+source = ["packages/cloud-crawler-core/src", "src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+skip_empty = true

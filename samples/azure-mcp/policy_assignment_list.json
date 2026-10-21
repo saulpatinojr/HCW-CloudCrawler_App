@@ -1,0 +1,20 @@
+{
+  "tool": "policy_assignment_list",
+  "arguments": { "subscription": "00000000-0000-0000-0000-000000000001" },
+  "serverInfo": { "name": "Azure MCP Server", "version": "3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b" },
+  "protocolVersion": "2026-07-28",
+  "content": "1 policy assignment",
+  "structuredContent": {
+    "assignments": [
+      {
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000001/providers/Microsoft.Authorization/policyAssignments/hcw-sample-baseline",
+        "name": "hcw-sample-baseline",
+        "type": "Microsoft.Authorization/policyAssignments",
+        "displayName": "HCW sample baseline initiative",
+        "policyDefinitionId": "/providers/Microsoft.Authorization/policySetDefinitions/00000000-0000-0000-0000-000000000031",
+        "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+        "enforcementMode": "Default"
+      }
+    ]
+  }
+}

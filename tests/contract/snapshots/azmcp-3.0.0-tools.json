@@ -1,0 +1,466 @@
+{
+  "serverVersion": "3.0.0",
+  "tools": {
+    "advisor_metadata_get": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Get Advisor Recommendation Metadata"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "description": "Catalog locale to filter on (properties.language). Defaults to 'en'. Case-insensitive. Supported values: en, cs, de, es, fr, hu, id, it, ja, ko, nl, pl, pt-br, pt-pt, ru, sv, tr, zh-hans, zh-hant. Region-qualified tags such as 'en-US' are accepted and mapped to the base language ('en').",
+            "type": "string"
+          },
+          "recommendation-type-id": {
+            "description": "The stable Advisor recommendation type id (properties.recommendationTypeId) to look up in the global recommendation-metadata catalog. This is the join key shared with individual recommendations. Required.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recommendation-type-id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "advisor_metadata_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Advisor Recommendation Metadata"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "description": "Optional exact Advisor category filter. Allowed values are Cost, HighAvailability, Security, Performance, and OperationalExcellence. Matched case-insensitively.",
+            "type": "string"
+          },
+          "impact": {
+            "description": "Optional recommendation impact filter. Allowed values are High, Medium, or Low. Matched case-insensitively; unfiltered results are ordered High, Medium, then Low.",
+            "type": "string"
+          },
+          "language": {
+            "description": "Language for localized recommendation metadata. Defaults to English ('en'). Supported catalog languages are en, cs, de, es, fr, hu, id, it, ja, ko, nl, pl, pt-BR, pt-PT, ru, sv, tr, zh-Hans, and zh-Hant. Regional variants map to a supported base language when available, such as en-US to en and fr-CA to fr; locale-specific catalog languages remain distinct.",
+            "type": "string"
+          },
+          "resource-type": {
+            "description": "Optional exact Azure resource type filter, such as 'microsoft.compute/virtualmachines'. Use it during brownfield onboarding to discover recommendation types applicable to that resource type. Matched case-insensitively.",
+            "type": "string"
+          },
+          "retirement-date": {
+            "description": "Optional service-retirement date filter in '<operator>:<yyyy-MM-dd>' format, for example 'ge:2026-03-31'. Supported operators are eq, lt, le, gt, and ge. Applies only to the ServiceUpgradeAndRetirement subcategory; --sub-category may be omitted but cannot specify a different value.",
+            "type": "string"
+          },
+          "sub-category": {
+            "description": "Optional exact recommendation subcategory filter, matched case-insensitively. Known catalog values include ComputeOptimization, DataPerformance, DataProtectionAndRecovery, EfficiencyOptimization, FailureMitigation, GovernanceAndCompliance, MonitoringAndAlerting, NetworkOptimization, Other, Personalized, RegionalResiliency, Reservations, SafeAndSecureDeployment, SavingsPlan, Scalability, ServiceUpgradeAndRetirement, StorageOptimization, UsageOptimization, and ZoneResiliency. The catalog can add values over time, so other subcategories are accepted.",
+            "type": "string"
+          },
+          "tracking-id": {
+            "description": "Optional exact Service Health tracking ID filter, such as QNY1-HB8. Matched case-insensitively within ServiceUpgradeAndRetirement metadata. --sub-category may be omitted but cannot specify a different value.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "advisor_recommendation_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Advisor Recommendations"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "description": "Filter recommendations by category (e.g., 'Security', 'Cost', 'Performance', 'HighAvailability', 'OperationalExcellence'). Case-insensitive exact match.",
+            "type": "string"
+          },
+          "impact": {
+            "description": "Filter recommendations by business impact ('High', 'Medium', or 'Low'). Case-insensitive exact match.",
+            "type": "string"
+          },
+          "recommendation-type-id": {
+            "description": "Filter recommendations by the recommendation type ID GUID. Uses a case-insensitive exact match and can be combined with other filters.",
+            "type": "string"
+          },
+          "resource": {
+            "description": "Filter recommendations by impacted resource name or full ARM resource ID. Case-insensitive substring match.",
+            "type": "string"
+          },
+          "resource-group": {
+            "description": "The Azure resource group name.",
+            "type": "string"
+          },
+          "resource-type": {
+            "description": "Filter recommendations by impacted Azure resource type (e.g., 'Microsoft.Storage/storageAccounts'). Case-insensitive exact match.",
+            "type": "string"
+          },
+          "retirement-date": {
+            "description": "Filter recommendations by service-retirement date in '<operator>:<yyyy-MM-dd>' format, for example 'ge:2026-03-31'. Supported operators are eq, lt, le, gt, and ge. Can be combined with --tracking-ids. --sub-category may be omitted; when specified, it must be ServiceUpgradeAndRetirement.",
+            "type": "string"
+          },
+          "search": {
+            "description": "Free-text filter applied to the recommendation problem text (case-insensitive substring match). Use this whenever the user's request includes a topical phrase such as 'related to Microsoft Foundry', 'about encryption', 'mentioning right-size', or 'for Key Vault'. Extract the salient noun(s) from the phrase (e.g., 'Foundry', 'encrypt', 'right-size', 'Key Vault') and pass them here.",
+            "type": "string"
+          },
+          "status": {
+            "description": "Filter recommendations by status ('New', 'Postponed', 'Dismissed', or 'Completed'). Defaults to 'New' when omitted.",
+            "type": "string"
+          },
+          "sub-category": {
+            "description": "Filter recommendations by recommendation subcategory, matched case-insensitively against the Advisor recommendation metadata. Known values include ComputeOptimization, DataPerformance, DataProtectionAndRecovery, EfficiencyOptimization, FailureMitigation, GovernanceAndCompliance, MonitoringAndAlerting, NetworkOptimization, Other, RegionalResiliency, Reservations, SafeAndSecureDeployment, SavingsPlan, Scalability, ServiceUpgradeAndRetirement, StorageOptimization, UsageOptimization, and ZoneResiliency. Advisor can add values over time, so other subcategories are accepted.",
+            "type": "string"
+          },
+          "subscription": {
+            "description": "The Azure subscription GUID identifier or display name. If not specified, the Azure CLI profile default subscription or AZURE_SUBSCRIPTION_ID environment variable will be used.",
+            "type": "string"
+          },
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          },
+          "top": {
+            "description": "Maximum number of recommendation records to return. Defaults to 50 and is clamped to the server-side range of 1 through 100.",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tracking-ids": {
+            "description": "Filter recommendations by one or more Service Health tracking IDs, such as QNY1-HB8. Pass several IDs as space-separated values after one option, for example --tracking-ids QNY1-HB8 9G0V-_G8; recommendations matching any of them are returned. Matched case-insensitively within ServiceUpgradeAndRetirement metadata. Can be combined with --retirement-date. --sub-category may be omitted; when specified, it must be ServiceUpgradeAndRetirement.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "advisor_recommendation_summary": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Summarize Advisor Recommendations in a Subscription"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "description": "Filter recommendations by category. Allowed values are Cost, HighAvailability, Security, Performance, and OperationalExcellence. Matched case-insensitively against metadata with recommendation-instance fallback.",
+            "type": "string"
+          },
+          "group-by": {
+            "description": "Optional field to group the summary by. One of: 'recommendation-type', 'category', 'impact', 'resource-type', 'status', 'sub-category', or 'retirement-date'. Defaults to 'category' when omitted, which surfaces the high-level themes (Cost, Security, Reliability, etc.) so prompts like 'summarize the key themes from my Advisor recommendations' work without naming a field.",
+            "type": "string"
+          },
+          "impact": {
+            "description": "Filter recommendations by business impact. Allowed values are High, Medium, and Low. Matched case-insensitively against metadata with recommendation-instance fallback.",
+            "type": "string"
+          },
+          "recommendation-type-id": {
+            "description": "Filter recommendations by one recommendation type ID GUID. Uses a case-insensitive exact match.",
+            "type": "string"
+          },
+          "resource": {
+            "description": "Filter recommendations by impacted resource name or full ARM resource ID. Uses a case-insensitive substring match.",
+            "type": "string"
+          },
+          "resource-group": {
+            "description": "The Azure resource group name.",
+            "type": "string"
+          },
+          "resource-type": {
+            "description": "Filter recommendations by the impacted Azure resource type in properties.impactedField, such as 'Microsoft.Storage/storageAccounts'. Uses a case-insensitive exact match.",
+            "type": "string"
+          },
+          "retirement-date": {
+            "description": "Filter recommendations by service-retirement date in '<operator>:<yyyy-MM-dd>' format, for example 'le:2026-12-31'. Supported operators are eq, lt, le, gt, and ge. The ServiceUpgradeAndRetirement subcategory is inferred when omitted.",
+            "type": "string"
+          },
+          "search": {
+            "description": "Filter recommendation problem text using a case-insensitive substring match. Prefer structured filters when an equivalent category, impact, subcategory, or resource-type filter exists.",
+            "type": "string"
+          },
+          "sub-category": {
+            "description": "Filter recommendations by metadata subcategory using a case-insensitive exact match. Known values include ServiceUpgradeAndRetirement, ZoneResiliency, and RegionalResiliency; future non-empty catalog values are accepted.",
+            "type": "string"
+          },
+          "subscription": {
+            "description": "The Azure subscription GUID identifier or display name. If not specified, the Azure CLI profile default subscription or AZURE_SUBSCRIPTION_ID environment variable will be used.",
+            "type": "string"
+          },
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          },
+          "top": {
+            "description": "Optional display cap from 1 through 100 on the number of known buckets returned. TotalRecommendations still reflects the complete filtered population, and an Unknown bucket is preserved after the selected buckets.",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "advisor_remediation_get": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Get Advisor Recommendation Remediation"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "recommendation-type-id": {
+            "description": "The Advisor recommendation type id (GUID) whose remediation package should be fetched. Must be a 36-character GUID in the form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx. Required.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recommendation-type-id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "cloudarchitect_design": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Design Azure cloud architectures through guided questions"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "description": "The user's response to the question",
+            "type": "string"
+          },
+          "confidence-score": {
+            "description": "A value between 0.0 and 1.0 representing confidence in understanding requirements. When this reaches 0.7 or higher, nextQuestionNeeded should be set to false.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "next-question-needed": {
+            "description": "Whether another question is needed",
+            "type": "boolean"
+          },
+          "question": {
+            "description": "The current question being asked",
+            "type": "string"
+          },
+          "question-number": {
+            "description": "Current question number",
+            "type": "integer"
+          },
+          "state": {
+            "description": "The complete architecture state from the previous request as JSON, State input schema:\n{\n\"state\":{\n\"type\":\"object\",\n\"description\":\"The complete architecture state from the previous request\",\n\"properties\":{\n\"architectureComponents\":{\n\"type\":\"array\",\n\"description\":\"All architecture components suggested so far\",\n\"items\":{\n\"type\":\"string\"\n}\n},\n\"architectureTiers\":{\n\"type\":\"object\",\n\"description\":\"Components organized by architecture tier\",\n\"additionalProperties\":{\n\"type\":\"array\",\n\"items\":{\n\"type\":\"string\"\n}\n}\n},\n\"thought\":{\n\"type\":\"string\",\n\"description\":\"The calling agent's thoughts on the next question or reasoning process. The calling agent should use the requirements it has gathered to reason about the next question.\"\n},\n\"suggestedHint\":{\n\"type\":\"string\",\n\"description\":\"A suggested interaction hint to show the user, such as 'Ask me to create an ASCII art diagram of this architecture' or 'Ask about how this design handles disaster recovery'.\"\n},\n\"requirements\":{\n\"type\":\"object\",\n\"description\":\"Tracked requirements organized by type\",\n\"properties\":{\n\"explicit\":{\n\"type\":\"array\",\n\"description\":\"Requirements explicitly stated by the user\",\n\"items\":{\n\"type\":\"object\",\n\"properties\":{\n\"category\":{\n\"type\":\"string\"\n},\n\"description\":{\n\"type\":\"string\"\n},\n\"source\":{\n\"type\":\"string\"\n},\n\"importance\":{\n\"type\":\"string\",\n\"enum\":[\n\"high\",\n\"medium\",\n\"low\"\n]\n},\n\"confidence\":{\n\"type\":\"number\"\n}\n}\n}\n},\n\"implicit\":{\n\"type\":\"array\",\n\"description\":\"Requirements implied by user responses\",\n\"items\":{\n\"type\":\"object\",\n\"properties\":{\n\"category\":{\n\"type\":\"string\"\n},\n\"description\":{\n\"type\":\"string\"\n},\n\"source\":{\n\"type\":\"string\"\n},\n\"importance\":{\n\"type\":\"string\",\n\"enum\":[\n\"high\",\n\"medium\",\n\"low\"\n]\n},\n\"confidence\":{\n\"type\":\"number\"\n}\n}\n}\n},\n\"assumed\":{\n\"type\":\"array\",\n\"description\":\"Requirements assumed based on context/best practices\",\n\"items\":{\n\"type\":\"object\",\n\"properties\":{\n\"category\":{\n\"type\":\"string\"\n},\n\"description\":{\n\"type\":\"string\"\n},\n\"source\":{\n\"type\":\"string\"\n},\n\"importance\":{\n\"type\":\"string\",\n\"enum\":[\n\"high\",\n\"medium\",\n\"low\"\n]\n},\n\"confidence\":{\n\"type\":\"number\"\n}\n}\n}\n}\n}\n},\n\"confidenceFactors\":{\n\"type\":\"object\",\n\"description\":\"Factors that contribute to the overall confidence score\",\n\"properties\":{\n\"explicitRequirementsCoverage\":{\n\"type\":\"number\"\n},\n\"implicitRequirementsCertainty\":{\n\"type\":\"number\"\n},\n\"assumptionRisk\":{\n\"type\":\"number\"\n}\n}\n}\n}\n}\n}",
+            "type": "string"
+          },
+          "total-questions": {
+            "description": "Estimated total questions needed",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "group_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Resource Groups"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "subscription": {
+            "description": "The Azure subscription GUID identifier or display name. If not specified, the Azure CLI profile default subscription or AZURE_SUBSCRIPTION_ID environment variable will be used.",
+            "type": "string"
+          },
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "group_resource_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Resources in Resource Group"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resource-group": {
+            "description": "The Azure resource group name.",
+            "type": "string"
+          },
+          "subscription": {
+            "description": "The Azure subscription GUID identifier or display name. If not specified, the Azure CLI profile default subscription or AZURE_SUBSCRIPTION_ID environment variable will be used.",
+            "type": "string"
+          },
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource-group"
+        ],
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "policy_assignment_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Policy Assignments"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "description": "The scope of the policy assignment (e.g., /subscriptions/{subscriptionId}, /subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}).",
+            "type": "string"
+          },
+          "subscription": {
+            "description": "The Azure subscription GUID identifier or display name. If not specified, the Azure CLI profile default subscription or AZURE_SUBSCRIPTION_ID environment variable will be used.",
+            "type": "string"
+          },
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "pricing_get": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Get Azure Retail Pricing"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "description": "Currency code for pricing (e.g., USD, EUR). Default is USD.",
+            "type": "string"
+          },
+          "filter": {
+            "description": "Raw OData filter expression for advanced queries (e.g., \"meterId eq 'abc-123'\")",
+            "type": "string"
+          },
+          "include-savings-plan": {
+            "description": "Include savings plan pricing information (uses preview API version)",
+            "type": "boolean"
+          },
+          "price-type": {
+            "description": "Price type filter (Consumption, Reservation, DevTestConsumption)",
+            "type": "string"
+          },
+          "region": {
+            "description": "Azure region (e.g., eastus, westeurope, westus2)",
+            "type": "string"
+          },
+          "service": {
+            "description": "Azure service name (e.g., Virtual Machines, Storage, SQL Database)",
+            "type": "string"
+          },
+          "service-family": {
+            "description": "Service family (e.g., Compute, Storage, Databases, Networking)",
+            "type": "string"
+          },
+          "sku": {
+            "description": "ARM SKU name (e.g., Standard_D4s_v5, Standard_E64-16ds_v4)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "subscription_list": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "List Azure Subscriptions"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tenant": {
+            "description": "The Microsoft Entra ID tenant GUID identifier or display name.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    },
+    "wellarchitectedframework_serviceguide_get": {
+      "annotations": {
+        "destructive_hint": false,
+        "idempotent_hint": true,
+        "open_world_hint": false,
+        "read_only_hint": true,
+        "title": "Get Well-Architected Framework Service Guide"
+      },
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "description": "A single Azure service name. Service name format: case-insensitive; hyphens, underscores, spaces, and name variations allowed; use double quotes (not single quotes) for names with spaces. e.g., cosmos-db, Cosmos_DB, \"Cosmos DB\", cosmosdb, cosmos-database, cosmosdatabase",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": null
+    }
+  }
+}

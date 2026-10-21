@@ -1,0 +1,21 @@
+{
+  "tool": "group_list",
+  "arguments": { "subscription": "00000000-0000-0000-0000-000000000001" },
+  "serverInfo": { "name": "Azure MCP Server", "version": "3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b" },
+  "protocolVersion": "2026-07-28",
+  "content": "2 resource groups",
+  "structuredContent": {
+    "groups": [
+      {
+        "name": "rg-hcw-sample-prod",
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod",
+        "location": "centralus"
+      },
+      {
+        "name": "rg-hcw-sample-dev",
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev",
+        "location": "centralus"
+      }
+    ]
+  }
+}

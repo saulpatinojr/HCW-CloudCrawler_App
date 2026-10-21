@@ -6,42 +6,6 @@
 
 version: 2
 updates:
-  # Root JavaScript or TypeScript manifests.
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "javascript"
-    groups:
-      javascript-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # Root Python manifests such as requirements.txt, pyproject.toml, or poetry.lock.
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "python"
-    groups:
-      python-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
   # GitHub Actions under .github/workflows.
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -58,27 +22,8 @@ updates:
       github-actions:
         patterns:
           - "*"
-
-  # Root Terraform files. Keep this block for Terraform/OpenTofu IaC repos.
-  - package-ecosystem: "terraform"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "06:00"
-      timezone: "Etc/UTC"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "terraform"
-    groups:
-      terraform-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  # Root Dockerfiles or container metadata.
-  - package-ecosystem: "docker"
+  # Python workspace: pyproject.toml and uv.lock at the root (the engine package is a workspace member).
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -88,7 +33,10 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "docker"
+    ignore:
+      # The Azure MCP contract is pinned by ADR 0001; the mcp SDK is bumped by hand with the snapshot re-run.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
 
 # Optional additional directories. Copy and adapt only when the paths exist.
 #
