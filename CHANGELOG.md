@@ -22,8 +22,9 @@ once, merge one before rebasing the next.
     payload redaction and the content-free log guard; the Azure Resource Graph
     export normaliser; the detector registry with `zone-redundancy` (SQL
     databases, storage accounts, App Service plans, PostgreSQL flexible
-    servers, Cosmos DB accounts, AKS clusters, virtual machines, public IP
-    addresses); the drift engine (severity-weighted score, coverage, one
+    servers, Cosmos DB accounts, AKS clusters, virtual machine scale sets and
+    public IP addresses; a single virtual machine row answers `unknown`
+    because redundancy is a property of the instance set); the drift engine (severity-weighted score, coverage, one
     proposal per contradicted claim); the in-memory ledger; the report bundle
     with `NOT-AN-AUDIT.md`.
   - `src/cloud_crawler_appliance` 0.1.0: the edition guard that refuses

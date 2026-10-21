@@ -31,6 +31,9 @@ are the outputs of the commands as run in the authoring session on Python 3.14.6
 
 - One detector (`zone-redundancy`) and three tools (`adr_create`, `evidence_ingest`, `drift_evaluate`); the ledger is
   in memory and not partitioned by tenant or session yet.
+- A single virtual machine row answers `unknown` for zone redundancy. The design's `instanceSet` claim parameter
+  (VMs sharing a tag value form the set, supported when the set spans two or more zones) needs a set-level reader
+  that this slice does not have; the reading says so.
 - Resource Graph exports carry no diagnostic settings, locks or sub-resource encryption state; claims on those stay
   `unknown` until the App edition's collectors exist.
 - `/api/health` reports `azureConnectivity: not-configured` because no Azure MCP host is wired yet.

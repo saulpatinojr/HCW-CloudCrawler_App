@@ -72,14 +72,20 @@ def aks_cluster(resource: NormalizedResource, parameters: dict[str, Any]) -> Rea
 
 
 def zones_on_resource(resource: NormalizedResource, parameters: dict[str, Any]) -> Reading:
-    """Virtual machines are zonal when pinned to any zone; public IP addresses and other zone-spanning resources are
-    zone redundant only when they list at least `minimumZones` (default 2)."""
-    minimum = int(parameters.get("minimumZones", 1))
+    """Zone-spanning resources (public IP addresses, virtual machine scale sets) are zone redundant only when they
+    list at least `minimumZones` (default 2)."""
+    minimum = int(parameters.get("minimumZones", 2))
     return Reading(len(resource.zones) >= minimum, resource.zones)
 
 
-def public_ip(resource: NormalizedResource, parameters: dict[str, Any]) -> Reading:
-    return zones_on_resource(resource, {"minimumZones": int(parameters.get("minimumZones", 2))})
+def virtual_machine(resource: NormalizedResource, parameters: dict[str, Any]) -> Reading:
+    """A single virtual machine row can show that the VM is zonal (`zones` non-empty) but never that anything is zone
+    *redundant*: redundancy is a property of the instance set the VM belongs to. The row therefore answers `unknown`.
+    The design's `instanceSet` claim parameter (the VMs sharing a tag value form the set, supported when the set spans
+    two or more zones) needs a set-level reader and is not implemented in this slice; the reading says so."""
+    if parameters.get("instanceSet"):
+        return Reading(None, resource.zones, "instanceSet grouping is not implemented yet; evaluate the set by hand")
+    return Reading(None, resource.zones, "zone redundancy of a virtual machine is a property of its instance set")
 
 
 ZONE_REDUNDANCY = Detector(
@@ -93,7 +99,8 @@ ZONE_REDUNDANCY = Detector(
         "microsoft.dbforpostgresql/flexibleservers": postgres_flexible,
         "microsoft.documentdb/databaseaccounts": cosmos_account,
         "microsoft.containerservice/managedclusters": aks_cluster,
-        "microsoft.compute/virtualmachines": zones_on_resource,
-        "microsoft.network/publicipaddresses": public_ip,
+        "microsoft.compute/virtualmachines": virtual_machine,
+        "microsoft.compute/virtualmachinescalesets": zones_on_resource,
+        "microsoft.network/publicipaddresses": zones_on_resource,
     },
 )

@@ -67,8 +67,10 @@ def test_registry_knows_zone_redundancy():
             False,
         ),
         ("microsoft.containerservice/managedclusters", {"properties": {}}, None),
-        ("microsoft.compute/virtualmachines", {"zones": ["1"]}, True),
-        ("microsoft.compute/virtualmachines", {}, False),
+        ("microsoft.compute/virtualmachines", {"zones": ["1"]}, None),  # a row cannot prove redundancy
+        ("microsoft.compute/virtualmachines", {}, None),
+        ("microsoft.compute/virtualmachinescalesets", {"zones": ["1", "2"]}, True),
+        ("microsoft.compute/virtualmachinescalesets", {"zones": ["1"]}, False),
         ("microsoft.network/publicipaddresses", {"zones": ["1", "2", "3"]}, True),
         ("microsoft.network/publicipaddresses", {"zones": ["1"]}, False),
     ],
@@ -76,6 +78,12 @@ def test_registry_knows_zone_redundancy():
 def test_readers(rtype, kwargs, answer):
     reader = ZONE_REDUNDANCY.readers[rtype]
     assert reader(resource(rtype, **kwargs), {}).answer is answer
+
+
+def test_virtual_machine_rows_say_why_they_are_unknown():
+    r = resource("microsoft.compute/virtualmachines", zones=["1"])
+    assert "instance set" in (ZONE_REDUNDANCY.readers[r.type](r, {}).reason or "")
+    assert "not implemented" in (ZONE_REDUNDANCY.readers[r.type](r, {"instanceSet": "app"}).reason or "")
 
 
 def test_aks_minimum_zones_parameter():

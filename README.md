@@ -48,7 +48,9 @@ First implementation slice. What exists today:
 - the Azure Resource Graph export normaliser (JSON array export);
 - the `zone-redundancy` detector for SQL databases, storage accounts, App
   Service plans, PostgreSQL flexible servers, Cosmos DB accounts, AKS
-  clusters, virtual machines and public IP addresses;
+  clusters, virtual machine scale sets and public IP addresses (a single
+  virtual machine row answers `unknown`, because redundancy is a property of
+  the instance set);
 - the drift engine and the in-memory ledger;
 - an MCP server (streamable HTTP, stateless) exposing `adr_create`,
   `evidence_ingest` and `drift_evaluate`, and a flat `/api/health`;
