@@ -43,9 +43,9 @@ jobs:
           if ! [ -s /tmp/notes.md ]; then echo "See CHANGELOG.md for $tag." > /tmp/notes.md; fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Create the release (idempotent)
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}", TAG: "${{ steps.notes.outputs.tag }}" }
         run: |
           set -euo pipefail
-          tag="${{ steps.notes.outputs.tag }}"
+          tag="$TAG"
           if gh release view "$tag" >/dev/null 2>&1; then echo "release $tag exists"; exit 0; fi
           gh release create "$tag" --title "$tag" --notes-file /tmp/notes.md --verify-tag
