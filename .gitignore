@@ -59,3 +59,9 @@ crash.log
 # Tooling caches
 .qlty/cache/
 .qlty/logs/
+
+# Coverage and test outputs
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

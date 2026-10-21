@@ -1,103 +1,132 @@
-# Repository template
+# HCW Cloud Crawler, App edition
 
-A GitHub template repository. Create a repository from it, run one command,
-and the new repository has its governance files, review-app configuration,
-security workflows and labels in place.
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## Create a repository from it
+Cloud Crawler is Hybrid Cloud Works' Azure architecture appliance: an evidence
+ledger, architecture decision records, deterministic drift detection and
+review proposals, with **Azure MCP Server 3.0** as the source of truth for what
+Azure reports and this appliance as the source of truth for what was decided,
+claimed, contradicted, reviewed and approved.
 
-1. On this repository's page choose **Use this template**, then **Create a
-   new repository**. Name it and create it.
-2. Clone the new repository and open a shell in its root folder.
-3. Run the initialize script once (next section).
-4. Work through `docs/TEMPLATE.md`, then delete that file.
+This repository is the **upstream product**. It owns the engine
+(`packages/cloud-crawler-core`), the appliance application
+(`src/cloud_crawler_appliance`) and, in later releases, the Azure MCP host,
+the live collectors, the persistent ledger and the Container Apps deployment.
+It is the reference implementation, the enterprise deployment option and the
+proving ground. It is **not** integrated into hybridcloudworks.com: the site
+integrates only with the derived lab edition,
+[`HCW-CloudCrawler_AddOn`](https://github.com/saulpatinojr/HCW-CloudCrawler_AddOn),
+which adopts the engine from here unchanged.
 
-## Initialize the checkout
+The design this repository implements is the owner-approved proposal
+*Azure Architecture MCP Appliance on Azure MCP Server 3.0* in the website
+repository (`docs/architecture/azure-architecture-mcp-appliance.md`). Its
+decisions that bind this repository are recorded as ADRs in `docs/adr/`.
 
-PowerShell (Windows):
+## What it does
 
-```powershell
-.\scripts\Initialize-Repo.ps1 -Stack node-typescript -Prune
-```
+| Record | Meaning |
+| --- | --- |
+| **Evidence** | What Azure reported (Observed), what an artifact says (Imported), what a decision states (Declared), what was derived or inferred, and what is proposed. Every record is hashed, redacted and carries provenance and an expiry. |
+| **Decision record** | An ADR with context, drivers, alternatives, consequences and **claims**, each claim bound to a deterministic detector. |
+| **Drift finding** | The verdict of one claim against current evidence: `supported`, `contradicted`, `unknown` or `not-applicable`. Unknown lowers coverage, never score. |
+| **Contradiction** | An open, dated record that a claim is contradicted by evidence, with the evidence ids. |
+| **Review proposal** | What a contradiction, a retirement notice, an Advisor finding or a cost ceiling asks the architects to decide, with an approval trail. |
 
-Bash (Git Bash, macOS, Linux; needs Python 3):
+Azure MCP Server is consumed as a separate process, pinned to **3.0.0**
+(ADR 0001). The appliance never links it, never forks it and never stores an
+Azure credential: the App edition runs under a managed identity or forwards
+a user's delegated token through Azure MCP's on-behalf-of flow; the AddOn
+edition cannot reach Azure at all (ADR 0003).
+
+## Status
+
+First implementation slice. What exists today:
+
+- the engine's evidence, provenance, collection-run, decision, claim, drift,
+  contradiction and review models, canonical hashing and redaction;
+- the Azure Resource Graph export normaliser (JSON array export);
+- the `zone-redundancy` detector for SQL databases, storage accounts, App
+  Service plans, PostgreSQL flexible servers, Cosmos DB accounts, AKS
+  clusters, virtual machines and public IP addresses;
+- the drift engine and the in-memory ledger;
+- an MCP server (streamable HTTP, stateless) exposing `adr_create`,
+  `evidence_ingest` and `drift_evaluate`, and a flat `/api/health`;
+- a contract test that starts the real Azure MCP Server 3.0.0 over stdio and
+  snapshots its tool list, so an unreviewed upgrade fails the build;
+- the zone-redundancy acceptance scenario against the fictional sample estate.
+
+Not yet: the Azure MCP host, live collectors, the persistent ledger, the
+remaining detectors and tools, the operator pane, Container Apps deployment.
+The roadmap is section 22 of the proposal; nothing here is production.
+
+## Getting started
+
+Prerequisites: Python 3.14 (managed by `uv`), `uv` 0.11, Node.js 22 for the
+contract test (it runs `npx @azure/mcp@3.0.0`).
 
 ```bash
-bash scripts/initialize-repo.sh --prune node-typescript
+uv sync --all-packages
+uv run ruff check . && uv run ruff format --check .
+uv run pytest -q --cov=packages --cov=src
 ```
 
-Both scripts do the same work. Run one of them, from the repository root,
-before committing any code of your own. Running it a second time is safe:
-every step checks whether it has already been done.
+Run the appliance locally (no Azure access is needed for this slice):
 
-### Parameters
+```bash
+uv run python -m cloud_crawler_appliance
+```
 
-| PowerShell | Bash | Meaning |
-| --- | --- | --- |
-| `-Stack <list>` | words after the flags | Technology in the repository: `node-typescript`, `python`, `terraform-ansible`. Give several, or none for a docs-only repository. |
-| `-Prune` | `--prune` | Delete `overlays/` and `scripts/` when done. Recommended. |
-| `-Name <repo>` | `--name <repo>` | Repository name. Default: read from the `origin` remote. |
-| `-Owner @login` | `--owner @login` | Code owner, a user or `@org/team`. Default: the account in the `origin` remote. |
-| `-SkipGitHub` | `--skip-github` | Do not call `gh`. Labels and Discussions must then be set up by hand. |
+Then `GET http://127.0.0.1:8080/api/health` answers a flat document with `id`,
+`version` and `edition` at the top level, and the MCP endpoint is
+`http://127.0.0.1:8080/mcp`.
 
-Full help: `Get-Help .\scripts\Initialize-Repo.ps1 -Detailed` or
-`bash scripts/initialize-repo.sh --help`.
+Run the Azure MCP contract test on its own (needs network for the npm
+download; no Azure sign-in, because only `initialize` and `tools/list` are
+sent):
 
-### What it does
+```bash
+uv run pytest tests/contract -q -m azmcp
+```
 
-1. Replaces this README with the project README skeleton from
-   `docs/README.project.md`, titled with the repository name.
-2. Writes `* @<owner>` into `.github/CODEOWNERS`.
-3. Removes every `.github/dependabot.yml` block whose manifest is absent
-   (no `package.json`, no npm block), so Dependabot reports nothing missing.
-4. Points the issue chooser (`.github/ISSUE_TEMPLATE/config.yml`) and
-   `docs/TEMPLATE.md` at the new repository.
-5. Adds the stack's CodeQL languages to `.github/workflows/codeql.yml`.
-   Workflow files (`actions`) are always analysed.
-6. Appends the stack's Qlty plugins from `overlays/<stack>/qlty.toml.part`
-   to `.qlty/qlty.toml`.
-7. With `gh` signed in: creates the labels in `.github/labels.json` and
-   enables Discussions. Otherwise it says so and continues.
-8. With `-Prune`: deletes `overlays/` and `scripts/`.
-
-### What success looks like
+## Repository layout
 
 ```text
-README.md: project README written for Demo_App
-CODEOWNERS: * @example-org
-dependabot.yml: kept npm, github-actions ; dropped pip, terraform, docker
-ISSUE_TEMPLATE/config.yml: links point at example-org/Demo_App
-codeql.yml: languages actions, javascript-typescript
-qlty.toml: appended node-typescript
-label: bug ... discussions: enabled on example-org/Demo_App
-pruned overlays/ and scripts/
+packages/cloud-crawler-core/   the engine: models, normalise, detectors, drift, ledger, redaction, hashing
+src/cloud_crawler_appliance/   the appliance application: edition guard, config, logging, MCP server, HTTP API
+tests/                         unit, security, contract (Azure MCP 3.0.0 snapshot) and acceptance suites
+samples/                       fictional Resource Graph exports (subscription 00000000-0000-0000-0000-000000000001)
+infrastructure/docker/         the hardened Dockerfile and the pinned base image
+docs/adr/                      this edition's decisions
 ```
 
-The script stops at the first error and prints it. Fix the cause and run it
-again. Nothing it does needs input while it runs.
+## Rules that do not bend
 
-### Requirements
+- No secrets, tokens, customer inventories or real tenant, subscription or
+  resource identifiers anywhere, fixtures and tests included. Samples use
+  subscription `00000000-0000-0000-0000-000000000001` and `hcw-sample-*`
+  names only.
+- The engine depends on pydantic only: no HTTP client, no cloud SDK. It moves
+  downstream to the AddOn unchanged (ADR 0002).
+- Verdicts come from detectors, never from a model. Unknown lowers coverage,
+  never score. Detector ids are only ever added, never renamed.
+- The appliance refuses to start when a secret-bearing credential variable is
+  present (`AZURE_CLIENT_SECRET`, `AZURE_CLIENT_CERTIFICATE_PATH`,
+  `AZURE_USERNAME`, `AZURE_PASSWORD`).
+- Logs are content-free: counts, durations, flags and hashed identifiers.
+- Azure MCP Server stays at 3.0.0 until an ADR records the upgrade criteria
+  being met (ADR 0001).
 
-- Git, with the new repository's `origin` remote set (a normal clone has it).
-- PowerShell 5.1 or 7 for the `.ps1`; Bash and Python 3 for the `.sh`.
-- Optional: GitHub CLI signed in (`gh auth status`) for labels and Discussions.
+## Repository standards
 
-## What the template contains
+This repository was created from the organisation's template repository. It
+carries `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
+`.github/SECURITY.md`, `.github/CODEOWNERS`, the pull request and issue
+templates, CodeQL, dependency review, Dependabot, CodeRabbit and Qlty
+configuration, and `docs/adr/`. Pull requests open ready for review and follow
+`.github/PULL_REQUEST_TEMPLATE.md`; `CHANGELOG.md` is updated in the same pull
+request as the change.
 
-- Governance: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
-  `.github/SECURITY.md`, `.github/CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md`.
-- Issues: `.github/ISSUE_TEMPLATE/` forms for bug, feature, ADR, FinOps
-  finding and infrastructure change; `.github/labels.json`;
-  `.github/release.yml` for generated release notes.
-- Writing templates in `.github/templates/` (blog, gist, task, workflow
-  document). GitHub does not load these; they are for copying.
-- Security: `.github/workflows/codeql.yml` with
-  `.github/codeql/codeql-config.yml`, `.github/workflows/dependency-review.yml`,
-  `.github/dependabot.yml`.
-- Review apps: `.coderabbit.yaml` (CodeRabbit), `.qlty/qlty.toml` plus
-  `overlays/` (Qlty), `.github/copilot-instructions.md`; lint configuration
-  `.yamllint.yaml` and `.markdownlint.yaml`.
-- Hygiene: `.editorconfig`, `.gitattributes`, `.gitignore`; `docs/adr/`
-  for decision records.
-- `docs/TEMPLATE.md`: the post-creation checklist for the steps no file can
-  carry (connecting the apps, repository settings).
+## Contributing, security, license
+
+See `CONTRIBUTING.md`, `.github/SECURITY.md` and [LICENSE](LICENSE) (MIT).

@@ -1,0 +1,108 @@
+"""An in-memory ledger: decisions, evidence, findings, contradictions, proposals and approvals, append-only except
+for contradiction and proposal state. Both editions use it; the App edition swaps in a persistent one later behind
+the same interface."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from cloud_crawler_core.models import (
+    Approval,
+    Contradiction,
+    DecisionRecord,
+    DriftFinding,
+    DriftResult,
+    Evidence,
+    ReviewProposal,
+)
+
+
+class NotFound(KeyError):
+    """A record that is not in this ledger. Callers answer 404; the id never reaches a log."""
+
+
+class InMemoryLedger:
+    def __init__(self) -> None:
+        self.decisions: dict[str, DecisionRecord] = {}
+        self.evidence: dict[str, Evidence] = {}
+        self.findings: dict[str, DriftFinding] = {}
+        self.contradictions: dict[str, Contradiction] = {}
+        self.proposals: dict[str, ReviewProposal] = {}
+        self.approvals: dict[str, Approval] = {}
+
+    # decisions
+    def add_decision(self, decision: DecisionRecord) -> DecisionRecord:
+        self.decisions[decision.decisionId] = decision
+        return decision
+
+    def get_decision(self, decision_id: str) -> DecisionRecord:
+        try:
+            return self.decisions[decision_id]
+        except KeyError:
+            raise NotFound(decision_id) from None
+
+    # evidence
+    def add_evidence(self, evidence: Evidence) -> Evidence:
+        self.evidence[evidence.evidenceId] = evidence
+        return evidence
+
+    def get_evidence(self, evidence_id: str) -> Evidence:
+        try:
+            return self.evidence[evidence_id]
+        except KeyError:
+            raise NotFound(evidence_id) from None
+
+    def evidence_for(self, decision: DecisionRecord, *, now: datetime | None = None) -> list[Evidence]:
+        """Every record not yet expired. Scope filtering happens in the drift engine, resource by resource."""
+        records = list(self.evidence.values())
+        if now is not None:
+            records = [e for e in records if e.expiresAt is None or e.expiresAt > now]
+        return records
+
+    # drift
+    def record(self, result: DriftResult) -> DriftResult:
+        """Keep every finding; merge contradictions by (claim, resource) so firstSeenAt survives re-evaluation."""
+        for finding in result.findings:
+            self.findings[finding.findingId] = finding
+        existing = {(c.claimId, c.resourceId): c for c in self.contradictions.values() if c.resolvedAt is None}
+        merged: list[Contradiction] = []
+        for contradiction in result.contradictions:
+            key = (contradiction.claimId, contradiction.resourceId)
+            if key in existing:
+                previous = existing[key]
+                updated = previous.model_copy(
+                    update={
+                        "lastSeenAt": contradiction.lastSeenAt,
+                        "observed": contradiction.observed,
+                        "evidenceIds": contradiction.evidenceIds,
+                    }
+                )
+                self.contradictions[previous.contradictionId] = updated
+                merged.append(updated)
+            else:
+                self.contradictions[contradiction.contradictionId] = contradiction
+                merged.append(contradiction)
+        for proposal in result.proposals:
+            self.proposals[proposal.proposalId] = proposal
+        return result.model_copy(update={"contradictions": merged})
+
+    def findings_for(self, decision_id: str) -> list[DriftFinding]:
+        return [f for f in self.findings.values() if f.decisionId == decision_id]
+
+    def open_contradictions(self, decision_id: str | None = None) -> list[Contradiction]:
+        return [
+            c
+            for c in self.contradictions.values()
+            if c.resolvedAt is None and (decision_id is None or c.decisionId == decision_id)
+        ]
+
+    def open_proposals(self, decision_id: str | None = None) -> list[ReviewProposal]:
+        return [
+            p
+            for p in self.proposals.values()
+            if p.status.value == "open" and (decision_id is None or p.decisionId == decision_id)
+        ]
+
+    def add_approval(self, approval: Approval) -> Approval:
+        self.approvals[approval.approvalId] = approval
+        return approval
