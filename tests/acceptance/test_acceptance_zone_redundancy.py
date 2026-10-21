@@ -13,18 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket
-import threading
-import time
 from pathlib import Path
 
-import pytest
-import uvicorn
 from cloud_crawler_core.ledger import InMemoryLedger
 from mcp.client import Client
 
-from cloud_crawler_appliance.api import create_app
-from cloud_crawler_appliance.config import Settings
 from cloud_crawler_appliance.mcp_server import build_mcp_server
 
 GOLDEN = Path(__file__).with_name("golden") / "zone-redundancy.verdicts.json"
@@ -67,7 +60,7 @@ async def scenario(client: Client, sample_decision: dict, sample_export: dict) -
         "supported": 3,
         "contradicted": 2,
         "unknown": 0,
-        "notApplicable": 6,
+        "notApplicable": 8,
         "score": 60.0,
         "coverage": 1.0,
     }
@@ -107,25 +100,6 @@ def test_in_process(sample_decision, sample_export, quiet_env):
             return await scenario(client, sample_decision, sample_export)
 
     asyncio.run(run())
-
-
-@pytest.fixture
-def http_server(quiet_env):
-    app = create_app(Settings.from_env(quiet_env), env=quiet_env)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    port = sock.getsockname()[1]
-    sock.close()
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.time() + 15
-    while not server.started and time.time() < deadline:
-        time.sleep(0.05)
-    assert server.started
-    yield f"http://127.0.0.1:{port}"
-    server.should_exit = True
-    thread.join(timeout=10)
 
 
 def test_over_streamable_http(http_server, sample_decision, sample_export):

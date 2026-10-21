@@ -9,5 +9,7 @@
   "hcw-sample-aks-prod-01": "not-applicable",
   "hcw-sample-vm-prod-01": "not-applicable",
   "hcw-sample-pip-prod-01": "not-applicable",
-  "hcw-sample-kv-prod-01": "not-applicable"
+  "hcw-sample-kv-prod-01": "not-applicable",
+  "hcw-sample-sqlsrv-01": "not-applicable",
+  "hcw-sample-app-prod-01": "not-applicable"
 }

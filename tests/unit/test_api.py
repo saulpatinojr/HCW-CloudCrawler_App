@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from cloud_crawler_core.detectors import DETECTORS
 from fastapi.testclient import TestClient
 
 from cloud_crawler_appliance import ADDON_ID, __version__
@@ -20,7 +21,7 @@ def test_health_is_flat(client):
     assert body["ok"] is True and body["id"] == ADDON_ID and body["version"] == __version__
     assert body["edition"] == "appliance" and body["azureConnectivity"] == "not-configured"
     assert body["production"] is False and body["asOf"].endswith("Z")
-    assert body["engine"]["detectors"] == ["zone-redundancy"]
+    assert body["engine"]["detectors"] == sorted(DETECTORS) and "zone-redundancy" in DETECTORS
     assert body["mcp"] == {"path": "/mcp", "protocolVersion": "2026-07-28", "stateless": True}
     assert body["ledger"] == {"decisions": 0, "evidence": 0, "openContradictions": 0, "openProposals": 0}
     assert body["limits"]["maxRows"] == 5000

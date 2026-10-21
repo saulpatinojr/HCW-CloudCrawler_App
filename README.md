@@ -46,20 +46,26 @@ First implementation slice. What exists today:
 - the engine's evidence, provenance, collection-run, decision, claim, drift,
   contradiction and review models, canonical hashing and redaction;
 - the Azure Resource Graph export normaliser (JSON array export);
-- the `zone-redundancy` detector for SQL databases, storage accounts, App
-  Service plans, PostgreSQL flexible servers, Cosmos DB accounts, AKS
-  clusters, virtual machine scale sets and public IP addresses (a single
+- the wave-one detectors: `zone-redundancy` (SQL databases, storage accounts,
+  App Service plans, PostgreSQL flexible servers, Cosmos DB accounts, AKS
+  clusters, virtual machine scale sets and public IP addresses; a single
   virtual machine row answers `unknown`, because redundancy is a property of
-  the instance set);
+  the instance set), `public-access-disabled` and `private-endpoint-present`
+  (twelve data, secret, messaging and compute types), `managed-identity`,
+  and the valued `tag-required`, `sku-allowed` and `region-allowed`, whose
+  claims compare the reading with `exists`, `in`, `eq` and the like;
 - the drift engine and the in-memory ledger;
 - an MCP server (streamable HTTP, stateless) exposing `adr_create`,
   `evidence_ingest` and `drift_evaluate`, and a flat `/api/health`;
 - a contract test that starts the real Azure MCP Server 3.0.0 over stdio and
   snapshots its tool list, so an unreviewed upgrade fails the build;
-- the zone-redundancy acceptance scenario against the fictional sample estate.
+- two acceptance scenarios against the fictional sample estate, in-process
+  and over streamable HTTP: the zone-redundancy contradiction, and the
+  six-claim "production platform baseline" over every wave-one detector.
 
 Not yet: the Azure MCP host, live collectors, the persistent ledger, the
-remaining detectors and tools, the operator pane, Container Apps deployment.
+Advisor, retirement and policy detectors, the review and listing tools, the
+operator pane, Container Apps deployment.
 The roadmap is section 22 of the proposal; nothing here is production.
 
 ## Getting started

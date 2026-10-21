@@ -24,9 +24,24 @@ once, merge one before rebasing the next.
     databases, storage accounts, App Service plans, PostgreSQL flexible
     servers, Cosmos DB accounts, AKS clusters, virtual machine scale sets and
     public IP addresses; a single virtual machine row answers `unknown`
-    because redundancy is a property of the instance set); the drift engine (severity-weighted score, coverage, one
-    proposal per contradicted claim); the in-memory ledger; the report bundle
-    with `NOT-AN-AUDIT.md`.
+    because redundancy is a property of the instance set); the drift engine
+    (severity-weighted score, coverage, one proposal per contradicted claim);
+    the in-memory ledger; the report bundle with `NOT-AN-AUDIT.md`.
+  - The remaining wave-one detectors (proposal section 22): the boolean
+    `public-access-disabled` (`publicNetworkAccess`, the PostgreSQL `network`
+    block and the AKS private API server; `SecuredByPerimeter` answers
+    unknown), `private-endpoint-present` (approved connections only; a
+    virtual-network-injected PostgreSQL server answers unknown) and
+    `managed-identity` (`identity.type`, optional `identityType` parameter),
+    and the valued `tag-required` (`tag` parameter), `sku-allowed` (`field`
+    parameter) and `region-allowed`. Valued detectors compare the reading with
+    the claim's `eq`, `neq`, `in`, `exists`, `absent`, `gte` or `lte`
+    expectation, case-insensitively and ignoring spaces for strings; a reader
+    registered under `*` applies to every resource type. Tag names in
+    selectors and decision scopes match case-insensitively, as Azure does.
+  - The "production platform baseline" sample decision and acceptance
+    scenario over all six detectors, with its golden verdicts; the sample
+    estate gains a SQL server and a web app.
   - `src/cloud_crawler_appliance` 0.1.0: the edition guard that refuses
     secret-bearing credential variables, `CC_`-prefixed settings, the
     content-free log writer, an MCP server (streamable HTTP, stateless,

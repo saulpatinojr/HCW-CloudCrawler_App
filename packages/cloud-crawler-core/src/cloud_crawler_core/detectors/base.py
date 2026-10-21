@@ -1,7 +1,12 @@
 """What a detector is: a pure function from (claim, resources) to findings, with the three-valued logic every
 detector shares. A detector reads one property per resource type and reports `True`, `False` or `None` (cannot be
 told from this evidence). The base turns that into `supported`, `contradicted` or `unknown`; resources outside the
-claim's selector are `not-applicable`. No detector ever returns `contradicted` from `None`."""
+claim's selector are `not-applicable`. No detector ever returns `contradicted` from `None`.
+
+Two kinds of detector share the base. A *boolean* detector answers a yes/no question (`Reading.answer`) and the
+claim's expectation is `eq`/`neq` `true`/`false`. A *valued* detector reads a value (`Reading.value`, with
+`Reading.answer` `True` meaning "readable") and the claim's expectation compares it: `eq`, `neq`, `in`, `exists`,
+`absent`, `gte`, `lte`. A reader registered under `"*"` applies to every resource type."""
 
 from __future__ import annotations
 
@@ -12,19 +17,40 @@ from datetime import datetime
 from typing import Any
 
 from cloud_crawler_core.ids import new_id
-from cloud_crawler_core.models import Claim, DriftFinding, NormalizedResource, Operator, Selector, Verdict
+from cloud_crawler_core.models import (
+    Claim,
+    DriftFinding,
+    Expectation,
+    NormalizedResource,
+    Operator,
+    Selector,
+    Verdict,
+)
 
 
 @dataclass(frozen=True)
 class Reading:
-    """One resource's answer to the detector's question. `value` is what was observed, for the finding."""
+    """One resource's answer to the detector's question. `value` is what was observed, for the finding. For a valued
+    detector `answer` is `True` when the value could be read (the value itself may be `None`, as in "no such tag")."""
 
     answer: bool | None
     value: Any = None
     reason: str | None = None  # when answer is None: why the evidence cannot say
 
 
+ANY_TYPE = "*"
+VALUED_OPERATORS = frozenset(
+    {Operator.EQ, Operator.NEQ, Operator.IN, Operator.EXISTS, Operator.ABSENT, Operator.GTE, Operator.LTE}
+)
+
+
 Reader = Callable[[NormalizedResource, dict[str, Any]], Reading]
+
+
+def tag_of(resource: NormalizedResource, name: str) -> str | None:
+    """The value of a tag by name, matched case-insensitively because Azure tag names are (values are not)."""
+    wanted = name.lower()
+    return next((value for key, value in resource.tags.items() if key.lower() == wanted), None)
 
 
 def selector_matches(selector: Selector, resource: NormalizedResource) -> bool:
@@ -35,7 +61,7 @@ def selector_matches(selector: Selector, resource: NormalizedResource) -> bool:
     }:
         return False
     for key, expected in selector.tagSelectors.items():
-        if resource.tags.get(key) != expected:
+        if tag_of(resource, key) != expected:
             return False
     return not selector.nameGlobs or any(fnmatch.fnmatchcase(resource.name, glob) for glob in selector.nameGlobs)
 
@@ -45,11 +71,15 @@ class Detector:
     detector_id: str
     version: str
     question: str
-    readers: dict[str, Reader] = field(default_factory=dict)  # lower-case ARM type -> reader
+    readers: dict[str, Reader] = field(default_factory=dict)  # lower-case ARM type (or "*") -> reader
+    valued: bool = False  # False: boolean question; True: the reading is a value the expectation compares
 
     @property
     def resource_types(self) -> tuple[str, ...]:
         return tuple(sorted(self.readers))
+
+    def reader_for(self, resource_type: str) -> Reader | None:
+        return self.readers.get(resource_type) or self.readers.get(ANY_TYPE)
 
     def evaluate(
         self,
@@ -59,10 +89,12 @@ class Detector:
         evidence_ids: list[str],
         now: datetime,
     ) -> list[DriftFinding]:
-        expected_true = _expected_boolean(claim)
+        expected_true = None if self.valued else _expected_boolean(claim)
+        if self.valued:
+            _check_valued_expectation(claim)
         findings: list[DriftFinding] = []
         for resource in resources:
-            reader = self.readers.get(resource.type)
+            reader = self.reader_for(resource.type)
             if reader is None or not selector_matches(claim.selector, resource):
                 findings.append(self._finding(claim, resource, Verdict.NOT_APPLICABLE, {}, evidence_ids, now))
                 continue
@@ -74,7 +106,12 @@ class Detector:
                 finding.unknownReason = reading.reason or "the evidence does not carry this property"
                 findings.append(finding)
                 continue
-            verdict = Verdict.SUPPORTED if reading.answer == expected_true else Verdict.CONTRADICTED
+            if self.valued:
+                observed = {claim.expectation.property: reading.value, "reading": reading.value}
+                holds = compare(claim.expectation, reading.value)
+            else:
+                holds = reading.answer == expected_true
+            verdict = Verdict.SUPPORTED if holds else Verdict.CONTRADICTED
             findings.append(self._finding(claim, resource, verdict, observed, evidence_ids, now))
         return findings
 
@@ -111,3 +148,43 @@ def _expected_boolean(claim: Claim) -> bool:
             f"got {expectation.operator.value} {expectation.value!r}"
         )
     return expectation.value if expectation.operator is Operator.EQ else not expectation.value
+
+
+def _check_valued_expectation(claim: Claim) -> None:
+    expectation = claim.expectation
+    if expectation.operator not in VALUED_OPERATORS:
+        raise ValueError(
+            f"claim {claim.claimId}: detector {claim.detectorId} takes expectation "
+            f"{'/'.join(sorted(o.value for o in VALUED_OPERATORS))}, got {expectation.operator.value}"
+        )
+    if expectation.operator is Operator.IN and not isinstance(expectation.value, list):
+        raise ValueError(f"claim {claim.claimId}: operator in takes a list, got {expectation.value!r}")
+    if expectation.operator in (Operator.GTE, Operator.LTE) and not isinstance(expectation.value, int | float):
+        raise ValueError(f"claim {claim.claimId}: operator {expectation.operator.value} takes a number")
+
+
+def fold(value: Any) -> Any:
+    """Strings compare case-insensitively and ignore spaces, because Azure does (`East US 2` is `eastus2`, a tag
+    name's case is not significant, SKU names mix cases across exports)."""
+    return value.replace(" ", "").lower() if isinstance(value, str) else value
+
+
+def compare(expectation: Expectation, value: Any) -> bool:
+    """Does the observed value satisfy the expectation? `exists`/`absent` test for a value at all; the rest compare
+    folded values. A `None` value fails every comparison except `absent` and `neq`."""
+    operator = expectation.operator
+    if operator is Operator.EXISTS:
+        return value is not None
+    if operator is Operator.ABSENT:
+        return value is None
+    if operator is Operator.EQ:
+        return fold(value) == fold(expectation.value)
+    if operator is Operator.NEQ:
+        return fold(value) != fold(expectation.value)
+    if operator is Operator.IN:
+        return value is not None and fold(value) in {fold(v) for v in expectation.value}
+    if operator is Operator.GTE:
+        return isinstance(value, int | float) and not isinstance(value, bool) and value >= expectation.value
+    if operator is Operator.LTE:
+        return isinstance(value, int | float) and not isinstance(value, bool) and value <= expectation.value
+    raise ValueError(f"operator {operator.value} is not supported by valued detectors")

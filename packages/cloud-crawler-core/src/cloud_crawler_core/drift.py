@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from cloud_crawler_core.detectors import get_detector
+from cloud_crawler_core.detectors.base import tag_of
 from cloud_crawler_core.ids import new_id
 from cloud_crawler_core.ingest import resources_of
 from cloud_crawler_core.models import (
@@ -59,7 +60,7 @@ def _in_scope(decision: DecisionRecord, resource: NormalizedResource) -> bool:
         g.lower() for g in scope.resourceGroupNames
     }:
         return False
-    return all(resource.tags.get(key) == value for key, value in scope.tagSelectors.items())
+    return all(tag_of(resource, key) == value for key, value in scope.tagSelectors.items())
 
 
 def evaluate_decision(
