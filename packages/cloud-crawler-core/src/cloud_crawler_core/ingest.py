@@ -24,7 +24,7 @@ from cloud_crawler_core.models import (
     SourceType,
     Subject,
 )
-from cloud_crawler_core.normalize import IngestionError, parse_resource_graph_json
+from cloud_crawler_core.normalize import IngestionError, parse_azure_mcp_result, parse_resource_graph_json
 from cloud_crawler_core.redaction import redact_payload
 
 UNAUTHENTICATED_CAP = 0.74
@@ -57,8 +57,10 @@ ALLOWED_CLASSES: dict[EvidenceKind, frozenset[EvidenceClass]] = {
     ),
 }
 
-# Kinds this version can normalise into resources. Every other kind is stored redacted, unparsed, for later versions.
-NORMALISED_KINDS = frozenset({EvidenceKind.ARG_EXPORT})
+# Kinds this version can normalise: exports into resources, Azure MCP results into observation rows keyed by the
+# tool named in the provenance. Every other kind (and a result of a tool this version does not know) is stored
+# redacted, unparsed, for later versions.
+NORMALISED_KINDS = frozenset({EvidenceKind.ARG_EXPORT, EvidenceKind.AZURE_MCP_RESULT})
 
 
 def confidence_for(
@@ -91,11 +93,18 @@ def ingest(
     redacted, removed = redact_payload(payload)
     correlations: list[Correlation] = []
     stored: Any = redacted
-    if kind in NORMALISED_KINDS:
+    if kind is EvidenceKind.ARG_EXPORT:
         resources = parse_resource_graph_json(redacted, max_rows=max_rows)
         stored = {"resources": [r.model_dump(mode="json") for r in resources]}
         correlations = [Correlation(type="resource", value=r.id) for r in resources]
         subject = _widen_subject(subject, resources)
+    elif kind is EvidenceKind.AZURE_MCP_RESULT:
+        parsed = parse_azure_mcp_result(provenance.tool, redacted, max_rows=max_rows)
+        if parsed is not None:
+            stored = parsed
+            correlations = [
+                Correlation(type="resource", value=row["resourceId"]) for row in parsed["rows"] if row.get("resourceId")
+            ]
     confidence, ttl = confidence_for(evidence_class, provenance.sourceType, authenticated=authenticated)
     return Evidence(
         evidenceId=new_id("evidence"),
@@ -122,6 +131,16 @@ def _widen_subject(subject: Subject, resources: list[NormalizedResource]) -> Sub
 
 def resources_of(evidence: Evidence) -> list[NormalizedResource]:
     """The normalised resources an evidence record carries, or none for kinds this version does not normalise."""
-    if evidence.kind not in NORMALISED_KINDS or not isinstance(evidence.payload, dict):
+    if evidence.kind is not EvidenceKind.ARG_EXPORT or not isinstance(evidence.payload, dict):
         return []
     return [NormalizedResource.model_validate(row) for row in evidence.payload.get("resources", [])]
+
+
+def observations_of(evidence: Evidence) -> tuple[str, list[dict[str, Any]]] | None:
+    """`(tool, rows)` for a normalised Azure MCP result; None for anything else (unparsed results included)."""
+    if evidence.kind is not EvidenceKind.AZURE_MCP_RESULT or not isinstance(evidence.payload, dict):
+        return None
+    tool, rows = evidence.payload.get("tool"), evidence.payload.get("rows")
+    if not isinstance(tool, str) or not isinstance(rows, list):
+        return None
+    return tool, rows

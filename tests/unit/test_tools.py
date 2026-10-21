@@ -82,6 +82,7 @@ def test_every_tool_declares_caller_class_and_no_azure(run):
             "contradiction_list",
             "review_list",
             "review_get",
+            "review_propose",
             "review_decide",
         }
         assert all(t.meta["callsAzure"] is False and t.meta["caller"] in ("model", "human") for t in tools)

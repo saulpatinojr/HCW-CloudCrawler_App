@@ -1,0 +1,18 @@
+{
+  "tool": "subscription_list",
+  "arguments": {},
+  "serverInfo": { "name": "Azure MCP Server", "version": "3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b" },
+  "protocolVersion": "2026-07-28",
+  "content": "1 subscription",
+  "structuredContent": {
+    "subscriptions": [
+      {
+        "subscriptionId": "00000000-0000-0000-0000-000000000001",
+        "displayName": "hcw-sample-sub-01",
+        "state": "Enabled",
+        "tenantId": "00000000-0000-0000-0000-000000000002",
+        "isDefault": true
+      }
+    ]
+  }
+}

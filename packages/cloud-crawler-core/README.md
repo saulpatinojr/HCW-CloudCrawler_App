@@ -15,7 +15,7 @@ It is seeded and versioned here, in `HCW-CloudCrawler_App`, and adopted by
 | `hashing` | canonical JSON and `sha256:` digests |
 | `redaction` | payload redaction (secret-shaped values, denied keys) and the content-free log guard |
 | `normalize` | one normaliser per evidence kind; `resource_graph` for Azure Resource Graph exports |
-| `detectors` | the detector registry: `zone-redundancy`, `public-access-disabled`, `private-endpoint-present`, `managed-identity` (boolean questions) and `tag-required`, `sku-allowed`, `region-allowed` (valued: the claim's expectation compares the reading with `eq`, `neq`, `in`, `exists`, `absent`, `gte`, `lte`) |
+| `detectors` | the detector registry: `zone-redundancy`, `public-access-disabled`, `private-endpoint-present`, `managed-identity` (boolean questions) and `tag-required`, `sku-allowed`, `region-allowed` (valued: the claim's expectation compares the reading with `eq`, `neq`, `in`, `exists`, `absent`, `gte`, `lte`); and the evidence-reading `advisor-findings`, `retirement-exposure`, `policy-assignment-present` over normalised Azure MCP results |
 | `drift` | `evaluate_decision`: claims × evidence → findings, contradictions, proposals, score and coverage |
 | `ledger` | `InMemoryLedger` |
 | `ingest` | the ingestion pipeline: validate, hash, redact, normalise, correlate, assign confidence and expiry |

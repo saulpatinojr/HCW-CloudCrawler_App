@@ -157,6 +157,59 @@ class NormalizedResource(StrictModel):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Normalised Azure MCP observations (what the evidence-reading detectors read)
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+class AdvisorRecommendationRow(StrictModel):
+    """One row of `advisor_recommendation_list` (Azure MCP 3.0.0 `RecommendationListResult.recommendations`)."""
+
+    id: str
+    resourceId: str | None = None
+    subscriptionId: str | None = None
+    resourceGroup: str | None = None
+    impactedField: str | None = Field(default=None, description="the impacted resource type, lower-cased")
+    impactedValue: str | None = None
+    category: str | None = None
+    impact: str | None = None
+    status: str | None = Field(default=None, description="New, Postponed, Dismissed or Completed")
+    recommendationTypeId: str | None = None
+    subCategory: str | None = Field(default=None, description="from extendedProperties.recommendationSubCategory")
+    retirementDate: str | None = Field(default=None, description="yyyy-MM-dd from extendedProperties.retirementDate")
+    retirementFeatureName: str | None = None
+    problem: str | None = None
+    solution: str | None = None
+    dismissReason: str | None = None
+    lastUpdated: str | None = None
+
+
+class PolicyAssignmentRow(StrictModel):
+    """One row of `policy_assignment_list` (`PolicyAssignmentListCommandResult.assignments`)."""
+
+    id: str
+    name: str | None = None
+    displayName: str | None = None
+    policyDefinitionId: str | None = Field(default=None, description="lower-cased")
+    scope: str | None = Field(default=None, description="lower-cased")
+    subscriptionId: str | None = None
+    enforcementMode: str | None = None
+
+
+class SubscriptionRow(StrictModel):
+    subscriptionId: str
+    displayName: str | None = None
+    state: str | None = None
+    tenantId: str | None = None
+
+
+class ResourceGroupRow(StrictModel):
+    id: str
+    name: str
+    location: str | None = None
+    subscriptionId: str | None = None
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Decisions and claims
 # ---------------------------------------------------------------------------------------------------------------------
 

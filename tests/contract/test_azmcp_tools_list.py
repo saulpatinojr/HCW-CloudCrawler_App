@@ -20,33 +20,21 @@ import pytest
 from mcp.client import Client
 from mcp.client.stdio import StdioServerParameters
 
-PIN = "3.0.0"
+from cloud_crawler_appliance.mcp_host.contract import ALLOWED_TOOLS, PIN, server_params
+
 SNAPSHOT = Path(__file__).with_name("snapshots") / f"azmcp-{PIN}-tools.json"
-NAMESPACES = ("advisor", "pricing", "policy", "group", "subscription", "wellarchitectedframework", "cloudarchitect")
 
 pytestmark = pytest.mark.azmcp
 
 
 def _params() -> StdioServerParameters:
-    npx = shutil.which("npx")
-    if npx is None:
+    """The host's own start command (`mcp_host.contract.server_params`), with a credential class that never prompts
+    and is never exercised: only `initialize` and `tools/list` are sent."""
+    if shutil.which("npx") is None:
         pytest.skip("npx is not on PATH; Node.js 22 is needed for the contract test")
-    args = [
-        "-y",
-        f"@azure/mcp@{PIN}",
-        "server",
-        "start",
-        "--read-only",
-        "--mode",
-        "all",
-        "--structured-output-mode",
-        "compact",
-    ]
-    for namespace in NAMESPACES:
-        args += ["--namespace", namespace]
     env = {k: v for k, v in os.environ.items() if not k.startswith("AZURE_")}
-    env["AZURE_TOKEN_CREDENTIALS"] = "ManagedIdentityCredential"  # never an interactive prompt, never a call here
-    return StdioServerParameters(command=npx, args=args, env=env)
+    env["AZURE_TOKEN_CREDENTIALS"] = "ManagedIdentityCredential"
+    return server_params(env)
 
 
 def _snapshot_of(tools) -> dict:
@@ -78,13 +66,8 @@ def test_tools_list_matches_the_pinned_snapshot():
     assert set(current) == set(expected["tools"]), sorted(set(current) ^ set(expected["tools"]))
     for name, tool in current.items():
         assert tool == expected["tools"][name], f"contract of {name} changed"
-    # every tool the design calls is read-only and needs no elicitation (not secret, not destructive)
-    for name in (
-        "advisor_recommendation_list",
-        "advisor_metadata_list",
-        "pricing_get",
-        "subscription_list",
-        "group_list",
-    ):
+    # every tool on the host's allow-list exists, is read-only and needs no elicitation (not secret, not destructive)
+    for name in sorted(ALLOWED_TOOLS):
+        assert name in current, f"{name} is on the allow-list but not in the pinned tool list"
         annotations = current[name]["annotations"]  # the SDK dumps the hints in snake_case
         assert annotations.get("read_only_hint") is True and annotations.get("destructive_hint") is False, name

@@ -52,6 +52,24 @@ once, merge one before rebasing the next.
     schema says so), so acceptance is always a person's act. Tool refusals
     are `ToolError`s whose text starts with a content-free code. The ledger
     gains decision, evidence and proposal listing and update.
+  - The Azure MCP host (`mcp_host/`): the pinned contract (version 3.0.0,
+    seven namespaces, a read-only tool allow-list the contract test checks
+    against the snapshot), the stdio host (the development model: the server
+    as a child process, `AZURE_*` variables not passed through except
+    `AZURE_TOKEN_CREDENTIALS`), the recorded host that replays
+    `samples/azure-mcp`, the result-to-evidence mapping and the standard
+    collection sequence; `CC_AZMCP_MODE` (`off`, `stdio`, `recorded`) and
+    `CC_AZMCP_RECORDINGS`; `/api/health` `azureConnectivity` names the mode.
+  - The engine normalises Azure MCP results by tool (`subscription_list`,
+    `group_list`, `advisor_recommendation_list`, `policy_assignment_list`)
+    into typed observation rows, and the `EvidenceDetector` shape reads
+    them: `advisor-findings`, `retirement-exposure` (the drift engine opens
+    a retirement-kind proposal with the date, the Advisor remediation and
+    migration considerations) and `policy-assignment-present`.
+  - Tools `review_propose` (model) and, only when a host is configured, the
+    Full-only `collection_run_azure` (human, the one tool with
+    `meta.callsAzure: true`). The "production platform observations" sample
+    decision and acceptance scenario.
   - `src/cloud_crawler_appliance` 0.1.0: the edition guard that refuses
     secret-bearing credential variables, `CC_`-prefixed settings, the
     content-free log writer, an MCP server (streamable HTTP, stateless,

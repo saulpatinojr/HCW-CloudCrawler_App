@@ -1,0 +1,36 @@
+{
+  "title": "Production platform observations",
+  "context": "Beyond what a Resource Graph export shows, the platform team watches three things Azure itself reports: Advisor reliability findings, service retirements and the baseline initiative assignment.",
+  "decision": "No high-impact reliability recommendation stays open on production; no production resource depends on a service retiring within 180 days; the baseline initiative stays assigned at the subscription.",
+  "decisionDrivers": ["Advisor is the cheapest early warning the platform has", "A retirement found late is a forced migration"],
+  "consequences": ["Advisor findings are triaged weekly", "Retirement notices open a review proposal"],
+  "assumptions": ["Advisor and policy results are handed in from Azure MCP Server 3.0.0"],
+  "scope": { "subscriptionIds": ["00000000-0000-0000-0000-000000000001"] },
+  "sourceType": "human",
+  "claims": [
+    {
+      "statement": "No high-impact reliability recommendation is open on production",
+      "detectorId": "advisor-findings",
+      "parameters": { "category": "HighAvailability", "impact": "High" },
+      "expectation": { "property": "openFindings", "operator": "eq", "value": 0 },
+      "severity": "high",
+      "maxAgeHours": 24
+    },
+    {
+      "statement": "No production resource depends on a service retiring within 180 days",
+      "detectorId": "retirement-exposure",
+      "parameters": { "withinDays": 180 },
+      "expectation": { "property": "exposedResources", "operator": "eq", "value": 0 },
+      "severity": "high",
+      "maxAgeHours": 24
+    },
+    {
+      "statement": "The baseline initiative is assigned at the subscription",
+      "detectorId": "policy-assignment-present",
+      "parameters": { "policyDefinitionId": "/providers/Microsoft.Authorization/policySetDefinitions/00000000-0000-0000-0000-000000000031", "enforcementMode": "Default" },
+      "expectation": { "property": "assigned", "operator": "eq", "value": true },
+      "severity": "medium",
+      "maxAgeHours": 24
+    }
+  ]
+}

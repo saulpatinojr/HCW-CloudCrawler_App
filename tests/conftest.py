@@ -14,6 +14,7 @@ from cloud_crawler_appliance.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "samples"
+RECORDINGS = SAMPLES / "azure-mcp"
 
 
 @pytest.fixture
@@ -32,13 +33,17 @@ def wave_one_decision() -> dict:
 
 
 @pytest.fixture
+def observations_decision() -> dict:
+    return json.loads((SAMPLES / "decision-azure-observations.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture
 def quiet_env() -> dict[str, str]:
     return {"CC_LOG_SILENT": "1", "CC_ALLOWED_HOSTS": "testserver 127.0.0.1:* localhost:*"}
 
 
-@pytest.fixture
-def http_server(quiet_env):
-    app = create_app(Settings.from_env(quiet_env), env=quiet_env)
+def serve(app):
+    """Run `app` under uvicorn on a free loopback port for the duration of a test; yields the base URL."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -53,3 +58,20 @@ def http_server(quiet_env):
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True
     thread.join(timeout=10)
+
+
+@pytest.fixture
+def http_server(quiet_env):
+    yield from serve(create_app(Settings.from_env(quiet_env), env=quiet_env))
+
+
+@pytest.fixture
+def recordings_dir() -> Path:
+    return RECORDINGS
+
+
+@pytest.fixture
+def recorded_http_server(quiet_env):
+    """The appliance with the recorded Azure MCP host, so `collection_run_azure` exists."""
+    env = {**quiet_env, "CC_AZMCP_MODE": "recorded", "CC_AZMCP_RECORDINGS": str(RECORDINGS)}
+    yield from serve(create_app(Settings.from_env(env), env=env))

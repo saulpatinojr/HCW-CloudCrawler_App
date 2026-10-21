@@ -46,6 +46,17 @@ First implementation slice. What exists today:
 - the engine's evidence, provenance, collection-run, decision, claim, drift,
   contradiction and review models, canonical hashing and redaction;
 - the Azure Resource Graph export normaliser (JSON array export);
+- the Azure MCP host (`src/cloud_crawler_appliance/mcp_host`): Azure MCP
+  Server 3.0.0 as a child process over stdio (the development model, the
+  developer's own credential chain, nothing held by the appliance) or a
+  recorded host that replays the fictional results in `samples/azure-mcp`;
+  a read-only tool allow-list the contract test proves against the pinned
+  snapshot; the result-to-evidence mapping (tool, server, version, protocol,
+  parameter hashes, subject) and the standard collection sequence;
+- the Azure observation detectors `advisor-findings` (a `New` record is a
+  contradiction; `Dismissed` and `Postponed` are accepted risk),
+  `retirement-exposure` (opens a retirement proposal with the date and the
+  Advisor remediation) and `policy-assignment-present`;
 - the wave-one detectors: `zone-redundancy` (SQL databases, storage accounts,
   App Service plans, PostgreSQL flexible servers, Cosmos DB accounts, AKS
   clusters, virtual machine scale sets and public IP addresses; a single
@@ -59,18 +70,23 @@ First implementation slice. What exists today:
   minus the Full-only tools: `adr_create`, `adr_get`, `adr_list`,
   `evidence_ingest`, `evidence_list`, `evidence_get`, `drift_evaluate`,
   `drift_list`, `contradiction_list`, `review_list` and `review_get` for the
-  model, and the human-only `adr_accept` and `review_decide`, which take a
-  person's object id and store only its hash (every tool carries
-  `meta.caller` and `meta.callsAzure: false`); and a flat `/api/health`;
+  model, `review_propose`, the human-only `adr_accept` and `review_decide`,
+  which take a person's object id and store only its hash (every tool
+  carries `meta.caller`), and, only when a host is configured, the Full-only
+  `collection_run_azure`, the one tool with `meta.callsAzure: true`; and a
+  flat `/api/health` whose `azureConnectivity` names the host mode;
 - a contract test that starts the real Azure MCP Server 3.0.0 over stdio and
   snapshots its tool list, so an unreviewed upgrade fails the build;
-- two acceptance scenarios against the fictional sample estate, in-process
-  and over streamable HTTP: the zone-redundancy contradiction, and the
-  six-claim "production platform baseline" over every wave-one detector.
+- three acceptance scenarios, in-process and over streamable HTTP: the
+  zone-redundancy contradiction, the six-claim "production platform
+  baseline" over every wave-one detector, and the Azure observations
+  (retirement review generation, Advisor contradiction with accepted risk,
+  policy assignment) through `collection_run_azure` on the recorded host.
 
-Not yet: the Azure MCP host, live collectors, the persistent ledger, the
-Advisor, retirement and policy detectors, `review_propose` for retirements,
-the operator pane, Container Apps deployment.
+Not yet: the HTTP transport to a hosted Azure MCP (managed identity or
+on-behalf-of), live collectors beyond the standard sequence, the persistent
+ledger, the `cost-ceiling` detector, the operator pane, Container Apps
+deployment.
 The roadmap is section 22 of the proposal; nothing here is production.
 
 ## Getting started
@@ -84,10 +100,25 @@ uv run ruff check . && uv run ruff format --check .
 uv run pytest -q --cov=packages --cov=src
 ```
 
-Run the appliance locally (no Azure access is needed for this slice):
+Run the appliance locally (no Azure access is needed):
 
 ```bash
 uv run python -m cloud_crawler_appliance
+```
+
+With the recorded Azure MCP host, so `collection_run_azure` replays the
+fictional results in `samples/azure-mcp`:
+
+```bash
+CC_AZMCP_MODE=recorded uv run python -m cloud_crawler_appliance
+```
+
+With the real Azure MCP Server 3.0.0 as a child process over stdio (the
+development model; Node.js 22, `az login` first; every call is read-only and
+the appliance never sees a token):
+
+```bash
+AZURE_TOKEN_CREDENTIALS=AzureCliCredential CC_AZMCP_MODE=stdio uv run python -m cloud_crawler_appliance
 ```
 
 Then `GET http://127.0.0.1:8080/api/health` answers a flat document with `id`,
@@ -106,9 +137,11 @@ uv run pytest tests/contract -q -m azmcp
 
 ```text
 packages/cloud-crawler-core/   the engine: models, normalise, detectors, drift, ledger, redaction, hashing
-src/cloud_crawler_appliance/   the appliance application: edition guard, config, logging, MCP server, HTTP API
+src/cloud_crawler_appliance/   the appliance application: edition guard, config, logging, MCP server, HTTP API,
+                               and mcp_host/ (the client of Azure MCP Server: contract, stdio and recorded hosts, collection)
 tests/                         unit, security, contract (Azure MCP 3.0.0 snapshot) and acceptance suites
-samples/                       fictional Resource Graph exports (subscription 00000000-0000-0000-0000-000000000001)
+samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
+                               (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
 docs/adr/                      this edition's decisions
 ```

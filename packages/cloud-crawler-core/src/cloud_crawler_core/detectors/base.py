@@ -19,7 +19,9 @@ from typing import Any
 from cloud_crawler_core.ids import new_id
 from cloud_crawler_core.models import (
     Claim,
+    DecisionScope,
     DriftFinding,
+    Evidence,
     Expectation,
     NormalizedResource,
     Operator,
@@ -188,3 +190,61 @@ def compare(expectation: Expectation, value: Any) -> bool:
     if operator is Operator.LTE:
         return isinstance(value, int | float) and not isinstance(value, bool) and value <= expectation.value
     raise ValueError(f"operator {operator.value} is not supported by valued detectors")
+
+
+def scope_matches(scope: DecisionScope, subscription_id: str | None, resource_group: str | None) -> bool:
+    """A decision scope against an observation that carries a subscription and maybe a resource group. Tag
+    selectors cannot be evaluated on an observation (Advisor and policy rows carry no tags) and are ignored here;
+    they apply to resource rows through `selector_matches` and the drift engine."""
+    if scope.subscriptionIds and (subscription_id or "") not in {s.lower() for s in scope.subscriptionIds}:
+        return False
+    return not scope.resourceGroupNames or (resource_group or "").lower() in {
+        g.lower() for g in scope.resourceGroupNames
+    }
+
+
+class EvidenceDetector:
+    """A detector that reads normalised Azure MCP observations rather than resource rows: it receives every usable
+    evidence record and answers for the claim as a whole (one finding per matching observation, or one finding
+    saying nothing matched). Subclasses implement `evaluate`; `finding` builds a record the way `Detector` does."""
+
+    detector_id: str = ""
+    version: str = "1.0.0"
+    question: str = ""
+    tools: tuple[str, ...] = ()  # the Azure MCP tools whose results this detector reads
+
+    def evaluate(
+        self,
+        claim: Claim,
+        evidence: list[Evidence],
+        *,
+        scope: DecisionScope,
+        now: datetime,
+    ) -> list[DriftFinding]:
+        raise NotImplementedError
+
+    def finding(
+        self,
+        claim: Claim,
+        verdict: Verdict,
+        *,
+        resource_id: str | None,
+        observed: dict[str, Any],
+        evidence_ids: list[str],
+        now: datetime,
+        unknown_reason: str | None = None,
+    ) -> DriftFinding:
+        return DriftFinding(
+            findingId=new_id("finding"),
+            claimId=claim.claimId,
+            decisionId=claim.decisionId,
+            resourceId=resource_id,
+            verdict=verdict,
+            observed=observed,
+            expected={claim.expectation.property: claim.expectation.value},
+            evidenceIds=list(evidence_ids),
+            unknownReason=unknown_reason,
+            detectorId=self.detector_id,
+            detectorVersion=self.version,
+            evaluatedAt=now,
+        )

@@ -10,8 +10,13 @@ Every refusal is a `ToolError` whose text starts with a content-free code (`not_
 - `model`: tools a chat model may call. Reads, drafts, evidence and proposals. `adr_create` creates `draft` or
   `proposed` decisions only.
 - `human`: tools that change an authoritative record and need a person's explicit action (`adr_accept`,
-  `review_decide`). They take the actor's object id and store only its hash. The website keeps them out of the
-  model's tool list and calls them from its own authenticated routes; this server records who acted, never why.
+  `review_decide`, and the Full-only `collection_run_azure`). They take the actor's object id and store only its
+  hash. The website keeps them out of the model's tool list and calls them from its own authenticated routes; this
+  server records who acted, never why.
+
+`collection_run_azure` is the one tool with `meta.callsAzure: true`: it drives the Azure MCP host through the
+standard read-only sequence and ingests every result. It exists only when a host is configured (`CC_AZMCP_MODE`),
+so the lab edition, which never has one, never lists it.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from cloud_crawler_core.models import (
     Approval,
     ApprovalDecision,
     Claim,
+    CollectionRun,
     Contradiction,
     DecisionRecord,
     DecisionScope,
@@ -42,7 +48,9 @@ from cloud_crawler_core.models import (
     EvidenceKind,
     EvidenceRequirement,
     Expectation,
+    ProposalKind,
     ProposalStatus,
+    RecommendedAction,
     ReviewProposal,
     Selector,
     Severity,
@@ -57,6 +65,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
 from cloud_crawler_appliance import __version__
+from cloud_crawler_appliance.mcp_host import AzureMcpHost, HostError, collect
 from cloud_crawler_appliance.security import logging as logs
 
 INSTRUCTIONS = (
@@ -206,6 +215,30 @@ class Decided(BaseModel):
     approval: Approval
 
 
+class ProposalInput(StrictInput):
+    kind: ProposalKind
+    title: str
+    rationale: str = ""
+    decisionId: str | None = None
+    claimIds: list[str] = Field(default_factory=list)
+    evidenceIds: list[str] = Field(default_factory=list)
+    impactedResourceIds: list[str] = Field(default_factory=list)
+    migrationConsiderations: list[str] = Field(default_factory=list)
+    recommendedActions: list[RecommendedAction] = Field(default_factory=list)
+    dueBy: datetime | None = None
+
+
+class ProposalCreated(BaseModel):
+    proposalId: str
+    kind: ProposalKind
+    status: ProposalStatus
+
+
+class CollectionRunResult(BaseModel):
+    run: CollectionRun
+    azureConnectivity: str
+
+
 def _annotations(*, read_only: bool, idempotent: bool) -> types.ToolAnnotations:
     return types.ToolAnnotations(
         readOnlyHint=read_only, destructiveHint=False, idempotentHint=idempotent, openWorldHint=False
@@ -222,7 +255,7 @@ def _actor(actor_id: str) -> str:
     return sha256_text(actor_id.strip())
 
 
-def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000) -> MCPServer:
+def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: AzureMcpHost | None = None) -> MCPServer:
     server = MCPServer(
         "cloud-crawler",
         title="Cloud Crawler",
@@ -231,16 +264,25 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000) -> MCPSer
         website_url="https://github.com/saulpatinojr/HCW-CloudCrawler_App",
     )
 
-    def meta(caller: Caller) -> dict[str, Any]:
-        return {"callsAzure": False, "engineVersion": engine_version, "caller": caller}
+    def meta(caller: Caller, *, calls_azure: bool = False) -> dict[str, Any]:
+        return {"callsAzure": calls_azure, "engineVersion": engine_version, "caller": caller}
 
-    def tool(name: str, title: str, description: str, *, caller: Caller, read_only: bool, idempotent: bool):
+    def tool(
+        name: str,
+        title: str,
+        description: str,
+        *,
+        caller: Caller,
+        read_only: bool,
+        idempotent: bool,
+        calls_azure: bool = False,
+    ):
         return server.tool(
             name=name,
             title=title,
             description=description,
             annotations=_annotations(read_only=read_only, idempotent=idempotent),
-            meta=meta(caller),
+            meta=meta(caller, calls_azure=calls_azure),
         )
 
     def decision_or_error(decision_id: str) -> DecisionRecord:
@@ -583,6 +625,42 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000) -> MCPSer
         return ProposalRecord(proposal=proposal, approvals=ledger.approvals_for(proposalId))
 
     @tool(
+        "review_propose",
+        "Propose a review",
+        "Open a review proposal (retirement, contradiction, advisor, cost, expiry or supersession) for the architects "
+        "to decide: what is impacted, why, the recommended actions and the migration considerations. The drift engine "
+        "opens contradiction and retirement proposals itself; this tool is for what a collector or a model noticed.",
+        caller="model",
+        read_only=False,
+        idempotent=False,
+    )
+    def review_propose(proposal: ProposalInput) -> ProposalCreated:
+        if proposal.decisionId is not None:
+            decision_or_error(proposal.decisionId)
+        for evidence_id in proposal.evidenceIds:
+            try:
+                ledger.get_evidence(evidence_id)
+            except NotFound:
+                raise ToolError("not_found: no such evidence") from None
+        record = ReviewProposal(
+            proposalId=new_id("proposal"),
+            kind=proposal.kind,
+            decisionId=proposal.decisionId,
+            claimIds=proposal.claimIds,
+            evidenceIds=proposal.evidenceIds,
+            impactedResourceIds=proposal.impactedResourceIds,
+            title=proposal.title,
+            rationale=proposal.rationale,
+            migrationConsiderations=proposal.migrationConsiderations,
+            recommendedActions=proposal.recommendedActions,
+            dueBy=proposal.dueBy,
+            createdAt=datetime.now(UTC),
+        )
+        ledger.proposals[record.proposalId] = record
+        logs.log_event("proposal_created", kind=record.kind.value, resources=len(record.impactedResourceIds))
+        return ProposalCreated(proposalId=record.proposalId, kind=record.kind, status=record.status)
+
+    @tool(
         "review_decide",
         "Decide a review proposal",
         "Approve or reject an open review proposal on behalf of a person. actorId is the person's object id and is "
@@ -623,5 +701,42 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000) -> MCPSer
         updated = ledger.update_proposal(proposal.model_copy(update={"status": status}))
         logs.log_event("review_decided", decision=decision.value, kind=proposal.kind.value, commented=bool(comment))
         return Decided(proposalId=proposalId, status=updated.status, approval=approval)
+
+    # ------------------------------------------------------------------------------------ collection (Full only)
+
+    if host is not None:
+
+        @tool(
+            "collection_run_azure",
+            "Collect from Azure through Azure MCP",
+            "Drive the Azure MCP host through the standard read-only sequence (subscriptions, resource groups, open "
+            "high-impact reliability recommendations, service retirements within 180 days, policy assignments) for "
+            "one subscription and ingest every result as observed evidence under one collection run. An operator's "
+            "act: actorId is the person's object id, stored only as a hash. Every Azure call is read-only.",
+            caller="human",
+            read_only=False,
+            idempotent=False,
+            calls_azure=True,
+        )
+        async def collection_run_azure(subscriptionId: str, actorId: str) -> CollectionRunResult:
+            actor = _actor(actorId)
+            if not subscriptionId.strip():
+                raise ToolError("invalid_request: subscriptionId is required")
+            try:
+                async with host:
+                    run = await collect(
+                        host, ledger, subscription_id=subscriptionId.strip(), actor_hash=actor, max_rows=max_rows
+                    )
+            except HostError as exc:
+                logs.log_event("collection_run", status=exc.code)
+                raise ToolError(f"{exc.code}: the host refused the run") from None
+            logs.log_event(
+                "collection_run",
+                evidence=run.summary.get("evidence", 0),
+                rows=run.summary.get("rows", 0),
+                errors=len(run.errors),
+                mode=host.mode,
+            )
+            return CollectionRunResult(run=run, azureConnectivity=host.mode)
 
     return server

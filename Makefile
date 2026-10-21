@@ -1,5 +1,5 @@
 # Cloud Crawler App edition. Every target is a plain uv invocation. Nothing here reaches Azure in this slice.
-.PHONY: setup lock lint test test-contract run image clean
+.PHONY: setup lock lint test test-contract run run-recorded run-stdio image clean
 
 setup:
 	uv python pin 3.14.6
@@ -23,6 +23,15 @@ test-contract:
 
 run:
 	PORT=8080 uv run python -m cloud_crawler_appliance
+
+# The appliance with the recorded Azure MCP host: collection_run_azure replays samples/azure-mcp (no Azure access).
+run-recorded:
+	PORT=8080 CC_AZMCP_MODE=recorded uv run python -m cloud_crawler_appliance
+
+# The development model: Azure MCP Server 3.0.0 as a child process over stdio with your own credential chain
+# (for example AZURE_TOKEN_CREDENTIALS=AzureCliCredential after az login). Every call is read-only.
+run-stdio:
+	PORT=8080 CC_AZMCP_MODE=stdio uv run python -m cloud_crawler_appliance
 
 image:
 	docker build -f infrastructure/docker/Dockerfile -t hcw-cloud-crawler-appliance:dev .

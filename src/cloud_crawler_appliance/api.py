@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 
 from cloud_crawler_core import __version__ as engine_version
 from cloud_crawler_core.detectors import DETECTORS
@@ -16,7 +17,8 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from cloud_crawler_appliance import ADDON_ID, __version__
 from cloud_crawler_appliance.config import Settings
-from cloud_crawler_appliance.edition import AZURE_CONNECTIVITY, CAPABILITIES, EDITION, refuse_forbidden_env
+from cloud_crawler_appliance.edition import CAPABILITIES, EDITION, azure_connectivity, refuse_forbidden_env
+from cloud_crawler_appliance.mcp_host import AzureMcpHost, RecordedAzureMcpHost, StdioAzureMcpHost
 from cloud_crawler_appliance.mcp_server import build_mcp_server
 from cloud_crawler_appliance.security import logging as logs
 
@@ -32,12 +34,28 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-def create_app(settings: Settings | None = None, *, ledger: InMemoryLedger | None = None, env=None) -> FastAPI:
+def host_for(settings: Settings, env=None) -> AzureMcpHost | None:
+    """The Azure MCP host the settings ask for, or None when the appliance has no Azure tool."""
+    if settings.azmcp_mode == "stdio":
+        return StdioAzureMcpHost(env)
+    if settings.azmcp_mode == "recorded":
+        return RecordedAzureMcpHost.from_directory(Path(settings.azmcp_recordings))
+    return None
+
+
+def create_app(
+    settings: Settings | None = None,
+    *,
+    ledger: InMemoryLedger | None = None,
+    env=None,
+    host: AzureMcpHost | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env(env)
     refuse_forbidden_env(env)
     logs.configure(silent=settings.log_silent)
     ledger = ledger if ledger is not None else InMemoryLedger()
-    mcp = build_mcp_server(ledger, max_rows=settings.max_rows)
+    host = host if host is not None else host_for(settings, env)
+    mcp = build_mcp_server(ledger, max_rows=settings.max_rows, host=host)
     transport_security = (
         TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=list(settings.allowed_hosts))
         if settings.allowed_hosts
@@ -53,7 +71,7 @@ def create_app(settings: Settings | None = None, *, ledger: InMemoryLedger | Non
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logs.log_event("startup", detectors=len(DETECTORS))
+        logs.log_event("startup", detectors=len(DETECTORS), azmcp=settings.azmcp_mode)
         async with mcp_app.router.lifespan_context(mcp_app):
             yield
         logs.log_event("shutdown")
@@ -72,7 +90,7 @@ def create_app(settings: Settings | None = None, *, ledger: InMemoryLedger | Non
             "edition": EDITION,
             "capabilities": list(CAPABILITIES),
             "asOf": _now_iso(),
-            "azureConnectivity": AZURE_CONNECTIVITY,
+            "azureConnectivity": azure_connectivity(host.mode if host else "off"),
             "engine": {"name": "cloud-crawler-core", "version": engine_version, "detectors": sorted(DETECTORS)},
             "mcp": {"path": MCP_PATH, "protocolVersion": MCP_PROTOCOL_VERSION, "stateless": True},
             "ledger": {

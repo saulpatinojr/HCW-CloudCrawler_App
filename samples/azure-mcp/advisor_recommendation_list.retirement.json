@@ -1,0 +1,38 @@
+{
+  "tool": "advisor_recommendation_list",
+  "arguments": { "subscription": "00000000-0000-0000-0000-000000000001", "sub-category": "ServiceUpgradeAndRetirement", "retirement-date": "*" },
+  "serverInfo": { "name": "Azure MCP Server", "version": "3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b" },
+  "protocolVersion": "2026-07-28",
+  "content": "1 recommendation",
+  "structuredContent": {
+    "recommendations": [
+      {
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Cache/Redis/hcw-sample-redis-01/providers/Microsoft.Advisor/recommendations/00000000-0000-0000-0000-000000000043",
+        "name": "00000000-0000-0000-0000-000000000043",
+        "type": "Microsoft.Advisor/recommendations",
+        "properties": {
+          "category": "OperationalExcellence",
+          "impact": "High",
+          "impactedField": "Microsoft.Cache/Redis",
+          "impactedValue": "hcw-sample-redis-01",
+          "recommendationStatus": "New",
+          "lastUpdated": "2026-10-20T06:00:00+00:00",
+          "recommendationTypeId": "00000000-0000-0000-0000-000000000023",
+          "shortDescription": {
+            "problem": "A cache tier this resource runs on retires on 2027-03-31 (fictional notice)",
+            "solution": "Migrate the cache to the replacement tier before the retirement date"
+          },
+          "resourceMetadata": {
+            "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Cache/Redis/hcw-sample-redis-01"
+          },
+          "extendedProperties": {
+            "recommendationSubCategory": "ServiceUpgradeAndRetirement",
+            "retirementDate": "2027-03-31",
+            "retirementFeatureName": "hcw-sample cache tier (fictional)"
+          }
+        }
+      }
+    ],
+    "areResultsTruncated": false
+  }
+}

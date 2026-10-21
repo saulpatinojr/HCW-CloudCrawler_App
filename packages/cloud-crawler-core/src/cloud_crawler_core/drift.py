@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from cloud_crawler_core.detectors import get_detector
-from cloud_crawler_core.detectors.base import tag_of
+from cloud_crawler_core.detectors.base import EvidenceDetector, tag_of
 from cloud_crawler_core.ids import new_id
 from cloud_crawler_core.ingest import resources_of
 from cloud_crawler_core.models import (
@@ -75,6 +75,9 @@ def evaluate_decision(
         detector = get_detector(claim.detectorId)
         requirement = _requirement_for(decision, claim)
         usable = [e for e in evidence if _usable(e, requirement, now)]
+        if isinstance(detector, EvidenceDetector):
+            findings.extend(detector.evaluate(claim, usable, scope=decision.scope, now=now))
+            continue
         resources: dict[str, NormalizedResource] = {}
         evidence_ids: list[str] = []
         for record in usable:
@@ -143,6 +146,9 @@ def _proposals(
         claim = claims[claim_id]
         resource_ids = [c.resourceId for c in items if c.resourceId]
         evidence_ids = sorted({eid for c in items for eid in c.evidenceIds})
+        if claim.detectorId == "retirement-exposure":
+            proposals.append(_retirement_proposal(decision, claim, items, evidence_ids, now))
+            continue
         proposals.append(
             ReviewProposal(
                 proposalId=new_id("proposal"),
@@ -166,6 +172,55 @@ def _proposals(
             )
         )
     return proposals
+
+
+def _retirement_proposal(
+    decision: DecisionRecord,
+    claim: Claim,
+    items: list[Contradiction],
+    evidence_ids: list[str],
+    now: datetime,
+) -> ReviewProposal:
+    """What a retirement asks the architects to decide (website proposal, section 14): the impacted resources, the
+    date, the Advisor description and remediation, and migration considerations assembled by rule."""
+    dates = sorted({str(c.observed.get("retirementDate")) for c in items if c.observed.get("retirementDate")})
+    features = sorted(
+        {str(c.observed.get("retirementFeatureName")) for c in items if c.observed.get("retirementFeatureName")}
+    )
+    due = datetime.fromisoformat(dates[0]).replace(tzinfo=UTC) if dates else None
+    actions = [
+        RecommendedAction(action=str(c.observed["solution"]), source="advisor", destructive=False)
+        for c in items
+        if c.observed.get("solution")
+    ]
+    seen: set[str] = set()
+    actions = [a for a in actions if not (a.action in seen or seen.add(a.action))]
+    return ReviewProposal(
+        proposalId=new_id("proposal"),
+        kind=ProposalKind.RETIREMENT,
+        decisionId=decision.decisionId,
+        claimIds=[claim.claimId],
+        evidenceIds=evidence_ids,
+        impactedResourceIds=[c.resourceId for c in items if c.resourceId],
+        title="Service retirement: "
+        + (", ".join(features) if features else "a service in scope")
+        + (f" on {dates[0]}" if dates else ""),
+        rationale=(
+            f"{len(items)} resource(s) in scope of decision {decision.decisionId} depend on a service that Advisor "
+            f"reports as retiring within {claim.parameters.get('withinDays', 180)} days (claim {claim.claimId})."
+        ),
+        migrationConsiderations=[
+            "Confirm the retirement date and the replacement offering in the Advisor notice and Service Health",
+            "Check whether the replacement keeps the decision's claims (zone redundancy, private access, region)",
+            "Plan data migration and cut-over before the retirement date; record the accepted risk if it slips",
+        ],
+        recommendedActions=actions
+        or [
+            RecommendedAction(action="Migrate to the replacement offering before the retirement date", source="catalog")
+        ],
+        dueBy=due,
+        createdAt=now,
+    )
 
 
 def summarise(decision: DecisionRecord, findings: list[DriftFinding]) -> DriftSummary:

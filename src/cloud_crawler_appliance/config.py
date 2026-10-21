@@ -41,6 +41,16 @@ def _hosts(env: Mapping[str, str], key: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(hosts))
 
 
+AZMCP_MODES = ("off", "stdio", "recorded")
+
+
+def _mode(env: Mapping[str, str], key: str) -> str:
+    raw = env.get(key, "").strip().lower() or "off"
+    if raw not in AZMCP_MODES:
+        raise ValueError(f"{key} must be one of {', '.join(AZMCP_MODES)}")
+    return raw
+
+
 @dataclass(frozen=True)
 class Settings:
     port: int = 8080
@@ -51,6 +61,10 @@ class Settings:
     # Host header values the MCP transport accepts (DNS-rebinding protection). Empty keeps the SDK's loopback default;
     # a deployment behind an ingress names its own FQDN here.
     allowed_hosts: tuple[str, ...] = ()
+    # The Azure MCP host: off (no Azure tool exists), stdio (the development model: Azure MCP Server 3.0.0 as a child
+    # process over stdio, the developer's own credential chain), recorded (replay the JSON recordings in a directory).
+    azmcp_mode: str = "off"
+    azmcp_recordings: str = "samples/azure-mcp"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -62,4 +76,6 @@ class Settings:
             max_rows=_int(env, "CC_MAX_ROWS", 5_000, minimum=1),
             evidence_ttl_hours=_int(env, "CC_EVIDENCE_TTL_HOURS", 24, minimum=1),
             allowed_hosts=_hosts(env, "CC_ALLOWED_HOSTS"),
+            azmcp_mode=_mode(env, "CC_AZMCP_MODE"),
+            azmcp_recordings=env.get("CC_AZMCP_RECORDINGS", "").strip() or "samples/azure-mcp",
         )
