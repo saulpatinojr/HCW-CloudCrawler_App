@@ -22,19 +22,28 @@ from cloud_crawler_appliance.mcp_server import build_mcp_server
 
 GOLDEN = Path(__file__).with_name("golden") / "zone-redundancy.verdicts.json"
 SUBSCRIPTION = "00000000-0000-0000-0000-000000000001"
+ACTOR = "00000000-0000-0000-0000-000000000011"  # a placeholder object id; never a real one
 
 
 async def scenario(client: Client, sample_decision: dict, sample_export: dict) -> dict:
     tools = await client.list_tools()
     names = {t.name for t in tools.tools}
-    assert {"adr_create", "evidence_ingest", "drift_evaluate"} <= names
+    assert {"adr_create", "adr_accept", "evidence_ingest", "drift_evaluate", "review_decide"} <= names
     assert all((t.meta or {}).get("callsAzure") is False for t in tools.tools)
+    assert {t.name for t in tools.tools if t.meta["caller"] == "human"} == {"adr_accept", "review_decide"}
     assert client.server_info is not None and client.server_info.name == "cloud-crawler"
 
     created = await client.call_tool("adr_create", {"decision": sample_decision})
     assert created.is_error is False, created.content
     decision_id = created.structured_content["decisionId"]
     assert len(created.structured_content["claimIds"]) == 1
+    assert created.structured_content["status"] == "draft"
+
+    # acceptance is a person's act: the actor id is stored only as a hash
+    accepted = await client.call_tool("adr_accept", {"decisionId": decision_id, "actorId": ACTOR})
+    assert accepted.is_error is False, accepted.content
+    assert accepted.structured_content["status"] == "accepted"
+    assert accepted.structured_content["acceptedBy"].startswith("sha256:") and ACTOR not in str(accepted.content)
 
     ingested = await client.call_tool(
         "evidence_ingest",

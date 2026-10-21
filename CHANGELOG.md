@@ -42,6 +42,16 @@ once, merge one before rebasing the next.
   - The "production platform baseline" sample decision and acceptance
     scenario over all six detectors, with its golden verdicts; the sample
     estate gains a SQL server and a web app.
+  - The tool catalogue of proposal section 16 minus the Full-only tools, with
+    caller classes in `meta.caller`: `adr_get`, `adr_list`, `evidence_list`
+    (no payloads), `evidence_get`, `drift_list`, `contradiction_list`,
+    `review_list` and `review_get` for the model; `adr_accept` and
+    `review_decide` for a person, taking an object id that is stored only as
+    a hash, the approval carrying the hash of the evidence it rested on.
+    `adr_create` now creates `draft` or `proposed` decisions only (the input
+    schema says so), so acceptance is always a person's act. Tool refusals
+    are `ToolError`s whose text starts with a content-free code. The ledger
+    gains decision, evidence and proposal listing and update.
   - `src/cloud_crawler_appliance` 0.1.0: the edition guard that refuses
     secret-bearing credential variables, `CC_`-prefixed settings, the
     content-free log writer, an MCP server (streamable HTTP, stateless,

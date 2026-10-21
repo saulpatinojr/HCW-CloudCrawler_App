@@ -55,8 +55,13 @@ First implementation slice. What exists today:
   and the valued `tag-required`, `sku-allowed` and `region-allowed`, whose
   claims compare the reading with `exists`, `in`, `eq` and the like;
 - the drift engine and the in-memory ledger;
-- an MCP server (streamable HTTP, stateless) exposing `adr_create`,
-  `evidence_ingest` and `drift_evaluate`, and a flat `/api/health`;
+- an MCP server (streamable HTTP, stateless) with the proposal's catalogue
+  minus the Full-only tools: `adr_create`, `adr_get`, `adr_list`,
+  `evidence_ingest`, `evidence_list`, `evidence_get`, `drift_evaluate`,
+  `drift_list`, `contradiction_list`, `review_list` and `review_get` for the
+  model, and the human-only `adr_accept` and `review_decide`, which take a
+  person's object id and store only its hash (every tool carries
+  `meta.caller` and `meta.callsAzure: false`); and a flat `/api/health`;
 - a contract test that starts the real Azure MCP Server 3.0.0 over stdio and
   snapshots its tool list, so an unreviewed upgrade fails the build;
 - two acceptance scenarios against the fictional sample estate, in-process
@@ -64,8 +69,8 @@ First implementation slice. What exists today:
   six-claim "production platform baseline" over every wave-one detector.
 
 Not yet: the Azure MCP host, live collectors, the persistent ledger, the
-Advisor, retirement and policy detectors, the review and listing tools, the
-operator pane, Container Apps deployment.
+Advisor, retirement and policy detectors, `review_propose` for retirements,
+the operator pane, Container Apps deployment.
 The roadmap is section 22 of the proposal; nothing here is production.
 
 ## Getting started

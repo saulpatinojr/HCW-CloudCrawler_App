@@ -22,6 +22,7 @@ from cloud_crawler_appliance.mcp_server import build_mcp_server
 
 GOLDEN = Path(__file__).with_name("golden") / "wave-one.verdicts.json"
 SUBSCRIPTION = "00000000-0000-0000-0000-000000000001"
+ACTOR = "00000000-0000-0000-0000-000000000011"  # a placeholder object id; never a real one
 
 
 async def scenario(client: Client, wave_one_decision: dict, sample_export: dict) -> dict:
@@ -29,6 +30,8 @@ async def scenario(client: Client, wave_one_decision: dict, sample_export: dict)
     assert created.is_error is False, created.content
     decision_id = created.structured_content["decisionId"]
     assert len(created.structured_content["claimIds"]) == 6
+    accepted = await client.call_tool("adr_accept", {"decisionId": decision_id, "actorId": ACTOR})
+    assert accepted.is_error is False, accepted.content
 
     ingested = await client.call_tool(
         "evidence_ingest",
@@ -75,6 +78,34 @@ async def scenario(client: Client, wave_one_decision: dict, sample_export: dict)
     region = next(f for f in app if f["detectorId"] == "region-allowed")
     assert region["observed"] == {"location": "eastus2", "reading": "eastus2"}
     assert region["expected"] == {"location": ["centralus"]}
+
+    # the lab page's views: evidence without payloads, findings by verdict, open contradictions and proposals
+    listed = await client.call_tool("evidence_list", {})
+    assert listed.structured_content["total"] == 1
+    [summary] = listed.structured_content["evidence"]
+    assert summary["resourceCount"] == 13 and "payload" not in summary and summary["sourceType"] == "upload"
+    drift = await client.call_tool("drift_list", {"decisionId": decision_id, "verdict": "contradicted"})
+    assert drift.structured_content["total"] == 7
+    open_contradictions = await client.call_tool("contradiction_list", {"decisionId": decision_id})
+    assert open_contradictions.structured_content["total"] == 7
+    reviews = await client.call_tool("review_list", {"decisionId": decision_id})
+    assert reviews.structured_content["total"] == 5
+
+    # a person decides one proposal; the model's tool list never carries review_decide (the site enforces that)
+    proposal_id = reviews.structured_content["proposals"][0]["proposalId"]
+    decided = await client.call_tool(
+        "review_decide",
+        {"proposalId": proposal_id, "decision": "approve", "actorId": ACTOR, "comment": "fix in the next sprint"},
+    )
+    assert decided.is_error is False, decided.content
+    assert decided.structured_content["status"] == "approved"
+    assert decided.structured_content["approval"]["actorId"].startswith("sha256:")
+    assert decided.structured_content["approval"]["evidenceSnapshotHash"].startswith("sha256:")
+    assert ACTOR not in str(decided.content)
+    remaining = await client.call_tool("review_list", {"decisionId": decision_id})
+    assert remaining.structured_content["total"] == 4
+    again = await client.call_tool("review_decide", {"proposalId": proposal_id, "decision": "reject", "actorId": ACTOR})
+    assert again.is_error is True  # decided once
     return result
 
 

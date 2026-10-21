@@ -41,6 +41,15 @@ class InMemoryLedger:
         except KeyError:
             raise NotFound(decision_id) from None
 
+    def list_decisions(self, *, status: str | None = None) -> list[DecisionRecord]:
+        return [d for d in self.decisions.values() if status is None or d.status.value == status]
+
+    def update_decision(self, decision: DecisionRecord) -> DecisionRecord:
+        """Replace a decision in place (status changes, supersession). The id must already be in the ledger."""
+        self.get_decision(decision.decisionId)
+        self.decisions[decision.decisionId] = decision
+        return decision
+
     # evidence
     def add_evidence(self, evidence: Evidence) -> Evidence:
         self.evidence[evidence.evidenceId] = evidence
@@ -51,6 +60,14 @@ class InMemoryLedger:
             return self.evidence[evidence_id]
         except KeyError:
             raise NotFound(evidence_id) from None
+
+    def list_evidence(self, *, kind: str | None = None, evidence_class: str | None = None) -> list[Evidence]:
+        return [
+            e
+            for e in self.evidence.values()
+            if (kind is None or e.kind.value == kind)
+            and (evidence_class is None or e.evidenceClass.value == evidence_class)
+        ]
 
     def evidence_for(self, decision: DecisionRecord, *, now: datetime | None = None) -> list[Evidence]:
         """Every record not yet expired. Scope filtering happens in the drift engine, resource by resource."""
@@ -103,6 +120,27 @@ class InMemoryLedger:
             if p.status.value == "open" and (decision_id is None or p.decisionId == decision_id)
         ]
 
+    def list_proposals(self, decision_id: str | None = None, *, status: str | None = None) -> list[ReviewProposal]:
+        return [
+            p
+            for p in self.proposals.values()
+            if (status is None or p.status.value == status) and (decision_id is None or p.decisionId == decision_id)
+        ]
+
+    def get_proposal(self, proposal_id: str) -> ReviewProposal:
+        try:
+            return self.proposals[proposal_id]
+        except KeyError:
+            raise NotFound(proposal_id) from None
+
+    def update_proposal(self, proposal: ReviewProposal) -> ReviewProposal:
+        self.get_proposal(proposal.proposalId)
+        self.proposals[proposal.proposalId] = proposal
+        return proposal
+
     def add_approval(self, approval: Approval) -> Approval:
         self.approvals[approval.approvalId] = approval
         return approval
+
+    def approvals_for(self, proposal_id: str) -> list[Approval]:
+        return [a for a in self.approvals.values() if a.proposalId == proposal_id]
