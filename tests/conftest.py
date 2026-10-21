@@ -46,10 +46,10 @@ def serve(app):
     """Run `app` under uvicorn on a free loopback port for the duration of a test; yields the base URL."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
+    sock.listen(16)
     port = sock.getsockname()[1]
-    sock.close()
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
-    thread = threading.Thread(target=server.run, daemon=True)
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
     thread.start()
     deadline = time.time() + 15
     while not server.started and time.time() < deadline:
@@ -58,6 +58,7 @@ def serve(app):
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True
     thread.join(timeout=10)
+    sock.close()
 
 
 @pytest.fixture

@@ -106,6 +106,62 @@ def test_every_tool_declares_caller_class_and_no_azure(run):
     run(body)
 
 
+def test_adr_create_refuses_claims_its_detector_cannot_evaluate(run):
+    async def body(call: Session):
+        base = call.decision["claims"][0]
+
+        async def create(**claim):
+            return await call("adr_create", decision={**call.decision, "claims": [{**base, **claim}]})
+
+        assert "unknown detector" in (await create(detectorId="nope"))["error"]
+        bad_expectation = await create(expectation={"property": "x", "operator": "in", "value": [True]})
+        assert "invalid_request" in bad_expectation["error"] and "eq/neq" in bad_expectation["error"]
+        zones = await create(detectorId="zone-redundancy", parameters={"minimumZones": "abc"})
+        assert "minimumZones" in zones["error"]
+        tag = await create(
+            detectorId="tag-required", expectation={"property": "tag", "operator": "exists"}, parameters={}
+        )
+        assert "the parameter tag" in tag["error"]
+        policy = await create(
+            detectorId="policy-assignment-present",
+            expectation={"property": "assigned", "operator": "eq", "value": True},
+            parameters={},
+        )
+        assert "policyDefinitionId" in policy["error"]
+        retirement = await create(
+            detectorId="retirement-exposure",
+            expectation={"property": "exposedResources", "operator": "eq", "value": 0},
+            parameters={"withinDays": True},
+        )
+        assert "withinDays" in retirement["error"]
+        assert (await call("adr_list"))["total"] == 1  # none of the refused decisions was stored
+        good = await create(detectorId="zone-redundancy", parameters={"minimumZones": 3})
+        assert good["status"] == "draft"
+
+    run(body)
+
+
+def test_evidence_ingest_never_trusts_the_caller_about_authentication(run):
+    async def body(call: Session):
+        tools = {t.name: t for t in (await call.client.list_tools()).tools}
+        assert "authenticated" not in tools["evidence_ingest"].input_schema["properties"]
+        assert tools["evidence_ingest"].annotations.idempotent_hint is False
+        assert tools["drift_evaluate"].annotations.idempotent_hint is False
+        claimed = await call(
+            "evidence_ingest",
+            kind="azure-mcp-result",
+            evidenceClass="observed",
+            payload={"groups": []},
+            subject={"scope": "subscription", "subscriptionId": SUBSCRIPTION},
+            provenance={"sourceType": "azure-mcp", "tool": "group_list", "serverVersion": "3.0.0"},
+        )
+        assert claimed["confidence"] == 0.74  # the provenance's word does not lift the unauthenticated cap
+        listed = (await call("evidence_list", kind="azure-mcp-result"))["evidence"]
+        assert listed[0]["confidence"] == 0.74 and listed[0]["sourceType"] == "azure-mcp"
+
+    run(body)
+
+
 def test_adr_create_rejects_accepted_status(run):
     async def body(call: Session):
         assert "error" in await call("adr_create", decision={**call.decision, "status": "accepted"})

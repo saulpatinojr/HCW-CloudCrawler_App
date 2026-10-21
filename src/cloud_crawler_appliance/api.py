@@ -4,7 +4,7 @@ envelope for every other /api path, and no-store on everything under /api."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from cloud_crawler_core import __version__ as engine_version
@@ -55,7 +55,9 @@ def create_app(
     logs.configure(silent=settings.log_silent)
     ledger = ledger if ledger is not None else InMemoryLedger()
     host = host if host is not None else host_for(settings, env)
-    mcp = build_mcp_server(ledger, max_rows=settings.max_rows, host=host)
+    mcp = build_mcp_server(
+        ledger, max_rows=settings.max_rows, host=host, observed_ttl=timedelta(hours=settings.evidence_ttl_hours)
+    )
     transport_security = (
         TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=list(settings.allowed_hosts))
         if settings.allowed_hosts

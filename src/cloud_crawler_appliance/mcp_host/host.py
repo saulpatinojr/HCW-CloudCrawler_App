@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -189,6 +189,7 @@ def evidence_from_result(
     collection_run_id: str | None = None,
     max_rows: int = 5_000,
     actor_hash: str | None = None,
+    ttl_override: timedelta | None = None,
 ) -> Evidence:
     """Observed evidence from one result: the structured content is hashed, redacted and normalised by the tool."""
     if result.is_error:
@@ -218,4 +219,5 @@ def evidence_from_result(
         now=now,
         collection_run_id=collection_run_id,
         max_rows=max_rows,
+        ttl_override=ttl_override,
     )

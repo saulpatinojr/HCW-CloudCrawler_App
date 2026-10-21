@@ -1,7 +1,9 @@
 # Samples
 
 Fictional only. Subscription `00000000-0000-0000-0000-000000000001`, resource
-names `hcw-sample-*`. Nothing here was exported from a real tenant.
+names `hcw-sample-*`, except storage accounts, whose names Azure forbids a
+hyphen in: those are `hcwsamplestprod01` and `hcwsamplestdev01`. Nothing here
+was exported from a real tenant.
 
 | File | What it is |
 | --- | --- |

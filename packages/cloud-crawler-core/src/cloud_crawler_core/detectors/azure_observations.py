@@ -65,10 +65,22 @@ def _types_match(claim: Claim, row: dict[str, Any]) -> bool:
     return not types or (row.get("impactedField") or "") in types
 
 
+def _positive_int(parameters: dict[str, Any], name: str) -> None:
+    value = parameters.get(name)
+    if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 1):
+        raise ValueError(f"the parameter {name} must be an integer of at least 1")
+
+
 class AdvisorFindings(EvidenceDetector):
     detector_id = "advisor-findings"
     question = "Are there open Advisor recommendations of the claimed category and impact in scope?"
     tools = (ADVISOR_LIST,)
+
+    def validate_claim(self, claim: Claim) -> None:
+        _require(claim, "openFindings", 0)
+        for name in ("category", "impact"):
+            if name in claim.parameters and not isinstance(claim.parameters[name], str):
+                raise ValueError(f"claim {claim.claimId}: the parameter {name} must be a string")
 
     def evaluate(
         self, claim: Claim, evidence: list[Evidence], *, scope: DecisionScope, now: datetime
@@ -150,6 +162,13 @@ class RetirementExposure(EvidenceDetector):
     question = "Does a resource in scope depend on a service retiring within the claimed window?"
     tools = (ADVISOR_LIST,)
 
+    def validate_claim(self, claim: Claim) -> None:
+        _require(claim, "exposedResources", 0)
+        try:
+            _positive_int(claim.parameters, "withinDays")
+        except ValueError as exc:
+            raise ValueError(f"claim {claim.claimId}: {exc}") from None
+
     def evaluate(
         self, claim: Claim, evidence: list[Evidence], *, scope: DecisionScope, now: datetime
     ) -> list[DriftFinding]:
@@ -223,6 +242,15 @@ class PolicyAssignmentPresent(EvidenceDetector):
     detector_id = "policy-assignment-present"
     question = "Is the declared policy definition or initiative assigned at the scope?"
     tools = (POLICY_LIST,)
+
+    def validate_claim(self, claim: Claim) -> None:
+        _require(claim, "assigned", True)
+        definition = claim.parameters.get("policyDefinitionId")
+        if not isinstance(definition, str) or not definition.strip():
+            raise ValueError(f"claim {claim.claimId}: the parameter policyDefinitionId is required")
+        for name in ("scope", "enforcementMode"):
+            if name in claim.parameters and not isinstance(claim.parameters[name], str):
+                raise ValueError(f"claim {claim.claimId}: the parameter {name} must be a string")
 
     def evaluate(
         self, claim: Claim, evidence: list[Evidence], *, scope: DecisionScope, now: datetime

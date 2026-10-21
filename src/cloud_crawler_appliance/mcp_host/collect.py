@@ -47,6 +47,7 @@ async def collect(
     actor_hash: str | None = None,
     max_rows: int = 5_000,
     now: datetime | None = None,
+    observed_ttl: timedelta | None = None,
 ) -> CollectionRun:
     started = now or datetime.now(UTC)
     run_id = new_id("run")
@@ -64,6 +65,7 @@ async def collect(
                 collection_run_id=run_id,
                 max_rows=max_rows,
                 actor_hash=actor_hash,
+                ttl_override=observed_ttl,
             )
         except HostError as exc:
             errors.append(exc.code)

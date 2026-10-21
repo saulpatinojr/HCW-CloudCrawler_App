@@ -32,8 +32,9 @@ deployment and the proving ground. The design is the website proposal
   `meta.callsAzure`. The HTTP transport is streamable HTTP, stateless, mounted at `/mcp`; `/api/health` is flat
   (`id`, `version`, `edition` at the top level).
 - No secrets, tokens, customer inventories or real tenant/subscription ids anywhere, fixtures and tests included.
-  Samples use subscription `00000000-0000-0000-0000-000000000001` and `hcw-sample-*` names only
-  (`tests/security/test_no_secrets.py` enforces it).
+  Samples use subscription `00000000-0000-0000-0000-000000000001` and `hcw-sample-*` names only, with one
+  Azure-imposed exception: storage account names take no hyphen, so the sample accounts are `hcwsamplest*`
+  (`tests/security/test_no_secrets.py` enforces the identifiers).
 - Owner-pasteable commands: no placeholders; bash and PowerShell both acceptable; say which shell.
 - ADRs in `docs/adr/` follow the template there (next number: 0004). Record limitations in `VALIDATION.md`. Keep
   `CHANGELOG.md` current in the same pull request. Pull requests open ready for review and follow

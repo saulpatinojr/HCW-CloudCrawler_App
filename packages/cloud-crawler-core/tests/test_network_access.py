@@ -67,6 +67,15 @@ FLAT_REJECTED = {"privateLinkServiceConnectionState": {"status": "Rejected"}}
         ({"privateEndpointConnections": [APPROVED, PENDING]}, True, 1),
         ({"privateEndpointConnections": [PENDING, FLAT_REJECTED]}, False, 0),
         ({"privateEndpointConnections": [{"id": "/pe/1"}]}, True, 1),  # no state in the export: counted
+        ({"privateEndpointConnections": ["x"]}, None, "x"),
+        ({"privateEndpointConnections": [{"properties": "x"}]}, None, "x"),
+        ({"privateEndpointConnections": [{"properties": {"privateLinkServiceConnectionState": "x"}}]}, None, "x"),
+        ({"privateEndpointConnections": [{"properties": {"privateLinkServiceConnectionState": {}}}]}, None, {}),
+        (
+            {"privateEndpointConnections": [{"properties": {"privateLinkServiceConnectionState": {"status": 1}}}]},
+            None,
+            {"status": 1},
+        ),
         ({"privateEndpointConnections": []}, False, 0),
         ({"privateEndpointConnections": "x"}, None, "x"),
         ({}, None, None),

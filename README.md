@@ -35,9 +35,11 @@ decisions that bind this repository are recorded as ADRs in `docs/adr/`.
 
 Azure MCP Server is consumed as a separate process, pinned to **3.0.0**
 (ADR 0001). The appliance never links it, never forks it and never stores an
-Azure credential: the App edition runs under a managed identity or forwards
-a user's delegated token through Azure MCP's on-behalf-of flow; the AddOn
-edition cannot reach Azure at all (ADR 0003).
+Azure credential. Today the App edition starts the server as a child process
+over stdio with the developer's own credential chain (the development model);
+running under a managed identity, or forwarding a user's delegated token
+through Azure MCP's on-behalf-of flow, is planned with the HTTP transport.
+The AddOn edition cannot reach Azure at all (ADR 0003).
 
 ## Status
 
@@ -187,6 +189,7 @@ docs/adr/                      this edition's decisions
   never score. Detector ids are only ever added, never renamed.
 - The appliance refuses to start when a secret-bearing credential variable is
   present (`AZURE_CLIENT_SECRET`, `AZURE_CLIENT_CERTIFICATE_PATH`,
+  `AZURE_CLIENT_CERTIFICATE_PASSWORD`,
   `AZURE_USERNAME`, `AZURE_PASSWORD`).
 - Logs are content-free: counts, durations, flags and hashed identifiers.
 - Azure MCP Server stays at 3.0.0 until an ADR records the upgrade criteria

@@ -150,6 +150,58 @@ def test_collect_ingests_every_result_and_records_failures():
     assert [s.status for s in failing.sources] == ["ok"] + ["no_recording"] * 4
 
 
+def test_observed_ttl_setting_reaches_observed_evidence():
+    import asyncio as _asyncio
+    from datetime import timedelta
+
+    from mcp.client import Client
+
+    from cloud_crawler_appliance.mcp_server import build_mcp_server
+    from cloud_crawler_appliance.security import logging as logs
+
+    logs.configure(silent=True)
+    ledger = InMemoryLedger()
+    server = build_mcp_server(
+        ledger, host=RecordedAzureMcpHost.from_directory(RECORDINGS), observed_ttl=timedelta(hours=2)
+    )
+
+    async def run():
+        async with Client(server) as client:
+            collected = await client.call_tool(
+                "collection_run_azure",
+                {"subscriptionId": SUBSCRIPTION, "actorId": "00000000-0000-0000-0000-000000000011"},
+            )
+            assert collected.is_error is False, collected.content
+            handed_in = await client.call_tool(
+                "evidence_ingest",
+                {
+                    "kind": "azure-mcp-result",
+                    "evidenceClass": "observed",
+                    "payload": {"groups": []},
+                    "subject": {"scope": "subscription", "subscriptionId": SUBSCRIPTION},
+                    "provenance": {"sourceType": "azure-mcp", "tool": "group_list"},
+                },
+            )
+            assert handed_in.is_error is False, handed_in.content
+            upload = await client.call_tool(
+                "evidence_ingest",
+                {
+                    "kind": "arg-export",
+                    "evidenceClass": "imported",
+                    "payload": [],
+                    "subject": {"scope": "subscription", "subscriptionId": SUBSCRIPTION},
+                    "provenance": {"sourceType": "upload"},
+                },
+            )
+            assert upload.is_error is False, upload.content
+
+    _asyncio.run(run())
+    observed = [e for e in ledger.evidence.values() if e.evidenceClass.value == "observed"]
+    imported = [e for e in ledger.evidence.values() if e.evidenceClass.value == "imported"]
+    assert len(observed) == 6 and all(e.expiresAt - e.retrievedAt == timedelta(hours=2) for e in observed)
+    assert len(imported) == 1 and imported[0].expiresAt - imported[0].retrievedAt == timedelta(days=7)
+
+
 def test_settings_select_the_host_mode():
     assert Settings.from_env({}).azmcp_mode == "off" and azure_connectivity("off") == "not-configured"
     assert Settings.from_env({"CC_AZMCP_MODE": "Recorded"}).azmcp_mode == "recorded"

@@ -94,6 +94,19 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- Review round on the first pull request: `adr_create` refuses a claim its
+  detector cannot evaluate (unknown detector, an expectation of the wrong
+  shape, bad parameters) instead of failing every later `drift_evaluate`;
+  `evidence_ingest` no longer takes `authenticated` from the caller, so
+  handed-in evidence is always capped at 0.74 whatever its provenance
+  claims; `CC_EVIDENCE_TTL_HOURS` now reaches observed evidence; the ledger
+  closes an open contradiction as `fixed` when the same claim and resource
+  evaluate `supported`; malformed private endpoint entries answer unknown;
+  `gte`/`lte` expectations refuse booleans; `evidence_ingest` and
+  `drift_evaluate` declare `idempotentHint: false`; every workflow checkout
+  sets `persist-credentials: false`; the Dockerfile tolerates only the pip
+  uninstall; the storage account naming exception is documented.
+
 ### Fixed
 
 ### Security

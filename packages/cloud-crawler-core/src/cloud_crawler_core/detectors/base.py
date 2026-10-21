@@ -75,6 +75,19 @@ class Detector:
     question: str
     readers: dict[str, Reader] = field(default_factory=dict)  # lower-case ARM type (or "*") -> reader
     valued: bool = False  # False: boolean question; True: the reading is a value the expectation compares
+    parameter_check: Callable[[dict[str, Any]], str | None] | None = None  # a reason the parameters are wrong
+
+    def validate_claim(self, claim: Claim) -> None:
+        """Raise ValueError when the claim's expectation or parameters cannot be evaluated by this detector. Called
+        when a decision is authored, so a bad claim never reaches the drift engine."""
+        if self.valued:
+            _check_valued_expectation(claim)
+        else:
+            _expected_boolean(claim)
+        if self.parameter_check is not None:
+            reason = self.parameter_check(claim.parameters)
+            if reason:
+                raise ValueError(f"claim {claim.claimId}: {reason}")
 
     @property
     def resource_types(self) -> tuple[str, ...]:
@@ -91,9 +104,8 @@ class Detector:
         evidence_ids: list[str],
         now: datetime,
     ) -> list[DriftFinding]:
+        self.validate_claim(claim)
         expected_true = None if self.valued else _expected_boolean(claim)
-        if self.valued:
-            _check_valued_expectation(claim)
         findings: list[DriftFinding] = []
         for resource in resources:
             reader = self.reader_for(resource.type)
@@ -161,7 +173,9 @@ def _check_valued_expectation(claim: Claim) -> None:
         )
     if expectation.operator is Operator.IN and not isinstance(expectation.value, list):
         raise ValueError(f"claim {claim.claimId}: operator in takes a list, got {expectation.value!r}")
-    if expectation.operator in (Operator.GTE, Operator.LTE) and not isinstance(expectation.value, int | float):
+    if expectation.operator in (Operator.GTE, Operator.LTE) and (
+        isinstance(expectation.value, bool) or not isinstance(expectation.value, int | float)
+    ):
         raise ValueError(f"claim {claim.claimId}: operator {expectation.operator.value} takes a number")
 
 
@@ -212,6 +226,10 @@ class EvidenceDetector:
     version: str = "1.0.0"
     question: str = ""
     tools: tuple[str, ...] = ()  # the Azure MCP tools whose results this detector reads
+
+    def validate_claim(self, claim: Claim) -> None:
+        """Raise ValueError when the claim cannot be evaluated by this detector (called at authoring time)."""
+        raise NotImplementedError
 
     def evaluate(
         self,

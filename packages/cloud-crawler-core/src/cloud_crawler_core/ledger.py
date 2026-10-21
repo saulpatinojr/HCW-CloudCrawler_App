@@ -9,11 +9,13 @@ from datetime import datetime
 from cloud_crawler_core.models import (
     Approval,
     Contradiction,
+    ContradictionResolution,
     DecisionRecord,
     DriftFinding,
     DriftResult,
     Evidence,
     ReviewProposal,
+    Verdict,
 )
 
 
@@ -78,10 +80,18 @@ class InMemoryLedger:
 
     # drift
     def record(self, result: DriftResult) -> DriftResult:
-        """Keep every finding; merge contradictions by (claim, resource) so firstSeenAt survives re-evaluation."""
+        """Keep every finding; merge contradictions by (claim, resource) so firstSeenAt survives re-evaluation; close
+        an open contradiction as `fixed` when the same claim and resource now evaluate `supported`."""
         for finding in result.findings:
             self.findings[finding.findingId] = finding
         existing = {(c.claimId, c.resourceId): c for c in self.contradictions.values() if c.resolvedAt is None}
+        for finding in result.findings:
+            key = (finding.claimId, finding.resourceId)
+            if finding.verdict is Verdict.SUPPORTED and key in existing:
+                previous = existing.pop(key)
+                self.contradictions[previous.contradictionId] = previous.model_copy(
+                    update={"resolvedAt": result.evaluatedAt, "resolution": ContradictionResolution.FIXED}
+                )
         merged: list[Contradiction] = []
         for contradiction in result.contradictions:
             key = (contradiction.claimId, contradiction.resourceId)

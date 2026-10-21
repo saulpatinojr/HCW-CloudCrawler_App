@@ -30,7 +30,7 @@ RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
- && python -m pip uninstall -y pip setuptools wheel >/dev/null 2>&1 || true \
+ && (python -m pip uninstall -y pip setuptools wheel >/dev/null 2>&1 || true) \
  && rm -rf /usr/local/lib/python3.14/ensurepip /usr/local/lib/python3.14/site-packages/pip* \
            /usr/local/lib/python3.14/site-packages/setuptools* /usr/local/lib/python3.14/site-packages/wheel* \
            /usr/local/bin/pip* /usr/local/bin/wheel /root/.cache \

@@ -21,11 +21,12 @@ so the lab edition, which never has one, never lists it.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 import mcp_types as types
 from cloud_crawler_core import __version__ as engine_version
+from cloud_crawler_core.detectors import get_detector
 from cloud_crawler_core.drift import evaluate_decision
 from cloud_crawler_core.hashing import sha256_of, sha256_text
 from cloud_crawler_core.ids import new_id
@@ -255,7 +256,15 @@ def _actor(actor_id: str) -> str:
     return sha256_text(actor_id.strip())
 
 
-def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: AzureMcpHost | None = None) -> MCPServer:
+def build_mcp_server(
+    ledger: InMemoryLedger,
+    *,
+    max_rows: int = 5_000,
+    host: AzureMcpHost | None = None,
+    observed_ttl: timedelta | None = None,
+) -> MCPServer:
+    """`observed_ttl` is the configured time to live of observed evidence (`CC_EVIDENCE_TTL_HOURS`); other classes
+    keep the engine's defaults, as the setting's documentation says."""
     server = MCPServer(
         "cloud-crawler",
         title="Cloud Crawler",
@@ -309,19 +318,25 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
         requirements: list[EvidenceRequirement] = []
         for item in decision.claims:
             claim_id = new_id("claim")
-            claims.append(
-                Claim(
-                    claimId=claim_id,
-                    decisionId=decision_id,
-                    statement=item.statement,
-                    detectorId=item.detectorId,
-                    parameters=item.parameters,
-                    selector=item.selector,
-                    severity=item.severity,
-                    required=item.required,
-                    expectation=item.expectation,
-                )
+            claim = Claim(
+                claimId=claim_id,
+                decisionId=decision_id,
+                statement=item.statement,
+                detectorId=item.detectorId,
+                parameters=item.parameters,
+                selector=item.selector,
+                severity=item.severity,
+                required=item.required,
+                expectation=item.expectation,
             )
+            # a claim its detector cannot evaluate is refused here, not at the first drift_evaluate
+            try:
+                get_detector(claim.detectorId).validate_claim(claim)
+            except KeyError:
+                raise ToolError("invalid_request: unknown detector") from None
+            except ValueError as exc:
+                raise ToolError(f"invalid_request: {exc}") from None
+            claims.append(claim)
             requirements.append(EvidenceRequirement(claimId=claim_id, maxAgeHours=item.maxAgeHours))
         record = DecisionRecord(
             decisionId=decision_id,
@@ -439,7 +454,7 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
         "imported evidence.",
         caller="model",
         read_only=False,
-        idempotent=True,
+        idempotent=False,
     )
     def evidence_ingest(
         kind: EvidenceKind,
@@ -447,7 +462,6 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
         payload: Any,
         subject: Subject,
         provenance: SourceProvenance,
-        authenticated: bool = False,
     ) -> EvidenceIngested:
         try:
             record = ingest(
@@ -456,8 +470,12 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
                 payload=payload,
                 subject=subject,
                 provenance=provenance,
-                authenticated=authenticated,
+                # The caller's word is not an identity: whatever the provenance claims, evidence handed in through
+                # this tool is unauthenticated and capped at 0.74. Only the appliance's own collection run (which
+                # made the Azure call itself) stores authenticated evidence.
+                authenticated=False,
                 max_rows=max_rows,
+                ttl_override=observed_ttl if evidenceClass is EvidenceClass.OBSERVED else None,
             )
         except IngestionError as exc:
             logs.log_event("evidence_rejected", code=exc.code, kind=kind.value)
@@ -544,7 +562,7 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
         "contradictions, review proposals, the severity-weighted score and the coverage.",
         caller="model",
         read_only=False,
-        idempotent=True,
+        idempotent=False,
     )
     def drift_evaluate(decisionId: str) -> DriftEvaluation:
         decision = decision_or_error(decisionId)
@@ -725,7 +743,12 @@ def build_mcp_server(ledger: InMemoryLedger, *, max_rows: int = 5_000, host: Azu
             try:
                 async with host:
                     run = await collect(
-                        host, ledger, subscription_id=subscriptionId.strip(), actor_hash=actor, max_rows=max_rows
+                        host,
+                        ledger,
+                        subscription_id=subscriptionId.strip(),
+                        actor_hash=actor,
+                        max_rows=max_rows,
+                        observed_ttl=observed_ttl,
                     )
             except HostError as exc:
                 logs.log_event("collection_run", status=exc.code)

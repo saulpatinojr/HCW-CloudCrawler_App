@@ -10,6 +10,7 @@ from cloud_crawler_core.ledger import InMemoryLedger, NotFound
 from cloud_crawler_core.models import (
     Approval,
     ApprovalDecision,
+    ContradictionResolution,
     EvidenceClass,
     EvidenceKind,
     ScopeKind,
@@ -57,6 +58,50 @@ def test_ledger_round_trip_and_contradiction_merge(decision, sample_export, now)
         evidenceSnapshotHash="sha256:y",
     )
     assert ledger.add_approval(approval) is approval
+
+
+def test_a_supported_re_evaluation_closes_the_open_contradiction(decision, sample_export, now):
+    ledger = InMemoryLedger()
+    ledger.add_decision(decision)
+    broken = ingest(
+        kind=EvidenceKind.ARG_EXPORT,
+        evidence_class=EvidenceClass.IMPORTED,
+        payload=sample_export,
+        subject=Subject(scope=ScopeKind.SUBSCRIPTION),
+        provenance=SourceProvenance(sourceType=SourceType.UPLOAD),
+        authenticated=False,
+        now=now,
+    )
+    ledger.add_evidence(broken)
+    first = ledger.record(evaluate_decision(decision, ledger.evidence_for(decision, now=now), now=now))
+    sql = next(c for c in first.contradictions if c.resourceId.endswith("/hcw-sample-sql-01"))
+    # the owner fixes the database: a later export shows it zone redundant
+    fixed_export = {**sample_export, "data": [dict(r) for r in sample_export["data"]]}
+    for row in fixed_export["data"]:
+        if row["name"] == "hcw-sample-sql-01":
+            row["properties"] = {**row["properties"], "zoneRedundant": True}
+    later = now + timedelta(hours=1)
+    ledger.add_evidence(
+        ingest(
+            kind=EvidenceKind.ARG_EXPORT,
+            evidence_class=EvidenceClass.IMPORTED,
+            payload=fixed_export,
+            subject=Subject(scope=ScopeKind.SUBSCRIPTION),
+            provenance=SourceProvenance(sourceType=SourceType.UPLOAD),
+            authenticated=False,
+            now=later,
+        )
+    )
+    second = ledger.record(evaluate_decision(decision, ledger.evidence_for(decision, now=later), now=later))
+    assert {f.resourceId: f.verdict.value for f in second.findings if f.resourceId.endswith("/hcw-sample-sql-01")} == {
+        sql.resourceId: "supported"
+    }
+    closed = ledger.contradictions[sql.contradictionId]
+    assert closed.resolvedAt == later and closed.resolution is ContradictionResolution.FIXED
+    assert {c.resourceId for c in ledger.open_contradictions(decision.decisionId)} == {
+        c.resourceId for c in second.contradictions
+    }
+    assert all(c.resourceId.endswith("/hcw-sample-cosmos-prod-01") for c in second.contradictions)
 
 
 def test_bundle_contents(decision, sample_export, now):

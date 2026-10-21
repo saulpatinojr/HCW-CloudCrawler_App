@@ -81,10 +81,19 @@ def private_endpoint_connections(resource: NormalizedResource, _: dict[str, Any]
         return Reading(None, connections, "properties.privateEndpointConnections is not a list")
     approved = 0
     for connection in connections:
-        properties = connection.get("properties", connection) if isinstance(connection, dict) else {}
-        state = properties.get("privateLinkServiceConnectionState") if isinstance(properties, dict) else None
+        if not isinstance(connection, dict):
+            return Reading(None, connection, "a private endpoint connection is malformed")
+        properties = connection.get("properties", connection)
+        if not isinstance(properties, dict):
+            return Reading(None, properties, "a private endpoint connection's properties are malformed")
+        if "privateLinkServiceConnectionState" not in properties:
+            approved += 1  # some exports omit the state; the connection exists
+            continue
+        state = properties["privateLinkServiceConnectionState"]
         status = state.get("status") if isinstance(state, dict) else None
-        if status is None or (isinstance(status, str) and status.lower() == "approved"):
+        if not isinstance(status, str):
+            return Reading(None, state, "privateLinkServiceConnectionState.status is malformed")
+        if status.lower() == "approved":
             approved += 1
     return Reading(approved > 0, approved)
 

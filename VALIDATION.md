@@ -10,7 +10,7 @@ are the outputs of the commands as run in the authoring session on Python 3.14.6
 | Dependency resolution | `uv sync --all-packages` | 70 packages resolved; `mcp==2.3.0`, `fastapi==0.143.3`, `pydantic==2.14.0`; no cloud SDK |
 | Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 47 files formatted |
 | Lockfile export | `bash scripts/check-lockfiles.sh` | `requirements.lock.txt` matches `uv.lock` (hash-pinned, 300 lines) |
-| Unit, security, acceptance | `uv run pytest -q --cov=packages --cov=src --cov-fail-under=85` | 208 passed, 1 deselected (the `azmcp` contract test); coverage 96.5 percent |
+| Unit, security, acceptance | `uv run pytest -q --cov=packages --cov=src --cov-fail-under=85` | 217 passed, 1 deselected (the `azmcp` contract test); coverage 96.6 percent |
 | Azure MCP 3.0.0 contract | `uv run pytest tests/contract -q -m azmcp` | 1 passed in 7.8 s: `npx @azure/mcp@3.0.0` started over stdio, `serverInfo.version` `3.0.0`, twelve tools across the seven namespaces matched `tests/contract/snapshots/azmcp-3.0.0-tools.json`; every tool the design calls is read-only and non-destructive |
 | Azure MCP build identity | `npx -y @azure/mcp@3.0.0 --version` | `3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b` (the `release/azure/3.x` branch head, not the tagged commit `61715e6a`; recorded in ADR 0001) |
 | Known vulnerabilities | `uv run pip-audit -r requirements.lock.txt --strict` | No known vulnerabilities found |

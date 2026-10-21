@@ -28,10 +28,18 @@ def identity_type(resource: NormalizedResource, parameters: dict[str, Any]) -> R
     return Reading(bool(assigned), raw or "None")
 
 
+def check_parameters(parameters: dict[str, Any]) -> str | None:
+    wanted = parameters.get("identityType")
+    if wanted is not None and (not isinstance(wanted, str) or wanted.replace(" ", "").lower() not in KINDS):
+        return "identityType must be SystemAssigned or UserAssigned"
+    return None
+
+
 MANAGED_IDENTITY = Detector(
     detector_id="managed-identity",
     version="1.0.0",
     question="Does the resource have a managed identity assigned?",
+    parameter_check=check_parameters,
     readers={
         "microsoft.web/sites": identity_type,
         "microsoft.web/sites/slots": identity_type,

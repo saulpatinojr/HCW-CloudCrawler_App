@@ -24,12 +24,18 @@ def tag_value(resource: NormalizedResource, parameters: dict[str, Any]) -> Readi
     return Reading(True, tag_of(resource, name))
 
 
+def _check_tag(parameters: dict[str, Any]) -> str | None:
+    name = parameters.get("tag")
+    return None if isinstance(name, str) and name.strip() else "the parameter tag (the tag name) is required"
+
+
 TAG_REQUIRED = Detector(
     detector_id="tag-required",
     version="1.0.0",
     question="What is the value of the required tag?",
     readers={ANY_TYPE: tag_value},
     valued=True,
+    parameter_check=_check_tag,
 )
 
 
@@ -43,12 +49,17 @@ def sku_value(resource: NormalizedResource, parameters: dict[str, Any]) -> Readi
     return Reading(True, value)
 
 
+def _check_sku(parameters: dict[str, Any]) -> str | None:
+    return None if parameters.get("field", "name") in ("name", "tier") else "the parameter field must be name or tier"
+
+
 SKU_ALLOWED = Detector(
     detector_id="sku-allowed",
     version="1.0.0",
     question="Which SKU does the resource run?",
     readers={ANY_TYPE: sku_value},
     valued=True,
+    parameter_check=_check_sku,
 )
 
 

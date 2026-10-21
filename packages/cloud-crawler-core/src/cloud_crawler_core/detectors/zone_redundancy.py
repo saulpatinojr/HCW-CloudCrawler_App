@@ -88,10 +88,21 @@ def virtual_machine(resource: NormalizedResource, parameters: dict[str, Any]) ->
     return Reading(None, resource.zones, "zone redundancy of a virtual machine is a property of its instance set")
 
 
+def check_parameters(parameters: dict[str, Any]) -> str | None:
+    minimum = parameters.get("minimumZones")
+    if minimum is not None and (isinstance(minimum, bool) or not isinstance(minimum, int) or minimum < 1):
+        return "minimumZones must be an integer of at least 1"
+    instance_set = parameters.get("instanceSet")
+    if instance_set is not None and not isinstance(instance_set, str):
+        return "instanceSet must be a tag name"
+    return None
+
+
 ZONE_REDUNDANCY = Detector(
     detector_id="zone-redundancy",
     version="1.0.0",
     question="Is the resource zone redundant?",
+    parameter_check=check_parameters,
     readers={
         "microsoft.sql/servers/databases": sql_database,
         "microsoft.storage/storageaccounts": storage_account,
