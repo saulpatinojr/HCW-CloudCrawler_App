@@ -70,6 +70,13 @@ once, merge one before rebasing the next.
     Full-only `collection_run_azure` (human, the one tool with
     `meta.callsAzure: true`). The "production platform observations" sample
     decision and acceptance scenario.
+  - The release pipeline (ADR 0002): `release.yml` creates the GitHub
+    Release for a `v*` tag from the changelog section after checking the
+    tag matches the engine version; `publish-core.yml` builds the engine
+    wheel and sdist, verifies the wheel with `scripts/verify-core-wheel.py`
+    (the engine present, no cloud SDK, no HTTP client, no Azure endpoint,
+    pydantic the only requirement), attests provenance and attaches both,
+    which is what the AddOn's `core-update.yml` pins.
   - `src/cloud_crawler_appliance` 0.1.0: the edition guard that refuses
     secret-bearing credential variables, `CC_`-prefixed settings, the
     content-free log writer, an MCP server (streamable HTTP, stateless,

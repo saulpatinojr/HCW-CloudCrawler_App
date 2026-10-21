@@ -133,6 +133,33 @@ sent):
 uv run pytest tests/contract -q -m azmcp
 ```
 
+## Releasing the engine
+
+The AddOn adopts the engine as the wheel attached to a GitHub Release of
+this repository, pinned by URL and sha256 (ADR 0002; the AddOn's
+`core-update.yml` opens the bump pull request). A release is one tag:
+
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` under a `## [0.1.0]`
+   heading dated the release day, and keep
+   `packages/cloud-crawler-core/pyproject.toml` at the same version
+   (`release.yml` refuses a tag that does not match it).
+2. Tag `main` and push the tag. PowerShell:
+
+```powershell
+git switch main; git pull origin main; git tag -a v0.1.0 -m "cloud-crawler-core 0.1.0"; git push origin v0.1.0
+```
+
+`release.yml` creates the release from the changelog section; `publish-core.yml`
+builds the wheel and sdist, verifies the wheel with
+`scripts/verify-core-wheel.py` (the engine, no cloud SDK, no HTTP client,
+no Azure endpoint, pydantic as its only requirement), attests provenance
+and attaches both. A successful run shows two assets on
+`https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0`:
+`cloud_crawler_core-0.1.0-py3-none-any.whl` and `cloud_crawler_core-0.1.0.tar.gz`.
+Within six hours the AddOn's `core-update.yml` opens its bump pull request;
+`gh workflow run core-update.yml --repo saulpatinojr/HCW-CloudCrawler_AddOn`
+(bash or PowerShell) runs it at once.
+
 ## Repository layout
 
 ```text
@@ -143,6 +170,8 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
+scripts/                       the lockfile check and the release wheel verifier
+.github/workflows/             ci, security, codeql, dependency-review, release, publish-core
 docs/adr/                      this edition's decisions
 ```
 

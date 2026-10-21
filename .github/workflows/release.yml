@@ -1,0 +1,43 @@
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem) proposes updates.
+# Creates the GitHub Release for a v* tag from the matching CHANGELOG.md section (publish-core.yml attaches the
+# engine wheel and sdist to it). Uses gh with GITHUB_TOKEN; no third-party action. The tag's version must match the
+# engine package version in packages/cloud-crawler-core/pyproject.toml, or the AddOn's CORE_REF line would name a
+# wheel file that does not exist.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  create:
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: The tag matches the engine version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          version="$(grep -E '^version = ' packages/cloud-crawler-core/pyproject.toml | head -1 | sed -E 's/version = "(.*)"/\1/')"
+          if [ "v$version" != "$tag" ]; then echo "::error::tag $tag does not match cloud-crawler-core version $version"; exit 1; fi
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF#refs/tags/}"
+          version="${tag#v}"
+          awk -v v="$version" '
+            /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, v " ") || index($0, "— " v)) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if ! [ -s /tmp/notes.md ]; then echo "See CHANGELOG.md for $tag." > /tmp/notes.md; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Create the release (idempotent)
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: |
+          set -euo pipefail
+          tag="${{ steps.notes.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "release $tag exists"; exit 0; fi
+          gh release create "$tag" --title "$tag" --notes-file /tmp/notes.md --verify-tag
