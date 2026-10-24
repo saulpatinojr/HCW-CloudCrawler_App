@@ -39,16 +39,52 @@ def test_main_refuses_a_bad_setting_and_scrubs_the_reason(clean_env, capsys):
     assert line["event"] == "startup_refused" and line["reason"].startswith("ValueError:")
 
 
-def test_main_starts_uvicorn_on_all_interfaces_without_access_log_or_proxy_headers(clean_env, monkeypatch):
+def test_main_starts_uvicorn_on_loopback_by_default_without_access_log_or_proxy_headers(clean_env, monkeypatch):
     import uvicorn
 
     clean_env.setenv("PORT", "8123")
     seen: dict = {}
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: seen.update(app=app, **kwargs))
     assert entry.main() == 0
-    assert seen["host"] == "0.0.0.0" and seen["port"] == 8123  # noqa: S104
+    assert seen["host"] == "127.0.0.1" and seen["port"] == 8123
     assert seen["access_log"] is False and seen["proxy_headers"] is False and seen["server_header"] is False
     assert seen["log_level"] == "warning" and callable(seen["app"])
+
+
+def test_main_binds_all_interfaces_only_when_cc_bind_host_says_so(clean_env, monkeypatch, capsys):
+    import uvicorn
+
+    clean_env.setenv("CC_LOG_SILENT", "0")
+    clean_env.setenv("CC_BIND_HOST", "0.0.0.0")  # noqa: S104 - what the container image sets
+    seen: dict = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: seen.update(app=app, **kwargs))
+    assert entry.main() == 0
+    assert seen["host"] == "0.0.0.0"  # noqa: S104
+    # authentication is off and the bind is exposed: said once, content-free
+    warning = json.loads(capsys.readouterr().err.strip().splitlines()[-1])
+    assert warning["event"] == "warning" and warning["auth"] is False and warning["exposed"] is True
+
+
+def test_main_does_not_warn_when_loopback_or_when_sign_in_is_on(clean_env, monkeypatch, capsys):
+    import uvicorn
+
+    clean_env.setenv("CC_LOG_SILENT", "0")
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: None)
+    assert entry.main() == 0
+    assert '"warning"' not in capsys.readouterr().err
+    clean_env.setenv("CC_BIND_HOST", "0.0.0.0")  # noqa: S104
+    clean_env.setenv("CC_AUTH_MODE", "entra")
+    clean_env.setenv("CC_ENTRA_TENANT_ID", "00000000-0000-0000-0000-000000000002")
+    clean_env.setenv("CC_ENTRA_AUDIENCE", "api://00000000-0000-0000-0000-000000000003")
+    assert entry.main() == 0
+    assert '"warning"' not in capsys.readouterr().err
+
+
+def test_main_refuses_entra_mode_without_tenant_or_audience(clean_env, capsys):
+    clean_env.setenv("CC_AUTH_MODE", "entra")
+    assert entry.main() == 3
+    line = json.loads(capsys.readouterr().err.strip().splitlines()[-1])
+    assert line["event"] == "startup_refused" and "CC_ENTRA_TENANT_ID" in line["reason"]
 
 
 def test_module_guard_exits_with_the_code_main_returns(clean_env):

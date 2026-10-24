@@ -36,7 +36,7 @@ deployment and the proving ground. The design is the website proposal
   Azure-imposed exception: storage account names take no hyphen, so the sample accounts are `hcwsamplest*`
   (`tests/security/test_no_secrets.py` enforces the identifiers).
 - Owner-pasteable commands: no placeholders; bash and PowerShell both acceptable; say which shell.
-- ADRs in `docs/adr/` follow the template there (next number: 0004). Record limitations in `VALIDATION.md`. Keep
+- ADRs in `docs/adr/` follow the template there (next number: 0005). Record limitations in `VALIDATION.md`. Keep
   `CHANGELOG.md` current in the same pull request. Pull requests open ready for review and follow
   `.github/PULL_REQUEST_TEMPLATE.md`.
 - **Keep the AddOn informed.** The AddOn (`saulpatinojr/HCW-CloudCrawler_AddOn`) adopts the engine from this repository, so

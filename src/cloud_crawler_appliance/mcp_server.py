@@ -10,9 +10,11 @@ Every refusal is a `ToolError` whose text starts with a content-free code (`not_
 - `model`: tools a chat model may call. Reads, drafts, evidence and proposals. `adr_create` creates `draft` or
   `proposed` decisions only.
 - `human`: tools that change an authoritative record and need a person's explicit action (`adr_accept`,
-  `review_decide`, and the Full-only `collection_run_azure`). They take the actor's object id and store only its
-  hash. The website keeps them out of the model's tool list and calls them from its own authenticated routes; this
-  server records who acted, never why.
+  `review_decide`, and the Full-only `collection_run_azure`). They store only the hash of the actor's object id.
+  With sign-in off (the lab default) the caller supplies `actorId`, as before. With Microsoft Entra sign-in on
+  (`CC_AUTH_MODE=entra`, ADR 0004) the actor is the `oid` of the validated token: the tool needs a delegated token
+  of a person (carrying the configured scope), an app-only token is refused, a typed `actorId` is optional and
+  must equal the token's `oid`, and a different one is refused. This server records who acted, never why.
 
 `collection_run_azure` is the one tool with `meta.callsAzure: true`: it drives the Azure MCP host through the
 standard read-only sequence and ingests every result. It exists only when a host is configured (`CC_AZMCP_MODE`),
@@ -21,6 +23,7 @@ so the lab edition, which never has one, never lists it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -61,13 +64,15 @@ from cloud_crawler_core.models import (
     Verdict,
 )
 from cloud_crawler_core.normalize import IngestionError
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
 from cloud_crawler_appliance import __version__
+from cloud_crawler_appliance.config import DEFAULT_HUMAN_SCOPE
 from cloud_crawler_appliance.mcp_host import AzureMcpHost, HostError, collect
 from cloud_crawler_appliance.security import logging as logs
+from cloud_crawler_appliance.security.entra import principal_of
 
 INSTRUCTIONS = (
     "Cloud Crawler keeps architecture decisions, claims and evidence, and evaluates drift deterministically. "
@@ -112,7 +117,11 @@ class DecisionInput(StrictInput):
         default=DecisionStatus.DRAFT, description="draft or proposed; adr_accept (a person) makes it accepted"
     )
     sourceType: SourceType = SourceType.HUMAN
-    actorId: str | None = Field(default=None, description="The author's object id; stored only as a sha256")
+    actorId: str | None = Field(
+        default=None,
+        description="The author's object id; stored only as a sha256. When the server requires sign-in it comes "
+        "from the token, and a value given here must match it",
+    )
 
 
 class DecisionCreated(BaseModel):
@@ -250,10 +259,51 @@ def _page(items: list, limit: int) -> list:
     return items[: max(1, min(limit, MAX_LIMIT))]
 
 
+@dataclass(frozen=True)
+class AuthPolicy:
+    """What the tools require of the caller's identity. `required` is true when Entra sign-in is on."""
+
+    required: bool = False
+    human_scope: str = DEFAULT_HUMAN_SCOPE
+
+
 def _actor(actor_id: str) -> str:
     if not actor_id or not actor_id.strip():
         raise ToolError("invalid_request: actorId is required for a human-class tool")
     return sha256_text(actor_id.strip())
+
+
+def _acting_hash(ctx: Context, supplied: str | None, policy: AuthPolicy, *, human: bool) -> str | None:
+    """The hash recorded as the actor for this call.
+
+    Sign-in on: the identity is the validated token's `oid`. A human-class tool needs a person (a delegated token
+    with the configured scope); `supplied` is optional and, when present, must name that same object id, so a typed
+    `actorId` can never stand in for someone else. Sign-in off: the caller's own `actorId`, required for a
+    human-class tool and optional elsewhere (None). Neither branch ever puts an identifier in a message or a log.
+    """
+    try:
+        request = ctx.request_context.request
+    except ValueError:  # no request context (called outside a request)
+        request = None
+    principal = principal_of(request)
+    if principal is None:
+        if policy.required:
+            raise ToolError("unauthenticated: this tool needs a signed-in caller")
+        if human:
+            return _actor(supplied or "")
+        return sha256_text(supplied) if supplied else None
+    if human and not principal.is_person(policy.human_scope):
+        raise ToolError("forbidden: this tool needs a signed-in person, not a service or an agent")
+    if supplied and supplied.strip() and supplied.strip().lower() != principal.object_id:
+        raise ToolError("forbidden: actorId does not match the signed-in identity")
+    return sha256_text(principal.object_id)
+
+
+def _human_hash(ctx: Context, supplied: str | None, policy: AuthPolicy) -> str:
+    actor = _acting_hash(ctx, supplied, policy, human=True)
+    if actor is None:  # unreachable today: a human-class call always yields a hash or raises
+        raise ToolError("invalid_request: actorId is required for a human-class tool")
+    return actor
 
 
 def build_mcp_server(
@@ -262,9 +312,12 @@ def build_mcp_server(
     max_rows: int = 5_000,
     host: AzureMcpHost | None = None,
     observed_ttl: timedelta | None = None,
+    auth: AuthPolicy | None = None,
 ) -> MCPServer:
     """`observed_ttl` is the configured time to live of observed evidence (`CC_EVIDENCE_TTL_HOURS`); other classes
-    keep the engine's defaults, as the setting's documentation says."""
+    keep the engine's defaults, as the setting's documentation says. `auth` says whether the tools take the actor from
+    a validated Entra token (see `_acting_hash`); None is the lab default, where the caller supplies it."""
+    policy = auth or AuthPolicy()
     server = MCPServer(
         "cloud-crawler",
         title="Cloud Crawler",
@@ -311,7 +364,8 @@ def build_mcp_server(
         read_only=False,
         idempotent=False,
     )
-    def adr_create(decision: DecisionInput) -> DecisionCreated:
+    def adr_create(decision: DecisionInput, ctx: Context) -> DecisionCreated:
+        created_by = _acting_hash(ctx, decision.actorId, policy, human=False)
         now = datetime.now(UTC)
         decision_id = new_id("decision")
         claims: list[Claim] = []
@@ -355,7 +409,7 @@ def build_mcp_server(
             scope=decision.scope,
             evidenceRequirements=requirements,
             provenance=SourceProvenance(sourceType=decision.sourceType),
-            createdBy=sha256_text(decision.actorId) if decision.actorId else None,
+            createdBy=created_by,
             createdAt=now,
         )
         ledger.add_decision(record)
@@ -368,13 +422,14 @@ def build_mcp_server(
         "adr_accept",
         "Accept a decision record",
         "Mark a draft or proposed decision as accepted on behalf of a person. actorId is the person's object id and "
-        "is stored only as a hash. Accepting an accepted decision again changes nothing.",
+        "is stored only as a hash; when the server requires sign-in it comes from the token and a typed value must "
+        "match it. Accepting an accepted decision again changes nothing.",
         caller="human",
         read_only=False,
         idempotent=True,
     )
-    def adr_accept(decisionId: str, actorId: str, comment: str = "") -> DecisionAccepted:
-        actor = _actor(actorId)
+    def adr_accept(decisionId: str, actorId: str = "", comment: str = "", *, ctx: Context) -> DecisionAccepted:
+        actor = _human_hash(ctx, actorId, policy)
         record = decision_or_error(decisionId)
         if record.status is DecisionStatus.ACCEPTED:
             if record.acceptedBy is None or record.acceptedAt is None:
@@ -683,15 +738,22 @@ def build_mcp_server(
         "review_decide",
         "Decide a review proposal",
         "Approve or reject an open review proposal on behalf of a person. actorId is the person's object id and is "
-        "stored only as a hash; the approval records the hash of the evidence the proposal rested on.",
+        "stored only as a hash; when the server requires sign-in it comes from the token and a typed value must "
+        "match it. The approval records the hash of the evidence the proposal rested on.",
         caller="human",
         read_only=False,
         idempotent=False,
     )
     def review_decide(
-        proposalId: str, decision: ApprovalDecision, actorId: str, comment: str = "", actorRole: str = "architect"
+        proposalId: str,
+        decision: ApprovalDecision,
+        actorId: str = "",
+        comment: str = "",
+        actorRole: str = "architect",
+        *,
+        ctx: Context,
     ) -> Decided:
-        actor = _actor(actorId)
+        actor = _human_hash(ctx, actorId, policy)
         try:
             proposal = ledger.get_proposal(proposalId)
         except NotFound:
@@ -731,14 +793,15 @@ def build_mcp_server(
             "Drive the Azure MCP host through the standard read-only sequence (subscriptions, resource groups, open "
             "high-impact reliability recommendations, service retirements within 180 days, policy assignments) for "
             "one subscription and ingest every result as observed evidence under one collection run. An operator's "
-            "act: actorId is the person's object id, stored only as a hash. Every Azure call is read-only.",
+            "act: actorId is the person's object id, stored only as a hash (from the token when sign-in is required). "
+            "Every Azure call is read-only.",
             caller="human",
             read_only=False,
             idempotent=False,
             calls_azure=True,
         )
-        async def collection_run_azure(subscriptionId: str, actorId: str) -> CollectionRunResult:
-            actor = _actor(actorId)
+        async def collection_run_azure(subscriptionId: str, actorId: str = "", *, ctx: Context) -> CollectionRunResult:
+            actor = _human_hash(ctx, actorId, policy)
             if not subscriptionId.strip():
                 raise ToolError("invalid_request: subscriptionId is required")
             try:

@@ -1,4 +1,5 @@
-"""`python -m cloud_crawler_appliance`: uvicorn on 0.0.0.0:$PORT, no access log, no proxy headers, SIGTERM graceful."""
+"""`python -m cloud_crawler_appliance`: uvicorn on $CC_BIND_HOST:$PORT (loopback unless the deployment says otherwise;
+the container image sets 0.0.0.0), no access log, no proxy headers, SIGTERM graceful."""
 
 from __future__ import annotations
 
@@ -22,11 +23,18 @@ def main() -> int:
         reason = scrub(f"{type(exc).__name__}: {exc}")
         sys.stderr.write(json.dumps({"event": "startup_refused", "reason": reason}) + "\n")
         return 3
+    import ipaddress
+
     import uvicorn
 
+    from cloud_crawler_appliance.security import logging as logs
+
+    if settings.auth_mode == "off" and not ipaddress.ip_address(settings.bind_host).is_loopback:
+        # Not a refusal (the lab image runs this way); said once so an exposed, unauthenticated server is not silent.
+        logs.log_event("warning", auth=False, exposed=True)
     uvicorn.run(
         app,
-        host="0.0.0.0",  # noqa: S104 # nosec B104 - the container ingress is the only listener in front of this port
+        host=settings.bind_host,  # nosec B104 - 0.0.0.0 only when CC_BIND_HOST says so (the image); else loopback
         port=settings.port,
         access_log=False,
         proxy_headers=False,

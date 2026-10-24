@@ -3,7 +3,9 @@ credential variables before this runs. Every key is listed in .env.example."""
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -51,6 +53,52 @@ def _mode(env: Mapping[str, str], key: str) -> str:
     return raw
 
 
+AUTH_MODES = ("off", "entra")
+DEFAULT_HUMAN_SCOPE = "access_as_user"
+DEFAULT_CLOCK_SKEW_SECONDS = 60
+MAX_CLOCK_SKEW_SECONDS = 300
+DEFAULT_JWKS_CACHE_SECONDS = 900
+MIN_JWKS_CACHE_SECONDS = 60
+MAX_JWKS_CACHE_SECONDS = 86_400
+LOOPBACK_BIND_HOST = "127.0.0.1"
+_GUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_SCOPE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+ENTRA_KEYS = (
+    "CC_ENTRA_TENANT_ID",
+    "CC_ENTRA_AUDIENCE",
+    "CC_ENTRA_HUMAN_SCOPE",
+    "CC_ENTRA_CLOCK_SKEW_SECONDS",
+    "CC_ENTRA_JWKS_CACHE_SECONDS",
+)
+
+
+def _auth_mode(env: Mapping[str, str], key: str) -> str:
+    raw = env.get(key, "").strip().lower() or "off"
+    if raw not in AUTH_MODES:
+        raise ValueError(f"{key} must be one of {', '.join(AUTH_MODES)}")
+    return raw
+
+
+def _audiences(env: Mapping[str, str], key: str) -> tuple[str, ...]:
+    """Accepted `aud` values (an application id URI or a client id), space or comma separated."""
+    values = []
+    for item in env.get(key, "").replace(",", " ").split():
+        if len(item) > 256 or any(ord(c) < 33 or ord(c) > 126 for c in item):
+            raise ValueError(f"{key} entries must be printable text without spaces, at most 256 characters")
+        values.append(item)
+    return tuple(dict.fromkeys(values))
+
+
+def _bind_host(env: Mapping[str, str], key: str) -> str:
+    raw = env.get(key, "").strip()
+    if not raw:
+        return LOOPBACK_BIND_HOST
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        raise ValueError(f"{key} must be an IP address such as 127.0.0.1 or 0.0.0.0") from None
+
+
 @dataclass(frozen=True)
 class Settings:
     port: int = 8080
@@ -65,10 +113,43 @@ class Settings:
     # process over stdio, the developer's own credential chain), recorded (replay the JSON recordings in a directory).
     azmcp_mode: str = "off"
     azmcp_recordings: str = "samples/azure-mcp"
+    # Who may call /api and /mcp. off: nobody is asked (the lab default; /api/health is open in both modes).
+    # entra: every route except /api/health needs a valid Microsoft Entra access token for the tenant and audience
+    # below, and the human-only tools take the actor from the token (ADR 0004).
+    auth_mode: str = "off"
+    entra_tenant_id: str = ""
+    entra_audience: tuple[str, ...] = ()
+    entra_human_scope: str = DEFAULT_HUMAN_SCOPE
+    entra_clock_skew_seconds: int = DEFAULT_CLOCK_SKEW_SECONDS
+    entra_jwks_cache_seconds: int = DEFAULT_JWKS_CACHE_SECONDS
+    # The interface uvicorn binds. Loopback unless the deployment says otherwise (the container image sets 0.0.0.0).
+    bind_host: str = LOOPBACK_BIND_HOST
+
+    def __post_init__(self) -> None:
+        if self.auth_mode not in AUTH_MODES:
+            raise ValueError(f"CC_AUTH_MODE must be one of {', '.join(AUTH_MODES)}")
+        if self.auth_mode == "entra":
+            if not _GUID.match(self.entra_tenant_id):
+                raise ValueError("CC_AUTH_MODE=entra needs CC_ENTRA_TENANT_ID set to the tenant (directory) id")
+            if not self.entra_audience:
+                raise ValueError("CC_AUTH_MODE=entra needs CC_ENTRA_AUDIENCE set to the accepted audience value(s)")
+            if not _SCOPE.match(self.entra_human_scope):
+                raise ValueError("CC_ENTRA_HUMAN_SCOPE must be a scope name such as access_as_user")
+            if not 0 <= self.entra_clock_skew_seconds <= MAX_CLOCK_SKEW_SECONDS:
+                raise ValueError(f"CC_ENTRA_CLOCK_SKEW_SECONDS must be between 0 and {MAX_CLOCK_SKEW_SECONDS}")
+            if not MIN_JWKS_CACHE_SECONDS <= self.entra_jwks_cache_seconds <= MAX_JWKS_CACHE_SECONDS:
+                raise ValueError(
+                    f"CC_ENTRA_JWKS_CACHE_SECONDS must be between {MIN_JWKS_CACHE_SECONDS} and {MAX_JWKS_CACHE_SECONDS}"
+                )
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if env is None else env
+        auth_mode = _auth_mode(env, "CC_AUTH_MODE")
+        stray = [key for key in ENTRA_KEYS if auth_mode == "off" and env.get(key, "").strip()]
+        if stray:
+            # Entra settings with authentication off would leave the operator believing the routes are protected.
+            raise ValueError("Entra settings are present but CC_AUTH_MODE is off: " + ", ".join(stray))
         return cls(
             port=_int(env, "PORT", 8080, minimum=1),
             log_silent=_flag(env, "CC_LOG_SILENT"),
@@ -78,4 +159,13 @@ class Settings:
             allowed_hosts=_hosts(env, "CC_ALLOWED_HOSTS"),
             azmcp_mode=_mode(env, "CC_AZMCP_MODE"),
             azmcp_recordings=env.get("CC_AZMCP_RECORDINGS", "").strip() or "samples/azure-mcp",
+            auth_mode=auth_mode,
+            entra_tenant_id=env.get("CC_ENTRA_TENANT_ID", "").strip(),
+            entra_audience=_audiences(env, "CC_ENTRA_AUDIENCE"),
+            entra_human_scope=env.get("CC_ENTRA_HUMAN_SCOPE", "").strip() or DEFAULT_HUMAN_SCOPE,
+            entra_clock_skew_seconds=_int(env, "CC_ENTRA_CLOCK_SKEW_SECONDS", DEFAULT_CLOCK_SKEW_SECONDS, minimum=0),
+            entra_jwks_cache_seconds=_int(
+                env, "CC_ENTRA_JWKS_CACHE_SECONDS", DEFAULT_JWKS_CACHE_SECONDS, minimum=MIN_JWKS_CACHE_SECONDS
+            ),
+            bind_host=_bind_host(env, "CC_BIND_HOST"),
         )

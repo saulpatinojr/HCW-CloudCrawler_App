@@ -62,6 +62,22 @@ def serve(app):
 
 
 @pytest.fixture
+def serve_app():
+    """`start(app)` serves an app on a free loopback port and returns the base URL; every server stops at teardown."""
+    running = []
+
+    def start(app) -> str:
+        generator = serve(app)
+        url = next(generator)
+        running.append(generator)
+        return url
+
+    yield start
+    for generator in running:
+        next(generator, None)
+
+
+@pytest.fixture
 def http_server(quiet_env):
     yield from serve(create_app(Settings.from_env(quiet_env), env=quiet_env))
 
