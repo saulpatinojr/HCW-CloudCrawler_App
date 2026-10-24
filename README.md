@@ -41,6 +41,22 @@ running under a managed identity, or forwarding a user's delegated token
 through Azure MCP's on-behalf-of flow, is planned with the HTTP transport.
 The AddOn edition cannot reach Azure at all (ADR 0003).
 
+## Is there a user interface?
+
+No, and that is by design for now. This App edition has no screens of its own: it is an HTTP API (`/api/health`)
+and an MCP server (`/mcp`) that other programs call, and nothing in this repository serves a web page. The screens
+people use live elsewhere, in the owner-approved design (the website repository's proposal *Azure Architecture MCP
+Appliance on Azure MCP Server 3.0*, sections 7, 9 and 17):
+
+- **The website** (hybridcloudworks.com) owns sign-in, the tenant and subscription pickers, the chat, the evidence
+  and drift views and the approvals. The proposal's feature table calls this "Lab page ... Website only".
+- **The AddOn** ([`HCW-CloudCrawler_AddOn`](https://github.com/saulpatinojr/HCW-CloudCrawler_AddOn)) carries a small
+  web pane (its `web/` folder) that the website frames. It never calls Azure.
+- **This App edition** may one day carry its own sign-in and chat loop for an "enterprise package": the proposal
+  marks both as optional and for that package only. Neither is built here.
+
+Until the owner decides to build that enterprise package, treat this repository as headless.
+
 ## Status
 
 First implementation slice. What exists today:
@@ -141,9 +157,10 @@ The AddOn adopts the engine as the wheel attached to a GitHub Release of
 this repository, pinned by URL and sha256 (ADR 0002; the AddOn's
 `core-update.yml` opens the bump pull request). A release is one tag:
 
-1. Move the `[Unreleased]` entries of `CHANGELOG.md` under a `## [0.1.0]`
-   heading dated the release day, and keep
-   `packages/cloud-crawler-core/pyproject.toml` at the same version
+1. `CHANGELOG.md` already has a `## [0.1.0]` section, dated 2026-10-21 when the release was first prepared.
+   `v0.1.0` has not been tagged yet (no tag and no release exist), so everything under `[Unreleased]` ships with
+   it: fold those entries into the `## [0.1.0]` section and set its date to the release day (`release.yml` takes
+   the release notes from that section). Keep `packages/cloud-crawler-core/pyproject.toml` at the same version
    (`release.yml` refuses a tag that does not match it).
 2. Tag `main` and push the tag. PowerShell:
 
@@ -173,7 +190,7 @@ samples/                       fictional Resource Graph exports, decisions and r
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
 scripts/                       the lockfile check and the release wheel verifier
-.github/workflows/             ci, security, codeql, dependency-review, release, publish-core
+.github/workflows/             ci, security, codeql, dependency-review, release, publish-core, repository-admin
 docs/adr/                      this edition's decisions
 ```
 
@@ -194,6 +211,15 @@ docs/adr/                      this edition's decisions
 - Logs are content-free: counts, durations, flags and hashed identifiers.
 - Azure MCP Server stays at 3.0.0 until an ADR records the upgrade criteria
   being met (ADR 0001).
+
+## Branch and tag protection
+
+Two GitHub rulesets protect this repository. They are applied by the owner-approved `repository-admin` workflow
+(tasks `protect-main` and `protect-release-tags`) and can be checked under Settings, Rules, Rulesets:
+
+- **Protect main:** `main` cannot be deleted or force-pushed, changes arrive through a pull request, and the six
+  checks `lint`, `test`, `contract`, `pip-audit`, `secret-scan` and `image` must pass.
+- **Protect release tags:** a `v*` tag cannot be moved or deleted once pushed. Check the version before tagging.
 
 ## Repository standards
 

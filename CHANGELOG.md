@@ -13,6 +13,14 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- `.github/workflows/repository-admin.yml` (pull request #19): a manual, owner-approved workflow for repository chores. Its tasks are `show-plan`,
+  `protect-main`, `protect-release-tags` and `delete-merged-branches`; it runs in the `admin-ops` environment, does nothing unless `apply` is ticked, and uses a
+  short-lived GitHub App token limited to this repository. No product code changed. The two rulesets it applied (main requires a pull request and the checks
+  `lint`, `test`, `contract`, `pip-audit`, `secret-scan` and `image`; `v*` tags cannot be moved or deleted) are described in the README.
+- README: a section "Is there a user interface?" (no: this edition is headless by design, the screens live in the website and the AddOn's pane) and a section on
+  branch and tag protection. `docs/adr/README.md` gains an index of the three decisions.
+- `docs/whats-new-upstream.md` in the AddOn repository (`HCW-CloudCrawler_AddOn`) records what changes here reach the AddOn; `CLAUDE.md` says to keep it current.
+
 - `tests/security/test_no_secrets.py`: the GUID-scan test now also checks that `.pyc` and `.pyo` files outside a
   `__pycache__` folder are skipped, so the file-suffix filter is covered on its own.
 
@@ -23,6 +31,11 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- README: the repository layout lists `repository-admin`, and release step 1 now matches the changelog as it stands (the `## [0.1.0]` section already exists and
+  nothing is tagged yet, so the `[Unreleased]` entries are folded into it on release day).
+- `infrastructure/README.md` says plainly that the Dockerfile repeats the digest from `versions.env` and that nothing compares the two (ticket #14).
+- `VALIDATION.md` re-run from `main` at `697cdc4` on 2026-10-24 (218 tests, coverage 96.25 percent, contract test and pip-audit clean, CI runs on that commit).
+- `CLAUDE.md`: when a change reaches the AddOn, add an entry to the AddOn's `docs/whats-new-upstream.md` in the same change set, or say in the pull request why not.
 - `codeql.yml` and `dependency-review.yml` use the same runner label as every other workflow (`ubuntu-26.04`, not `ubuntu-latest`). `publish-core.yml` no
   longer passes `--clobber`: attaching the wheel and sdist to a release fails if a file of the same name is already there, so a re-run cannot silently
   replace published files. It also writes a CycloneDX SBOM of the engine's locked runtime dependencies (`uv export --format cyclonedx1.5`), attaches it to
