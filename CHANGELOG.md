@@ -13,6 +13,8 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- `CLAUDE.md`: owner-communication rule to give the exact text for every form field, always with a description.
+
 - `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
   instructions, links).
 
