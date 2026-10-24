@@ -89,7 +89,8 @@ First implementation slice. What exists today:
   `evidence_ingest`, `evidence_list`, `evidence_get`, `drift_evaluate`,
   `drift_list`, `contradiction_list`, `review_list` and `review_get` for the
   model, `review_propose`, the human-only `adr_accept` and `review_decide`,
-  which take a person's object id and store only its hash (every tool
+  which store only the hash of a person's object id (typed by the caller with
+  sign-in off, taken from the Microsoft Entra token with sign-in on; every tool
   carries `meta.caller`), and, only when a host is configured, the Full-only
   `collection_run_azure`, the one tool with `meta.callsAzure: true`; and a
   flat `/api/health` whose `azureConnectivity` names the host mode;
@@ -100,6 +101,9 @@ First implementation slice. What exists today:
   baseline" over every wave-one detector, and the Azure observations
   (retirement review generation, Advisor contradiction with accepted risk,
   policy assignment) through `collection_run_azure` on the recorded host.
+
+Also today: optional Microsoft Entra sign-in on `/api` and `/mcp` (ADR 0004, off by
+default; see "Signing in with Microsoft Entra" below).
 
 Not yet: the HTTP transport to a hosted Azure MCP (managed identity or
 on-behalf-of), live collectors beyond the standard sequence, the persistent
@@ -151,6 +155,77 @@ sent):
 uv run pytest tests/contract -q -m azmcp
 ```
 
+## Signing in with Microsoft Entra
+
+**Interim note: with sign-in off, which is the default, nobody is asked who they are.** Anyone who can reach the
+port can read evidence and accept decisions as if they were a trusted person. Run the appliance only on a trusted lab
+network until you turn sign-in on. Turning it on is a decision recorded in
+[ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md).
+
+Two things make the default less exposed than it used to be. The server now listens on `127.0.0.1` (this machine
+only) unless `CC_BIND_HOST` says otherwise; the container image sets `CC_BIND_HOST=0.0.0.0`, so the image still
+listens on every interface. And if it starts unauthenticated on a non-loopback address, it writes one `warning` line.
+`GET /api/health` reports `"auth": "off"` or `"auth": "entra"` so you can see which one is running.
+
+### What sign-in does
+
+With `CC_AUTH_MODE=entra`, every route except `GET /api/health` needs `Authorization: Bearer <access token>` from
+your Microsoft Entra tenant. The appliance checks the token's signature against your tenant's published signing keys
+(RS256 only), its issuer, audience, expiry and not-before time (with a small clock skew), and that it was issued by
+your tenant. Anything else gets `401` with `WWW-Authenticate: Bearer` and `{"error": {"code", "message"}}`; if the
+signing keys cannot be fetched it answers `503` and tries again later. Nothing about the token is logged or stored.
+Background: [access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens) and
+[claims validation](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation) on Microsoft Learn.
+
+The tools for a person (`adr_accept`, `review_decide`, and `collection_run_azure` when a host is configured) take
+`actorId` from the token's `oid` claim. You can leave `actorId` out; if you send one it must be the same object id,
+or the call is refused. They also need a token a person signed in to get (it carries the scope `access_as_user`), so a
+service or an agent that signs in as itself can read, ingest, propose and evaluate, but cannot accept or decide.
+
+### Settings
+
+None of these is a secret: they are identifiers. Put them in the deployment's settings (Container Apps: the app's
+environment variables). The shapes below use placeholder ids; use your own from step 2 of the next section.
+
+| Setting | Required with `entra` | Example shape | Meaning |
+| --- | --- | --- | --- |
+| `CC_AUTH_MODE` | yes | `entra` | `off` (default) or `entra`. |
+| `CC_ENTRA_TENANT_ID` | yes | `00000000-0000-0000-0000-000000000002` | Your directory (tenant) id. |
+| `CC_ENTRA_AUDIENCE` | yes | `api://00000000-0000-0000-0000-000000000003 00000000-0000-0000-0000-000000000003` | Accepted `aud` values, space or comma separated: the Application ID URI and the client id of the API registration. Version 1.0 tokens carry the first, version 2.0 tokens the second, so list both. |
+| `CC_ENTRA_HUMAN_SCOPE` | no | `access_as_user` | The scope a token needs to call a tool for a person. |
+| `CC_ENTRA_CLOCK_SKEW_SECONDS` | no | `60` | Tolerance on `exp` and `nbf`; 0 to 300. |
+| `CC_ENTRA_JWKS_CACHE_SECONDS` | no | `900` | How long signing keys are cached; 60 to 86400. |
+| `CC_BIND_HOST` | no | `127.0.0.1` | The interface to listen on (an IP address). |
+
+If `CC_AUTH_MODE=entra` is set without the tenant id or the audience, the appliance refuses to start and says which
+setting is missing. If any `CC_ENTRA_*` setting is present while sign-in is `off`, it also refuses to start, so a
+half-finished setup cannot look protected.
+
+### What you do in Microsoft Entra, once
+
+1. Open the [Microsoft Entra admin center](https://entra.microsoft.com), then Identity, Applications, App
+   registrations, New registration.
+2. Name: `HCW Cloud Crawler API`. Supported account types: "Accounts in this organizational directory only
+   (single tenant)". Leave Redirect URI empty. Select Register. On the Overview page, copy the "Application (client)
+   ID" and the "Directory (tenant) ID": these are the values for `CC_ENTRA_AUDIENCE` and `CC_ENTRA_TENANT_ID`.
+3. Open Expose an API. Next to "Application ID URI" select Add and accept the suggested `api://<client id>` value.
+   Select Add a scope: Scope name `access_as_user`; Who can consent "Admins and users"; Admin consent display name
+   `Act as the signed-in user`; Admin consent description `Lets the website call Cloud Crawler as the signed-in
+   user.`; State "Enabled". The audience setting should list both the `api://...` value and the client id.
+4. Open Identity, Applications, Enterprise applications, select `HCW Cloud Crawler API`, Properties, set "Assignment
+   required?" to Yes, and Save. Then Users and groups, Add user/group, and add only the people allowed to use the
+   appliance. Without this, any user in your tenant can obtain a token for the API.
+5. Put TLS in front of the appliance (Container Apps ingress does this) so tokens never travel over plain HTTP, and
+   list its public host name in `CC_ALLOWED_HOSTS`.
+6. Set the settings in the table above, redeploy, and confirm that `GET /api/health` shows `"auth": "entra"` and that
+   `POST /mcp` without a token answers `401`.
+7. Make the client (the website) request tokens for the scope `api://<client id>/access_as_user`.
+
+Details: [register an application](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app),
+[expose a web API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis)
+and [restrict an app to assigned users](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal).
+Not yet checked against a real tenant: see `VALIDATION.md`.
+
 ## Releasing the engine
 
 The AddOn adopts the engine as the wheel attached to a GitHub Release of
@@ -183,7 +258,7 @@ Within six hours the AddOn's `core-update.yml` opens its bump pull request;
 
 ```text
 packages/cloud-crawler-core/   the engine: models, normalise, detectors, drift, ledger, redaction, hashing
-src/cloud_crawler_appliance/   the appliance application: edition guard, config, logging, MCP server, HTTP API,
+src/cloud_crawler_appliance/   the appliance application: edition guard, config, logging, Entra sign-in, MCP server, HTTP API,
                                and mcp_host/ (the client of Azure MCP Server: contract, stdio and recorded hosts, collection)
 tests/                         unit, security, contract (Azure MCP 3.0.0 snapshot) and acceptance suites
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
@@ -208,7 +283,10 @@ docs/adr/                      this edition's decisions
   present (`AZURE_CLIENT_SECRET`, `AZURE_CLIENT_CERTIFICATE_PATH`,
   `AZURE_CLIENT_CERTIFICATE_PASSWORD`,
   `AZURE_USERNAME`, `AZURE_PASSWORD`).
-- Logs are content-free: counts, durations, flags and hashed identifiers.
+- Logs are content-free: counts, durations, flags and hashed identifiers. A rejected token is logged as a status and
+  a fixed reason word, never the token, a claim or an identifier.
+- With Entra sign-in on, the actor of a human-only tool is the validated token's object id, never a typed value, and
+  an app-only token cannot call those tools (ADR 0004).
 - Azure MCP Server stays at 3.0.0 until an ADR records the upgrade criteria
   being met (ADR 0001).
 

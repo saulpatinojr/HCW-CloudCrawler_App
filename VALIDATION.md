@@ -26,11 +26,29 @@ below are the outputs of the commands as run in this session on Python 3.14.6, u
 | CI on `main` | `ci`, `security` and `CodeQL` workflows at `fc542be` (CI, not run in this session) | All three succeeded (runs 40101984078, 40101984071, 40101984196). In the `ci` run the `image` job built the appliance image and its step "Startup refusal, non-root and health" passed, as did `lint`, `test` and `contract` |
 | Azure MCP host | `tests/unit/test_mcp_host.py` | The allow-list refuses other tools before any request; `AZURE_*` variables are not passed to the child except `AZURE_TOKEN_CREDENTIALS`; parameters are stored as hashes; a failed source is recorded by code and the run continues |
 
+## Ran for Entra sign-in (ticket #8, ADR 0004)
+
+Run on the branch `claude/sweet-einstein-4y648v` on 2026-10-24, Python 3.14.6, uv 0.11.32, Node.js 22.22.0, in a session with no Azure and no Entra
+access. These rows are about this change only; the rows above were not re-run for it, apart from the full test suite, which includes them.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Lint, format, lockfiles | `uv run ruff check . && uv run ruff format --check . && bash scripts/check-lockfiles.sh` | All checks passed; 62 files formatted; `requirements.lock.txt` matches `uv.lock` (PyJWT 2.15.1 was already locked through `mcp`, so only the "via" line and the direct requirement changed) |
+| Full suite and coverage gate | `uv run pytest -q --cov=packages --cov=src --cov-report=term-missing` | 302 passed, 1 deselected (the `azmcp` contract test); coverage 97.91 percent against the 96 percent gate |
+| Entra validation, no network | `tests/unit/test_entra_auth.py` (66 tests) | An RSA key is generated at test time and served as a local key set. Valid v2.0, v1.0, client-id-audience, list-audience and in-skew tokens pass. Refused with the same 401 body: expired, expired beyond the skew, `nbf` in the future, wrong audience, wrong issuer, another tenant's issuer, wrong `tid`, missing `tid`, `oid`, `exp`, `nbf` or `aud`, unknown, missing and non-text `kid`, a token signed by another key, `alg: none`, HS256 keyed with the public key, RS384, a tampered payload, a non-JWT, two `Authorization` headers, an over-long token. `/api/*`, `/mcp` (GET, POST, DELETE) and unknown paths answer 401 without a token; `/api/health` stays open and flat. Key set caching, refetch cooldown, rotation, outage (503) and the default HTTPS fetcher (https only, status, size cap, no redirect) are covered |
+| The actor comes from the token | same file | A typed `actorId` naming someone else is refused by `adr_accept`, `review_decide` and `adr_create` over streamable HTTP with a real token, and nothing changes; with no typed id the recorded actor is the sha256 of the token's `oid`; a matching id in any letter case is accepted; an app-only token, a token without the scope and a token with `idtyp: app` get `forbidden` from the human-class tools but can call the model-class ones; the scope is a setting; with sign-in off the typed actor works as before |
+| Logs carry no token | same file | Three rejected requests produce exactly three `request_error` lines with the status and the words `expired`, `signature`, `missing`; the token, its payload segment, the object ids, the tenant id, the audience and the key id appear nowhere in the output |
+| Startup | `tests/unit/test_main_entry.py`, `tests/unit/test_entra_auth.py` | `CC_AUTH_MODE=entra` without a tenant or audience exits 3 with the setting named; `CC_ENTRA_*` with sign-in off exits 3; the server binds `127.0.0.1` by default and `0.0.0.0` only with `CC_BIND_HOST`, with one `warning` line when that is unauthenticated |
+| Real process smoke test | `CC_AUTH_MODE=entra ... uv run python -m cloud_crawler_appliance`, then `curl` | `POST /mcp` without a token answered `401` with `www-authenticate: Bearer`; `GET /api/health` answered 200 with `"auth": "entra"` |
+| Azure MCP 3.0.0 contract | `uv run pytest tests/contract -q -m azmcp` | 1 passed (the real server over `npx`, no Azure sign-in); the snapshot is unchanged |
+| Known vulnerabilities | `uv run pip-audit -r requirements.lock.txt --strict` | No known vulnerabilities found |
+
 ## Did not run
 
 | Check | Why | Where it runs |
 | --- | --- | --- |
-| Docker image build and the image-level refusal, non-root and health checks | No Docker daemon was started in this session | `ci.yml` job `image`, which passed on `main` at `fc542be` (run 40101984078) |
+| Docker image build and the image-level refusal, non-root and health checks | No Docker daemon was started in this session. The Dockerfile now sets `CC_BIND_HOST=0.0.0.0` (ticket #8); that line is untested until CI builds the image | `ci.yml` job `image`, which passed on `main` at `fc542be` (run 40101984078) and must pass on the pull request |
+| Entra sign-in against a real tenant | No Entra tenant and no network access to `login.microsoftonline.com` in the session; every token in the tests is minted locally and the key set is a local fixture | The owner's first deployment with `CC_AUTH_MODE=entra`: the README lists the app registration and the check (`/api/health` shows `"auth": "entra"`, `POST /mcp` without a token answers 401, then a real token from the website works) |
 | Base image digest re-resolution | Needs a registry read (`docker buildx imagetools inspect`) | The `image` job pulls the pinned digest and builds on every change (passed on `main` at `fc542be`). The `[VERIFY]` marker in `infrastructure/docker/versions.env` is still there; ticket #12 tracks it. How the two files relate: the Dockerfile writes the digest out in full on each `FROM` line and does not read `versions.env`; nothing in CI or the tests compares them, so `versions.env` is documentation only today and the two must be changed together by hand (see `infrastructure/README.md`) |
 | Container registry path for Azure MCP (`azure-sdk/azure-mcp` versus `azure-mcp`) | No registry read; not needed by this slice (no Azure MCP container yet) | ADR 0001 step 1, at the first derived-image build |
 | Gitleaks, CodeQL, dependency review | GitHub-hosted | `security.yml`, `codeql.yml`, `dependency-review.yml`. `security` and CodeQL passed on `main` at `fc542be`; dependency review passed on pull request 23 |
@@ -60,7 +78,24 @@ below are the outputs of the commands as run in this session on Python 3.14.6, u
 - Resource Graph exports carry no diagnostic settings, locks or sub-resource encryption state; claims on those stay
   `unknown` until the App edition's collectors exist.
 - `/api/health` reports `azureConnectivity: not-configured` unless `CC_AZMCP_MODE` names a host.
-- `/api` and `/mcp` accept requests without any sign-in, and the human-only tools only require a non-empty `actorId`.
-  That is acceptable for a lab and not for a shared deployment; ticket #8 tracks it.
+- Sign-in is **off by default**. With `CC_AUTH_MODE=off`, `/api` and `/mcp` accept requests without any sign-in and the
+  human-only tools only require a non-empty `actorId`; that is for a trusted lab network only (the README says so, and
+  the server now binds loopback unless `CC_BIND_HOST` is set; the container image sets `0.0.0.0`). Ticket #8 stays open
+  until the owner has enabled and checked it in a real deployment.
+- Entra sign-in (ADR 0004) is **not tested against a real Entra tenant**: the claims and issuer shapes follow Microsoft Learn
+  (access tokens, claims validation, retrieved 2026-10-24) but were not observed on a live token. Specifically unverified: that
+  v1.0 and v2.0 `iss` values are exactly the two forms accepted; which `aud` form a given app registration issues (the setting
+  takes both); that `scp` and `idtyp` look as assumed for the website's delegated tokens; and that the key set URL answers as
+  coded.
+- Entra sign-in does not yet include: an allow-list of client applications (who can obtain a token is controlled in Entra by
+  "Assignment required"); per-role authorisation inside the model-class tools (any valid token for the tenant and audience can
+  read, ingest, propose and evaluate); sovereign clouds (the public authority `login.microsoftonline.com` and
+  `sts.windows.net` are fixed in `security/entra.py`); revocation (a stolen token works until it expires, as with any access
+  token); token binding or proof-of-possession; rate limiting of failed sign-ins. A person's delegated token proves consent,
+  not attention: an on-behalf-of service holding a person's token acts as that person.
+- The tool schemas of `adr_accept`, `review_decide` and `collection_run_azure` now mark `actorId` optional (additive; the
+  engine is unchanged). With sign-in off an empty `actorId` is still refused.
+- The in-memory ledger is shared by everyone who can sign in; it is not partitioned by tenant, user or session yet, so a
+  second tenant must not share one appliance.
 - The template's labels and Discussions step was skipped (`--skip-github`); whether it has been done since was not
   checked. Ticket #12 tracks the template leftovers.
