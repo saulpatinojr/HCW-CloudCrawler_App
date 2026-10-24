@@ -20,6 +20,12 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- `VALIDATION.md` re-run from `main` at `fed357b` on 2026-10-24: current file counts, test and coverage numbers, CI evidence for the image job and the
+  security workflows, no `v0.1.0` tag yet, the missing sign-in on `/api` and `/mcp` recorded as a limitation, and the dead reference to
+  `docs/TEMPLATE.md` removed (ticket #14).
+- `CLAUDE.md`: the form-filling rule now says secrets are never written in chat, pull requests, issues or documentation; the owner enters each secret
+  only in the secure settings field or through a script that reads it from a file.
+
 ### Fixed
 
 ### Security
