@@ -39,6 +39,10 @@ deployment and the proving ground. The design is the website proposal
 - ADRs in `docs/adr/` follow the template there (next number: 0004). Record limitations in `VALIDATION.md`. Keep
   `CHANGELOG.md` current in the same pull request. Pull requests open ready for review and follow
   `.github/PULL_REQUEST_TEMPLATE.md`.
+- **Keep the AddOn informed.** The AddOn (`saulpatinojr/HCW-CloudCrawler_AddOn`) adopts the engine from this repository, so
+  when a change reaches it (the public surface of `packages/cloud-crawler-core`, tool schemas, detector ids, evidence kinds,
+  the release workflows or their assets, the shared test rules), add an entry to the AddOn's `docs/whats-new-upstream.md` in
+  the same change set, or say in the pull request why none is needed.
 
 ## How to communicate with the owner
 
