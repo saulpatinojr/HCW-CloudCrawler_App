@@ -1,0 +1,148 @@
+name: repository-admin
+
+# Owner-approved repository chores: branch and tag rules, and cleanup of merged branches.
+# Every run needs the owner's approval (environment admin-ops) and does nothing unless "apply" is ticked.
+# It uses a short-lived GitHub App token (HCW Portfolio Admin), limited to this repository.
+# The default token below stays read-only. No secrets are stored in this file.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "What to do. Start with show-plan, then run the same task again with apply ticked."
+        type: choice
+        required: true
+        options:
+          - show-plan
+          - protect-main
+          - protect-release-tags
+          - delete-merged-branches
+      apply:
+        description: "Tick to really make the change. Leave unticked for a dry run that only prints what would change."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-admin
+  cancel-in-progress: false
+
+jobs:
+  admin:
+    name: repository-admin
+    runs-on: ubuntu-26.04
+    environment: admin-ops
+    timeout-minutes: 10
+    steps:
+      - name: Get a short-lived token for this repository only
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-administration: write
+          permission-contents: write
+          permission-metadata: read
+
+      - name: Run the chosen task
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          TASK: ${{ inputs.task }}
+          APPLY: ${{ inputs.apply }}
+          REQUIRED_CHECKS: '["lint","test","contract","pip-audit","secret-scan","image"]'
+          KEEP_REGEX: '^(main|master|develop|gh-pages|release/.*)$'
+        run: |
+          set -euo pipefail
+          api() { gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@"; }
+          say() { echo "$*" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          mode="DRY RUN, nothing is changed"
+          if [ "$APPLY" = "true" ]; then mode="APPLY, changes are made"; fi
+          say "## $TASK on $REPO ($mode)"
+
+          # Create the ruleset if it does not exist, otherwise update it in place.
+          upsert_ruleset() {
+            local name="$1" payload="$2" id
+            say "Ruleset payload for '$name':"
+            say '```json'
+            say "$payload"
+            say '```'
+            id=$(api "repos/$REPO/rulesets" | jq -r --arg n "$name" '.[] | select(.name == $n) | .id' | head -n1)
+            if [ "$APPLY" != "true" ]; then
+              if [ -n "$id" ]; then say "Would UPDATE the existing ruleset (id $id)."; else say "Would CREATE this ruleset."; fi
+              return 0
+            fi
+            if [ -n "$id" ]; then
+              api -X PUT "repos/$REPO/rulesets/$id" --input - <<<"$payload" > /dev/null
+              say "Updated ruleset '$name' (id $id)."
+            else
+              api -X POST "repos/$REPO/rulesets" --input - <<<"$payload" > /dev/null
+              say "Created ruleset '$name'."
+            fi
+          }
+
+          case "$TASK" in
+            show-plan)
+              say "Existing rulesets:"
+              api "repos/$REPO/rulesets" --jq '.[] | "- \(.name) (\(.target), \(.enforcement))"' | tee -a "$GITHUB_STEP_SUMMARY"
+              say "Branches:"
+              api --paginate "repos/$REPO/branches" --jq '.[] | "- \(.name)"' | tee -a "$GITHUB_STEP_SUMMARY"
+              say "Required checks that protect-main would use: $REQUIRED_CHECKS"
+              ;;
+            protect-main)
+              payload=$(jq -n --argjson checks "$REQUIRED_CHECKS" '{
+                name: "Protect main",
+                target: "branch",
+                enforcement: "active",
+                conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+                bypass_actors: [ { actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "pull_request" } ],
+                rules: [
+                  { type: "deletion" },
+                  { type: "non_fast_forward" },
+                  { type: "pull_request", parameters: {
+                      required_approving_review_count: 0,
+                      dismiss_stale_reviews_on_push: false,
+                      require_code_owner_review: false,
+                      require_last_push_approval: false,
+                      required_review_thread_resolution: false } },
+                  { type: "required_status_checks", parameters: {
+                      strict_required_status_checks_policy: false,
+                      required_status_checks: ($checks | map({ context: . })) } }
+                ] }')
+              upsert_ruleset "Protect main" "$payload"
+              ;;
+            protect-release-tags)
+              payload=$(jq -n '{
+                name: "Protect release tags",
+                target: "tag",
+                enforcement: "active",
+                conditions: { ref_name: { include: ["refs/tags/v*"], exclude: [] } },
+                bypass_actors: [],
+                rules: [ { type: "deletion" }, { type: "non_fast_forward" }, { type: "update" } ] }')
+              upsert_ruleset "Protect release tags" "$payload"
+              ;;
+            delete-merged-branches)
+              owner="${REPO%%/*}"
+              api --paginate "repos/$REPO/branches" --jq '.[].name' | while read -r b; do
+                if [ "$b" = "$DEFAULT_BRANCH" ]; then continue; fi
+                if echo "$b" | grep -Eq "$KEEP_REGEX"; then say "keep   $b (protected name)"; continue; fi
+                open_prs=$(api "repos/$REPO/pulls?state=open&head=$owner:$b" --jq 'length')
+                if [ "$open_prs" != "0" ]; then say "keep   $b (has an open pull request)"; continue; fi
+                ahead=$(api "repos/$REPO/compare/$DEFAULT_BRANCH...$b" --jq '.ahead_by')
+                if [ "$ahead" != "0" ]; then say "keep   $b ($ahead commit(s) not on $DEFAULT_BRANCH)"; continue; fi
+                if [ "$APPLY" = "true" ]; then
+                  api -X DELETE "repos/$REPO/git/refs/heads/$b" > /dev/null
+                  say "DELETED $b (every commit is already on $DEFAULT_BRANCH)"
+                else
+                  say "would delete $b (every commit is already on $DEFAULT_BRANCH)"
+                fi
+              done
+              ;;
+            *)
+              say "Unknown task: $TASK"
+              exit 1
+              ;;
+          esac
