@@ -50,8 +50,11 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["packages/cloud-crawler-core/src", "src"]
 branch = true
+# Tests are not product code: they are nearly always fully executed, so counting them inflates the figure. This holds
+# even when `--cov=packages` is given on the command line, which would otherwise pull in packages/*/tests.
+omit = ["*/tests/*", "*/conftest.py"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 96
 show_missing = true
 skip_empty = true

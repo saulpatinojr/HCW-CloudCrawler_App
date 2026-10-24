@@ -210,3 +210,132 @@ def test_settings_select_the_host_mode():
     assert Settings.from_env({"CC_AZMCP_RECORDINGS": " /tmp/x "}).azmcp_recordings == "/tmp/x"
     with pytest.raises(ValueError):
         Settings.from_env({"CC_AZMCP_MODE": "http"})
+
+
+class _FakeInfo:
+    def __init__(self, version: str) -> None:
+        self.name = "Azure MCP Server"
+        self.version = version
+
+
+class _FakeContent:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class _FakeCallResult:
+    def __init__(self, *, is_error: bool = False) -> None:
+        self.structured_content = {"groups": []}
+        self.content = [_FakeContent("one "), _FakeContent("two"), object()]  # an item without text is skipped
+        self.is_error = is_error
+
+
+def _fake_client(monkeypatch, *, version: str = "3.0.0+abc", is_error: bool = False, no_info: bool = False):
+    """Replace the MCP client the stdio host starts, so the host's own branches run without a child process."""
+    from cloud_crawler_appliance.mcp_host import host as host_module
+
+    events: list[str] = []
+
+    class FakeClient:
+        server_info = None if no_info else _FakeInfo(version)
+        protocol_version = "2026-07-28"
+
+        def __init__(self, params, *, read_timeout_seconds):
+            events.append(f"init:{read_timeout_seconds}")
+
+        async def __aenter__(self):
+            events.append("enter")
+            return self
+
+        async def __aexit__(self, *exc):
+            events.append("exit")
+
+        async def call_tool(self, tool, arguments):
+            events.append(f"call:{tool}")
+            return _FakeCallResult(is_error=is_error)
+
+    monkeypatch.setattr(host_module, "Client", FakeClient)
+    return events
+
+
+def test_base_host_is_an_interface_with_no_default_call():
+    from cloud_crawler_appliance.mcp_host.host import AzureMcpHost
+
+    async def run():
+        async with AzureMcpHost() as host:
+            assert host.mode == "off" and host.identity_mode is IdentityMode.NONE
+            with pytest.raises(NotImplementedError):
+                await host.call("group_list", {})
+
+    asyncio.run(run())
+
+
+def test_stdio_host_opens_calls_and_closes(monkeypatch):
+    from cloud_crawler_appliance.mcp_host.host import StdioAzureMcpHost
+
+    events = _fake_client(monkeypatch)
+    monkeypatch.setattr("cloud_crawler_appliance.mcp_host.host.server_params", lambda env=None: object())
+    host = StdioAzureMcpHost({"PATH": "/usr/bin"}, read_timeout_seconds=7)
+
+    async def run():
+        with pytest.raises(HostError, match="not open"):
+            await host.call("group_list", {})
+        async with host:
+            with pytest.raises(HostError, match="allow-list"):
+                await host.call("storage_account_create", {})
+            result = await host.call("group_list", {"subscription": SUBSCRIPTION})
+        assert host._client is None  # closed again
+        return result
+
+    result = asyncio.run(run())
+    assert host.mode == "stdio" and events == ["init:7", "enter", "call:group_list", "exit"]
+    assert result.text == "one two" and result.structured == {"groups": []} and result.is_error is False
+    assert result.server_name == "Azure MCP Server" and result.server_version == "3.0.0+abc"
+    assert result.protocol_version == "2026-07-28" and result.arguments == {"subscription": SUBSCRIPTION}
+
+
+def test_stdio_host_refuses_a_server_that_does_not_identify_itself(monkeypatch):
+    from cloud_crawler_appliance.mcp_host.host import StdioAzureMcpHost
+
+    monkeypatch.setattr("cloud_crawler_appliance.mcp_host.host.server_params", lambda env=None: object())
+    events = _fake_client(monkeypatch, no_info=True)
+
+    async def run():
+        # A server that does not identify itself cannot be shown to be the pinned version: refused and closed.
+        with pytest.raises(HostError, match="is not 3.0.0"):
+            await StdioAzureMcpHost().__aenter__()
+
+    asyncio.run(run())
+    assert events == ["init:180", "enter", "exit"]
+
+
+def test_stdio_host_refuses_a_server_that_is_not_the_pinned_version(monkeypatch):
+    from cloud_crawler_appliance.mcp_host.host import StdioAzureMcpHost
+
+    monkeypatch.setattr("cloud_crawler_appliance.mcp_host.host.server_params", lambda env=None: object())
+    events = _fake_client(monkeypatch, version="4.0.0-beta.1")
+
+    async def run():
+        with pytest.raises(HostError) as raised:
+            async with StdioAzureMcpHost():
+                pytest.fail("a wrong server version must not open")
+        return raised.value
+
+    error = asyncio.run(run())
+    assert error.code == "server_version" and events == ["init:180", "enter", "exit"]
+
+
+def test_stdio_host_error_result_is_carried_and_then_refused_by_evidence(monkeypatch):
+    from cloud_crawler_appliance.mcp_host.host import StdioAzureMcpHost
+
+    monkeypatch.setattr("cloud_crawler_appliance.mcp_host.host.server_params", lambda env=None: object())
+    _fake_client(monkeypatch, is_error=True)
+
+    async def run():
+        async with StdioAzureMcpHost() as host:
+            return await host.call("group_list", {"subscription": SUBSCRIPTION})
+
+    result = asyncio.run(run())
+    assert result.is_error is True
+    with pytest.raises(HostError, match="answered an error"):
+        evidence_from_result(result, identity_mode=IdentityMode.NONE, now=NOW)
