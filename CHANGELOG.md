@@ -33,6 +33,11 @@ once, merge one before rebasing the next.
 
 ### Fixed
 
+- `tests/security/test_no_secrets.py`: the real-identifier scan no longer reads compiled bytecode caches (`__pycache__`, `.pyc`, `.pyo`). They embed the
+  checkout's absolute path, so a checkout whose path contained a GUID (a temporary or CI directory) failed `test_no_real_guids_outside_placeholders`
+  with dozens of false hits. The scan of source files is unchanged, and a new test proves both halves: caches are skipped, and a real-looking GUID in a
+  source file is still reported (ticket #13).
+
 ### Security
 
 ## [0.1.0] - 2026-10-21

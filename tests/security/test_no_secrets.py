@@ -15,26 +15,51 @@ ALLOWED_GUIDS = {
 }
 SECRET_SHAPED = re.compile(r"(AccountKey=[A-Za-z0-9+/=]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")
 CREDENTIAL_PATHS = re.compile(r"ClientSecretCredential|CertificateCredential|UsernamePasswordCredential")
-SKIP_SUFFIXES = {".lock", ".png", ".ico"}
+# Compiled bytecode embeds the absolute path of the checkout, so a path that happens to contain a GUID (a temporary or
+# CI directory) would be reported as a real identifier in the tree. Bytecode caches are build output, not source.
+SKIP_SUFFIXES = {".lock", ".png", ".ico", ".pyc", ".pyo"}
+SKIP_DIRS = {"__pycache__"}
 
 
-def files():
+def files(root: Path = ROOT):
     for entry in SCAN:
-        path = ROOT / entry
+        path = root / entry
         if path.is_file():
             yield path
         elif path.is_dir():
-            yield from (p for p in path.rglob("*") if p.is_file() and p.suffix not in SKIP_SUFFIXES)
+            yield from (
+                p
+                for p in path.rglob("*")
+                if p.is_file()
+                and p.suffix not in SKIP_SUFFIXES
+                and not SKIP_DIRS.intersection(p.relative_to(root).parts)
+            )
 
 
-def test_no_real_guids_outside_placeholders():
+def guid_offenders(root: Path = ROOT) -> list[str]:
     offenders = []
-    for path in files():
+    for path in files(root):
         for n, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
             for guid in GUID.findall(line):
                 if not PLACEHOLDER.match(guid) and guid.lower() not in ALLOWED_GUIDS:
-                    offenders.append(f"{path.relative_to(ROOT)}:{n}: {guid}")
-    assert offenders == []
+                    offenders.append(f"{path.relative_to(root).as_posix()}:{n}: {guid}")
+    return offenders
+
+
+def test_no_real_guids_outside_placeholders():
+    assert guid_offenders() == []
+
+
+def test_guid_scan_ignores_bytecode_caches_but_still_flags_a_real_guid_in_source(tmp_path):
+    # Built at run time so this file does not itself contain a real-looking identifier.
+    real = "-".join(["8a1f3c2e", "5b7d", "4e6a", "9c0b", "1d2e3f4a5b6c"])
+    cache = tmp_path / "src" / "__pycache__"
+    cache.mkdir(parents=True)
+    (cache / "mod.cpython-314.pyc").write_bytes(f"/tmp/{real}/checkout/src/mod.py".encode())
+    (cache / "note.txt").write_text(f"/tmp/{real}/checkout\n", encoding="utf-8")
+    assert guid_offenders(tmp_path) == []
+    (tmp_path / "src" / "mod.py").write_text(f"IDENTIFIER = '{real}'\n", encoding="utf-8")
+    assert guid_offenders(tmp_path) == [f"src/mod.py:1: {real}"]
 
 
 def test_no_secret_shaped_strings_and_no_client_secret_credentials():
