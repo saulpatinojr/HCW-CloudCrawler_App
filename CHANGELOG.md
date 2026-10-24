@@ -11,6 +11,10 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: `pydantic` 2.14.0 → 2.14.1 (the exact pin in `pyproject.toml`) with `pydantic-core` 2.50.0 → 2.50.1 in `uv.lock` and `requirements.lock.txt`. This replaces the open Dependabot pull requests #3 and #4: #4 (`pydantic-core` alone) could not resolve because pydantic pins its core to one exact version. `.github/dependabot.yml` now groups `pydantic` and `pydantic-core` so they arrive in one pull request. The engine package's `pydantic>=2.14,<3` range is unchanged, so nothing reaches the lab edition. Verified: `make lint`, `uv run pytest -q --cov=packages --cov=src` (218 passed, coverage 96.25 %) and `make test-contract` (1 passed against the real Azure MCP Server 3.0.0).
+
 ### Added
 
 - `.github/workflows/repository-admin.yml` (pull request #19): a manual, owner-approved workflow for repository chores. Its tasks are `show-plan`,
