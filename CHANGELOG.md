@@ -20,6 +20,11 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- `codeql.yml` and `dependency-review.yml` use the same runner label as every other workflow (`ubuntu-26.04`, not `ubuntu-latest`). `publish-core.yml` no
+  longer passes `--clobber`: attaching the wheel and sdist to a release fails if a file of the same name is already there, so a re-run cannot silently
+  replace published files. It also writes a CycloneDX SBOM of the engine's locked runtime dependencies (`uv export --format cyclonedx1.5`), attaches it to
+  the release and attests it with `actions/attest` v4.2.2 (SHA-pinned). The release path itself has not run yet; it first runs on the `v0.1.0` tag
+  (ticket #7). Part of ticket #16.
 - `VALIDATION.md` re-run from `main` at `fed357b` on 2026-10-24: current file counts, test and coverage numbers, CI evidence for the image job and the
   security workflows, no `v0.1.0` tag yet, the missing sign-in on `/api` and `/mcp` recorded as a limitation, and the dead reference to
   `docs/TEMPLATE.md` removed (ticket #14).
