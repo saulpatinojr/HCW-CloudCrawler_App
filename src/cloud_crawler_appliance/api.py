@@ -1,5 +1,6 @@
 """The application factory: a flat /api/health, the MCP endpoint at /mcp (streamable HTTP, stateless), the error
-envelope for every other /api path, and no-store on everything under /api."""
+envelope for every other /api path, and no-store on everything under /api. With `CC_AUTH_MODE=entra` every route
+except /api/health needs a valid Microsoft Entra access token (ADR 0004)."""
 
 from __future__ import annotations
 
@@ -19,8 +20,9 @@ from cloud_crawler_appliance import ADDON_ID, __version__
 from cloud_crawler_appliance.config import Settings
 from cloud_crawler_appliance.edition import CAPABILITIES, EDITION, azure_connectivity, refuse_forbidden_env
 from cloud_crawler_appliance.mcp_host import AzureMcpHost, RecordedAzureMcpHost, StdioAzureMcpHost
-from cloud_crawler_appliance.mcp_server import build_mcp_server
+from cloud_crawler_appliance.mcp_server import AuthPolicy, build_mcp_server
 from cloud_crawler_appliance.security import logging as logs
+from cloud_crawler_appliance.security.entra import EntraAuthMiddleware, JwksFetcher, TokenVerifier
 
 MCP_PATH = "/mcp"
 MCP_PROTOCOL_VERSION = "2026-07-28"
@@ -49,14 +51,22 @@ def create_app(
     ledger: InMemoryLedger | None = None,
     env=None,
     host: AzureMcpHost | None = None,
+    jwks_fetcher: JwksFetcher | None = None,
 ) -> FastAPI:
+    """`jwks_fetcher` replaces the HTTPS key-set download (tests hand in a local key set; nothing else uses it)."""
     settings = settings or Settings.from_env(env)
     refuse_forbidden_env(env)
     logs.configure(silent=settings.log_silent)
     ledger = ledger if ledger is not None else InMemoryLedger()
     host = host if host is not None else host_for(settings, env)
+    entra = settings.auth_mode == "entra"
+    verifier = TokenVerifier(settings, jwks_fetcher) if entra else None
     mcp = build_mcp_server(
-        ledger, max_rows=settings.max_rows, host=host, observed_ttl=timedelta(hours=settings.evidence_ttl_hours)
+        ledger,
+        max_rows=settings.max_rows,
+        host=host,
+        observed_ttl=timedelta(hours=settings.evidence_ttl_hours),
+        auth=AuthPolicy(required=entra, human_scope=settings.entra_human_scope),
     )
     transport_security = (
         TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=list(settings.allowed_hosts))
@@ -73,7 +83,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        logs.log_event("startup", detectors=len(DETECTORS), azmcp=settings.azmcp_mode)
+        logs.log_event("startup", detectors=len(DETECTORS), azmcp=settings.azmcp_mode, auth=entra)
         async with mcp_app.router.lifespan_context(mcp_app):
             yield
         logs.log_event("shutdown")
@@ -82,6 +92,9 @@ def create_app(
         title="Cloud Crawler", version=__version__, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
     app.state.ledger = ledger
+    if verifier is not None:
+        # Added before the headers middleware below, so that one stays outermost and its headers reach a 401 too.
+        app.add_middleware(EntraAuthMiddleware, verifier=verifier)
 
     @app.get("/api/health")
     def health() -> dict:
@@ -94,6 +107,7 @@ def create_app(
             "asOf": _now_iso(),
             "azureConnectivity": azure_connectivity(host.mode if host else "off"),
             "engine": {"name": "cloud-crawler-core", "version": engine_version, "detectors": sorted(DETECTORS)},
+            "auth": settings.auth_mode,
             "mcp": {"path": MCP_PATH, "protocolVersion": MCP_PROTOCOL_VERSION, "stateless": True},
             "ledger": {
                 "decisions": len(ledger.decisions),
