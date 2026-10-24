@@ -1,8 +1,10 @@
 # Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
 # proposes updates.
 # On every v* tag: build the cloud-crawler-core wheel and sdist, verify the wheel carries the detector registry, no
-# cloud SDK import and no Azure endpoint, attach both to the GitHub Release (release.yml creates it), attest
-# provenance. The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by
+# cloud SDK import and no Azure endpoint, write a CycloneDX SBOM (the engine's locked runtime dependencies), attach the
+# wheel, sdist and SBOM to the GitHub Release (release.yml creates it), attest provenance and the SBOM. A re-run never
+# replaces a published file: the upload fails if an asset of the same name exists (delete the asset by hand if a
+# replacement is really intended). The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by
 # URL on its CORE_REF line
 # (https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl)
 # and by the sha256 `uv lock` records; its core-update.yml bumps the tag. A git+https pin cannot be verified by the
@@ -32,17 +34,26 @@ jobs:
       - run: uv build --package cloud-crawler-core --out-dir dist
       - name: The wheel carries the engine, no cloud SDK import, no HTTP client and no Azure endpoint
         run: uv run --no-project --with pydantic python scripts/verify-core-wheel.py dist/cloud_crawler_core-*.whl
+      - name: SBOM (CycloneDX) of the engine's locked runtime dependencies
+        run: |
+          set -euo pipefail
+          mkdir sbom
+          uv export --frozen --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 -o sbom/cloud-crawler-core.cdx.json
+          test -s sbom/cloud-crawler-core.cdx.json
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: startsWith(github.ref, 'refs/tags/v')
         with: { subject-path: "dist/*" }
-      - name: Attach the wheel and sdist to the GitHub Release
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with: { subject-path: "dist/*", sbom-path: "sbom/cloud-crawler-core.cdx.json" }
+      - name: Attach the wheel, sdist and SBOM to the GitHub Release (never replaces a published file)
         if: startsWith(github.ref, 'refs/tags/v')
         env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
           set -euo pipefail
           tag="${GITHUB_REF#refs/tags/}"
           for i in 1 2 3 4 5 6; do gh release view "$tag" >/dev/null 2>&1 && break; sleep 10; done
-          gh release upload "$tag" dist/* --clobber
+          gh release upload "$tag" dist/* sbom/cloud-crawler-core.cdx.json
       - name: PyPI trusted publishing (repository variable PYPI_ENABLED)
         if: startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'
         run: uv publish --trusted-publishing always dist/*
