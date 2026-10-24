@@ -1,17 +1,18 @@
 # Validation record
 
-What ran, with what result, and what did not run, for the first implementation slice and the wave-one detectors (2026-10-21). The numbers below
-are the outputs of the commands as run in the authoring session on Python 3.14.6, uv 0.11.32 and Node.js 22.22.0.
+Re-run on 2026-10-24 from `main` at commit `fed357b` (the first record, dated 2026-10-21, described the first implementation slice and the wave-one
+detectors). The numbers below are the outputs of the commands as run in this session on Python 3.14.6, uv 0.11.32 and Node.js 22.22.0, except in the rows
+and cells that say CI.
 
 ## Ran
 
 | Check | Command | Result |
 | --- | --- | --- |
 | Dependency resolution | `uv sync --all-packages` | 70 packages resolved; `mcp==2.3.0`, `fastapi==0.143.3`, `pydantic==2.14.0`; no cloud SDK |
-| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 47 files formatted |
+| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 59 files formatted |
 | Lockfile export | `bash scripts/check-lockfiles.sh` | `requirements.lock.txt` matches `uv.lock` (hash-pinned, 300 lines) |
-| Unit, security, acceptance | `uv run pytest -q --cov=packages --cov=src --cov-fail-under=85` | 217 passed, 1 deselected (the `azmcp` contract test); coverage 96.6 percent |
-| Azure MCP 3.0.0 contract | `uv run pytest tests/contract -q -m azmcp` | 1 passed in 7.8 s: `npx @azure/mcp@3.0.0` started over stdio, `serverInfo.version` `3.0.0`, twelve tools across the seven namespaces matched `tests/contract/snapshots/azmcp-3.0.0-tools.json`; every tool the design calls is read-only and non-destructive |
+| Unit, security, acceptance | `uv run pytest -q --cov=packages --cov=src --cov-fail-under=85` | 217 passed, 1 deselected (the `azmcp` contract test); coverage 96.25 percent |
+| Azure MCP 3.0.0 contract | `uv run pytest tests/contract -q -m azmcp` | 1 passed in 7.9 s: `npx @azure/mcp@3.0.0` started over stdio, `serverInfo.version` `3.0.0`, twelve tools across the seven namespaces matched `tests/contract/snapshots/azmcp-3.0.0-tools.json`; every tool the design calls is read-only and non-destructive |
 | Azure MCP build identity | `npx -y @azure/mcp@3.0.0 --version` | `3.0.0+6369a8a7a9822e804f4986f67619dfcd28fc815b` (the `release/azure/3.x` branch head, not the tagged commit `61715e6a`; recorded in ADR 0001) |
 | Known vulnerabilities | `uv run pip-audit -r requirements.lock.txt --strict` | No known vulnerabilities found |
 | Startup refusal | `tests/security/test_startup_refusal.py` | A fresh process with `AZURE_CLIENT_SECRET` set exits 3 with a scrubbed `startup_refused` line |
@@ -20,17 +21,18 @@ are the outputs of the commands as run in the authoring session on Python 3.14.6
 | Tool catalogue | `tests/unit/test_tools.py` | Fourteen tools without a host, fifteen with one; `adr_accept`, `review_decide` and `collection_run_azure` are the `human` caller class; eight are read-only; `adr_create`'s schema allows `draft` and `proposed` only; every refusal carries its code |
 | Azure observations acceptance | `tests/acceptance/test_acceptance_azure_mcp.py` | Passes in-process and over streamable HTTP with the recorded host: `collection_run_azure` ingests five results (seven rows) under one run; the `New` Advisor record is contradicted citing one evidence id, the `Dismissed` one is accepted risk, the retirement opens a retirement-kind proposal due 2027-03-31, the initiative assignment is supported; score 45.5, coverage 1.0 |
 | Engine wheel | `uv build --package cloud-crawler-core --out-dir dist` then `uv run --no-project --with pydantic python scripts/verify-core-wheel.py 'dist/cloud_crawler_core-*.whl'` | `cloud_crawler_core-0.1.0-py3-none-any.whl` and the sdist built; the wheel verified: 22 files, the detector registry, the Azure MCP normaliser and the drift engine present, no cloud SDK or HTTP client import, no Azure endpoint, `Requires-Dist: pydantic<3,>=2.14` only |
+| CI on `main` | `ci`, `security` and `CodeQL` workflows at `fed357b` (CI, not run in this session) | All three succeeded (runs 40084768974, 40084769008, 40084769031). The `image` job built the appliance image and its step "Startup refusal, non-root and health" passed |
 | Azure MCP host | `tests/unit/test_mcp_host.py` | The allow-list refuses other tools before any request; `AZURE_*` variables are not passed to the child except `AZURE_TOKEN_CREDENTIALS`; parameters are stored as hashes; a failed source is recorded by code and the run continues |
 
 ## Did not run
 
 | Check | Why | Where it runs |
 | --- | --- | --- |
-| Docker image build and the image-level refusal, non-root and health checks | No Docker daemon in the authoring session | `ci.yml` job `image` |
-| Base image digest re-resolution | Needs a registry read (`docker buildx imagetools inspect`) | First image build; `infrastructure/docker/versions.env` carries `[VERIFY]` |
+| Docker image build and the image-level refusal, non-root and health checks | No Docker daemon was started in this session | `ci.yml` job `image`, which passed on `main` at `fed357b` (run 40084768974) |
+| Base image digest re-resolution | Needs a registry read (`docker buildx imagetools inspect`) | The `image` job pulls the pinned digest and builds on every change (passed on `main` at `fed357b`). The `[VERIFY]` marker in `infrastructure/docker/versions.env` is still there; ticket #12 tracks it |
 | Container registry path for Azure MCP (`azure-sdk/azure-mcp` versus `azure-mcp`) | No registry read; not needed by this slice (no Azure MCP container yet) | ADR 0001 step 1, at the first derived-image build |
-| Gitleaks, CodeQL, dependency review | GitHub-hosted | `security.yml`, `codeql.yml`, `dependency-review.yml` |
-| The release itself (`release.yml`, `publish-core.yml` attaching the wheel, provenance attestation) | Runs on a `v*` tag, which the owner pushes after the merge; the attach step needs the release the other workflow creates | The first tag `v0.1.0` |
+| Gitleaks, CodeQL, dependency review | GitHub-hosted | `security.yml`, `codeql.yml`, `dependency-review.yml`. `security` and CodeQL passed on `main` at `fed357b`; dependency review passed on pull request 19 |
+| The release itself (`release.yml`, `publish-core.yml` attaching the wheel, provenance attestation) | Runs on a `v*` tag, which the owner pushes after the merge; the attach step needs the release the other workflow creates | The first tag `v0.1.0`. No tag or release exists yet (checked on 2026-10-24); ticket #7 tracks it |
 | The stdio host against a live Azure MCP Server with a signed-in credential | No Azure credential in the authoring session; the contract test proves only `initialize` and `tools/list` | The owner's `make run-stdio` after `az login`; the integration job of the roadmap |
 | The recorded results against a live capture | No Azure access; the recordings were written by hand to the 3.0.0 result records read from the `release/azure/3.x` source on 2026-10-21 (`RecommendationListResult`, `PolicyAssignmentListCommandResult`, `SubscriptionListCommandResult`, the Group `Result`), with fictional values | The first live run replaces them with captured results of the fictional lab estate |
 
@@ -56,5 +58,7 @@ are the outputs of the commands as run in the authoring session on Python 3.14.6
 - Resource Graph exports carry no diagnostic settings, locks or sub-resource encryption state; claims on those stay
   `unknown` until the App edition's collectors exist.
 - `/api/health` reports `azureConnectivity: not-configured` unless `CC_AZMCP_MODE` names a host.
-- The template's labels and Discussions step was skipped (`--skip-github`); the owner runs it once from a signed-in
-  `gh` (see the template's `docs/TEMPLATE.md` history in the first commit).
+- `/api` and `/mcp` accept requests without any sign-in, and the human-only tools only require a non-empty `actorId`.
+  That is acceptable for a lab and not for a shared deployment; ticket #8 tracks it.
+- The template's labels and Discussions step was skipped (`--skip-github`); whether it has been done since was not
+  checked. Ticket #12 tracks the template leftovers.
