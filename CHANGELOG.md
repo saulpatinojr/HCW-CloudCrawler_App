@@ -13,6 +13,9 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
+  instructions, links).
+
 ### Changed
 
 ### Fixed
