@@ -57,6 +57,9 @@ def test_guid_scan_ignores_bytecode_caches_but_still_flags_a_real_guid_in_source
     cache.mkdir(parents=True)
     (cache / "mod.cpython-314.pyc").write_bytes(f"/tmp/{real}/checkout/src/mod.py".encode())
     (cache / "note.txt").write_text(f"/tmp/{real}/checkout\n", encoding="utf-8")
+    # The suffix filter must work on its own, outside any __pycache__ directory.
+    (tmp_path / "src" / "mod.pyc").write_bytes(f"/tmp/{real}/checkout/src/mod.py".encode())
+    (tmp_path / "src" / "legacy.pyo").write_bytes(f"/tmp/{real}/checkout/src/mod.py".encode())
     assert guid_offenders(tmp_path) == []
     (tmp_path / "src" / "mod.py").write_text(f"IDENTIFIER = '{real}'\n", encoding="utf-8")
     assert guid_offenders(tmp_path) == [f"src/mod.py:1: {real}"]
