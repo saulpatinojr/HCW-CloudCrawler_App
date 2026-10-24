@@ -13,6 +13,9 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- `tests/security/test_no_secrets.py`: the GUID-scan test now also checks that `.pyc` and `.pyo` files outside a
+  `__pycache__` folder are skipped, so the file-suffix filter is covered on its own.
+
 - `CLAUDE.md`: owner-communication rule to give the exact text for every form field, always with a description.
 
 - `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
