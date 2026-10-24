@@ -9,7 +9,7 @@ dependencies = [
   "cloud-crawler-core",
   "fastapi==0.143.3",
   "uvicorn==0.54.0",
-  "pydantic==2.14.0",
+  "pydantic==2.14.1",
   "mcp==2.3.0",
 ]
 

@@ -33,6 +33,13 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    groups:
+      # pydantic pins pydantic-core to one exact version, so the two must move in one pull request; a pydantic-core
+      # bump on its own cannot resolve against the pinned pydantic.
+      pydantic:
+        patterns:
+          - "pydantic"
+          - "pydantic-core"
     ignore:
       # The Azure MCP contract is pinned by ADR 0001; the mcp SDK is bumped by hand with the snapshot re-run.
       - dependency-name: "mcp"
