@@ -40,6 +40,12 @@ updates:
         patterns:
           - "pydantic"
           - "pydantic-core"
+      # httpx2 requires one exact httpcore2 (both arrive through the mcp SDK), and Dependabot does not regenerate
+      # requirements.lock.txt, so they move together here and `make lock` is run on the pull request.
+      httpx2:
+        patterns:
+          - "httpx2"
+          - "httpcore2"
     ignore:
       # The Azure MCP contract is pinned by ADR 0001; the mcp SDK is bumped by hand with the snapshot re-run.
       - dependency-name: "mcp"
