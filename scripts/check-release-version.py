@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import subprocess
+import subprocess  # nosec B404 - only runs git, with a fixed argument list and no shell
 import sys
 import tomllib
 import zipfile
@@ -119,11 +119,15 @@ def check_dist(dist: Path, version: str) -> list[str]:
     return problems
 
 
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # nosec B603 B607 - git by name, arguments are a fixed list, no shell
+        ["git", *args], cwd=root, capture_output=True, text=True, check=False
+    )
+
+
 def on_branch(sha: str, ref: str, root: Path) -> str | None:
     """None when `sha` is an ancestor of `ref`, otherwise the reason it is not."""
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", sha, ref], cwd=root, capture_output=True, text=True, check=False
-    )
+    result = _git(root, "merge-base", "--is-ancestor", sha, ref)
     if result.returncode == 0:
         return None
     if result.returncode == 1:
@@ -179,12 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     problems, version = check(args.root, args.tag, args.dist)
     if args.tag and args.ancestor_of and version:
-        sha = (
-            os.environ.get("GITHUB_SHA")
-            or subprocess.run(
-                ["git", "rev-parse", "HEAD"], cwd=args.root, capture_output=True, text=True, check=False
-            ).stdout.strip()
-        )
+        sha = os.environ.get("GITHUB_SHA") or _git(args.root, "rev-parse", "HEAD").stdout.strip()
         reason = on_branch(sha, args.ancestor_of, args.root)
         if reason:
             problems.append(reason)

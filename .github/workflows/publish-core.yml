@@ -15,7 +15,9 @@
 # always` exchanges the job's OIDC token with PyPI; no registry token exists anywhere.
 # Dry run (no tag, nothing published): Actions, publish-core, Run workflow, on the main branch. It runs every step up
 # to and including the attestations, keeps the wheel, sdist and SBOM as a workflow artifact, and skips the release
-# upload and PyPI. Untick "attest" to skip the attestations too (they are permanent entries in the public signing log).
+# upload and PyPI: only a pushed v* tag publishes, so a manual run can never publish, whatever ref it names. (To
+# repeat a failed tag run, use "Re-run failed jobs" on that run.) Untick "attest" to skip the attestations too (they
+# are permanent entries in the public signing log).
 name: publish-core
 on:
   push:
@@ -81,13 +83,13 @@ jobs:
             sbom
           if-no-files-found: error
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
+        if: github.event_name == 'push' || inputs.attest
         with: { subject-path: "dist/*" }
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
+        if: github.event_name == 'push' || inputs.attest
         with: { subject-path: "dist/*", sbom-path: "sbom/cloud-crawler-core.cdx.json" }
       - name: Attach the wheel, sdist and SBOM to the GitHub Release (never replaces a published file)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", TAG: "${{ github.ref_name }}" }
         run: |
           set -euo pipefail
@@ -110,7 +112,7 @@ jobs:
             fi
           done
       - name: Verify the attestations against this repository (provenance, then SBOM)
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
+        if: github.event_name == 'push' || inputs.attest
         env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
         run: |
           set -euo pipefail
@@ -119,5 +121,5 @@ jobs:
             gh attestation verify "$file" --repo "$GH_REPO" --predicate-type https://cyclonedx.org/bom
           done
       - name: PyPI trusted publishing (repository variable PYPI_ENABLED)
-        if: startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'
         run: uv publish --trusted-publishing always dist/*

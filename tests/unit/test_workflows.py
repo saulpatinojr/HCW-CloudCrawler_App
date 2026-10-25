@@ -25,7 +25,7 @@ EXPECTED = {
     "repository-admin.yml",
     "security.yml",
 }
-TAG_ONLY = "startsWith(github.ref, 'refs/tags/v')"
+TAG_ONLY = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
 PUBLISHING = ("gh release create", "gh release upload", "uv publish")
 
 
@@ -96,7 +96,9 @@ def test_both_release_workflows_run_on_v_tags_and_can_be_dry_run():
 
 def test_nothing_is_published_without_a_tag():
     release = jobs(text("release.yml"))
-    assert TAG_ONLY in release["create"].split("steps:")[0], "the create job must only run for a v* tag"
+    assert TAG_ONLY in release["create"].split("steps:")[0], (
+        "the create job must only run for a pushed v* tag, never for a manual run"
+    )
     assert "gh release create" not in release["check"]
     publish = text("publish-core.yml")
     for step in steps(publish):
@@ -110,7 +112,7 @@ def test_the_dry_run_of_publish_core_still_builds_and_attests_but_never_attaches
         assert needle in publish
     assert "inputs.attest" in publish
     attest = [s for s in steps(publish) if "actions/attest" in s]
-    assert len(attest) == 2 and all(f"{TAG_ONLY} || inputs.attest" in s for s in attest)
+    assert len(attest) == 2 and all("if: github.event_name == 'push' || inputs.attest" in s for s in attest)
 
 
 def test_write_permissions_are_held_only_where_they_are_used():

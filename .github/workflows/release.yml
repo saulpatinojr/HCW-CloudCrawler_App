@@ -8,7 +8,8 @@
 #                             the last chance to stop a wrong one), then the release notes are written.
 #   create  (contents: write) only for a v* tag: creates the release with the notes; one that exists is left alone.
 # Dry run: Actions, release, Run workflow, on the main branch. It runs `check` only (no tag, so `create` is skipped),
-# prints the release notes a tag would publish in the run summary and keeps them as a workflow artifact.
+# prints the release notes a tag would publish in the run summary and keeps them as a workflow artifact. Only a pushed
+# v* tag creates a release, so a manual run can never create one, whatever ref it names.
 name: release
 on:
   push:
@@ -40,7 +41,7 @@ jobs:
         with: { name: release-notes, path: release-notes.md, if-no-files-found: error }
   create:
     needs: check
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-26.04
     permissions:
       contents: write
