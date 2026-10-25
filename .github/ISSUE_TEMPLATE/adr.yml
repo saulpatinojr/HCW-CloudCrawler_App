@@ -4,6 +4,7 @@ title: "[ADR]: "
 labels:
   - architecture
   - decision
+  - product:cloudcrawler
 body:
   - type: markdown
     attributes:

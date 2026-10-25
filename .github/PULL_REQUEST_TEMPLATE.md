@@ -17,7 +17,7 @@ Closes #
 - [ ] Documentation or process change
 - [ ] Dependency update
 - [ ] CI/CD or repository policy change
-- [ ] Infrastructure or deployment change
+- [ ] Image, workflow or deployment change
 - [ ] Security or privacy change
 - [ ] Breaking change
 
@@ -37,15 +37,15 @@ run and why. Distinguish static, local, CI, staging, and production evidence. --
 - Checks not run and why:
 - Evidence level: [ ] Static [ ] Local [ ] CI [ ] Staging [ ] Production
 
-## Infrastructure changes only
+## Image or workflow changes only
 
-<!-- Remove this section when infrastructure is untouched. -->
+<!-- Remove this section when the Dockerfile, the base image, the workflows and the scan files are untouched. -->
 
-- [ ] Plan or preview was reviewed; no unexpected destroy/recreate operations exist.
-- [ ] Resource addresses were not renamed without the required moved-state handling.
-- [ ] Secrets, state files, saved plans, and real variable values are not included.
-- [ ] Required tags, policies, networking, backup, identity, and security settings are preserved.
-- [ ] Rollout, monitoring, rollback, and recovery steps are documented.
+- [ ] The base image (if changed) is pinned by digest in `versions.env` and in both `FROM` lines, and `bash scripts/scan-image.sh` was run.
+- [ ] Every new or changed `uses:` is a full commit SHA with a version comment; runners are `ubuntu-26.04`; top-level `permissions` is `contents: read`.
+- [ ] Any new entry in `.trivyignore.yaml` has an id, a reason, an owner and an expiry date.
+- [ ] The tests that pin the workflow set (`tests/unit/test_workflows.py`) were updated when a workflow was added or removed.
+- [ ] Rollout and rollback are described (for a release workflow, see the README section "Releasing the engine").
 
 ## Security and data review
 
@@ -58,7 +58,8 @@ run and why. Distinguish static, local, CI, staging, and production evidence. --
 ## Documentation and operations
 
 - [ ] User-facing or developer documentation updated when needed.
-- [ ] Release notes, changelog, runbook, architecture record, migration notes, or security records updated when needed.
+- [ ] `CHANGELOG.md` updated in this pull request; a decision record (`docs/adr/`) or `VALIDATION.md` entry added when needed.
+- [ ] If the change reaches the AddOn (engine surface, tool schemas, detector ids, evidence kinds, release workflows), its `docs/whats-new-upstream.md` entry is written here, or this description says why none is needed.
 - [ ] Remaining work is recorded in the repository's established tracker.
 - [ ] Rollout and rollback owners are identified when the change affects a shared environment.
 

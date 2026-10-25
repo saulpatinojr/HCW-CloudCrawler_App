@@ -1,0 +1,84 @@
+# Accepted risk for the appliance image scan (ticket #15). Trivy reads this file (`--ignorefile`) in
+# scripts/scan-image.sh, which the weekly workflow .github/workflows/image-scan.yml runs.
+#
+# What an entry is: a vulnerability in the Debian base image that the owner has looked at and chosen to live with for
+# now. Every entry needs all four of these, and tests/unit/test_image_scan.py fails when one is missing:
+#   id          the vulnerability id (CVE-... or GHSA-...)
+#   statement   the reason: why it does not put this appliance at risk, written so a stranger can check it
+#   owner       the GitHub user who answers for the decision
+#   expired_at  the date the decision stops holding (YYYY-MM-DD, at most 180 days ahead); Trivy stops hiding the
+#               finding on that date, and the same test fails on every pull request until someone re-reads the entry
+#
+# How to renew or remove an entry: re-run `bash scripts/scan-image.sh`. If a fixed package exists now, delete the entry
+# and rebuild the image. If not, check that the statement is still true, move expired_at forward (never more than 180
+# days) and say so in the pull request. Do not add an entry only to make a red run green: the reason must be one you
+# could defend to a reviewer. A finding that has a fix available is not accepted here; update the base image instead.
+#
+# The first scan, run on 2026-10-25 with Trivy 0.76.1 (vulnerability database updated 2026-10-25 12:57 UTC) against the
+# image built from infrastructure/docker/Dockerfile on main at 0fd502e (Debian 13.7, Python 3.14.8):
+#   Operating-system packages, 164 findings: 0 CRITICAL, 44 HIGH, 58 MEDIUM, 61 LOW, 1 UNKNOWN. None of the 164 has a
+#   fixed version available. The 44 HIGH findings are 8 distinct vulnerabilities (listed below) spread over 17
+#   packages. Python packages (the hash-pinned runtime set): 0 findings of any severity.
+# MEDIUM and LOW findings are not gated and are not listed here.
+#
+# Status: proposed with the first scan. The reasons below are an analysis of what is installed in the image and what
+# the flaws need, checked in a disposable container on 2026-10-25; the owner accepts them by merging this file.
+vulnerabilities:
+  - id: CVE-2025-69720
+    statement: >-
+      ncurses (libncursesw6, libtinfo6, ncurses-base, ncurses-bin 6.5+20250216-2). The stack overflow is in the infocmp
+      command-line tool. infocmp is installed but nothing in the appliance runs it, and the container runs one Python
+      process as uid 10001, so an attacker would first need to run commands inside the container. Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-16742
+    statement: >-
+      systemd (libsystemd0, libudev1 257.13-1~deb13u1). The flaw is in systemd-homed. Only the two client libraries
+      are installed; systemd-homed and homectl are absent from the image, and a container has no homed-managed users.
+      Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-54369
+    statement: >-
+      acl (libacl1 2.3.2-2+b1). The symlink flaw needs a privileged program to call the libacl path functions on a
+      path an attacker controls. getfacl and setfacl are absent, no Python extension module links libacl, and the
+      appliance has no privileged process (uid 10001). Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-76642
+    statement: >-
+      util-linux 2.41.5-0+deb13u1 (bsdutils, libblkid1, liblastlog2-2, libmount1, libsmartcols1, libuuid1, login,
+      mount, util-linux). The flaw is in mount(8) running post-mount hooks after a failed helper. It needs the mount
+      system call, which a container does not have without CAP_SYS_ADMIN, and a person already running commands
+      inside the container. The application never runs mount. Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-78408
+    statement: >-
+      util-linux 2.41.5-0+deb13u1 (same packages as CVE-2026-76642). The flaw is in nsenter --join-cgroup. nsenter is
+      installed but needs privileges a container does not have (no CAP_SYS_ADMIN) and a person already running
+      commands inside it; the application never runs nsenter. Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-78409
+    statement: >-
+      util-linux 2.41.5-0+deb13u1 (same packages as CVE-2026-76642). The flaw is in the X-mount.subdir option, which
+      works only for a mount that an /etc/fstab entry authorizes. The image's /etc/fstab has no entries (checked on
+      2026-10-25), so the option cannot be reached. Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-78410
+    statement: >-
+      util-linux 2.41.5-0+deb13u1 (same packages as CVE-2026-76642). The flaw is in restricted bind mounts, which work
+      only for a mount that an /etc/fstab entry authorizes. The image's /etc/fstab has no entries (checked on
+      2026-10-25), so the flaw cannot be reached. Debian has no fix yet.
+    owner: saulpatinojr
+    expired_at: 2027-01-23
+  - id: CVE-2026-9538
+    statement: >-
+      perl-base 5.40.1-6+deb13u1 (Trivy status fix_deferred: Debian has chosen not to fix it yet). The flaw is in the
+      Perl module Archive::Tar. The module is not installed in the image (checked with perl -MArchive::Tar on
+      2026-10-25) and nothing in the appliance runs Perl, so the finding names a package that does not ship the
+      vulnerable code.
+    owner: saulpatinojr
+    expired_at: 2027-01-23

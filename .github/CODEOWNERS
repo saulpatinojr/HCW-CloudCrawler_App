@@ -1,26 +1,7 @@
-# Standardized CODEOWNERS baseline
+# Code owners: the people GitHub asks to review a pull request that touches a path.
+# Format and rules: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# The last matching rule wins and paths are case-sensitive. Owners must be real GitHub users or teams with write access.
 #
-# Replace every placeholder owner before enabling required code-owner review.
-# Owners must be real GitHub users or visible teams with explicit write access.
-# The last matching rule wins. Paths are case-sensitive.
-#
-# Until replaced, this file intentionally creates no review requests.
-
-# Required repository-wide ownership:
+# This repository has one maintainer, so one rule covers every path. Add a narrower rule below it only when a second
+# owner exists for that path (for example `/docs/adr/ @someone`).
 * @saulpatinojr
-
-# Protect governance and security configuration:
-# /.github/ @ORG/REPOSITORY-MAINTAINERS
-# /.github/CODEOWNERS @ORG/REPOSITORY-MAINTAINERS
-# /.github/SECURITY.md @ORG/SECURITY-TEAM
-# /.github/dependabot.yml @ORG/PLATFORM-TEAM
-# /.github/codeql/ @ORG/SECURITY-TEAM
-
-# Add only ownership boundaries that exist in the repository:
-# /src/ @ORG/ENGINEERING-TEAM
-# /app/ @ORG/ENGINEERING-TEAM
-# /infra/ @ORG/PLATFORM-TEAM
-# /modules/ @ORG/PLATFORM-TEAM
-# /docs/ @ORG/DOCS-TEAM
-
-# Validate the file in GitHub's CODEOWNERS error view after replacement.
