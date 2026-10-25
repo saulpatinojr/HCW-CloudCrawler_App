@@ -1,0 +1,55 @@
+# Rehearsal of the self-merging pull request (.github/actions/self-merging-pr).
+# Proves, on demand and without publishing anything, that the GitHub App can open a pull
+# request here, that auto-merge can be switched on, and that the required checks start on a
+# pull request the App opened. By default the pull request is closed again and the branch
+# deleted. With "merge" ticked it really merges the harmless file .github/rehearsal.txt, once,
+# as the end-to-end proof. Run it after any change to the App, the ruleset or the action.
+#
+# The credential is the repository-admin App (HCW Portfolio Admin) held by the admin-ops
+# environment. That is the interim choice: the token the action mints is limited to Contents and
+# Pull requests write on this repository, but the key behind it can do more. To move to a
+# dedicated lower-privilege App, change the two lines marked "credential" below.
+name: rehearse-self-merging-pr
+on:
+  workflow_dispatch:
+    inputs:
+      merge:
+        description: "Really merge .github/rehearsal.txt instead of closing the pull request again. Use once, as the end-to-end proof."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rehearse-self-merging-pr
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-26.04
+    environment: admin-ops
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Write the rehearsal file
+        run: |
+          mkdir -p .github
+          printf 'Rehearsal of the self-merging pull request, run %s at %s.\n' "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .github/rehearsal.txt
+
+      - name: Rehearse
+        uses: ./.github/actions/self-merging-pr
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}          # credential
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}  # credential
+          branch: rehearsal/self-merging-pr
+          add-paths: .github/rehearsal.txt
+          title: "chore(rehearsal): self-merging pull request"
+          body: Rehearsal run ${{ github.run_id }} of the self-merging pull request. Safe to close.
+          rehearsal: ${{ inputs.merge && 'false' || 'true' }}
