@@ -1,7 +1,8 @@
 # Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
 # proposes updates. Runners: ubuntu-26.04, never ubuntu-latest (program convention). uv is installed with pip at the
 # exact version this repository was authored with.
-# Jobs: lint (ruff, lockfile export), test (85 percent coverage gate; the azmcp-marked contract test excluded),
+# Jobs: lint (ruff, lockfile export, release version consistency), test (96 percent coverage gate; the azmcp-marked
+# contract test excluded),
 # contract (the real Azure MCP Server 3.0.0 over stdio through npx: initialize and tools/list only, no Azure call),
 # image (build, startup refusal under a secret-bearing variable, non-root, health answers).
 name: ci
@@ -27,6 +28,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: bash scripts/check-lockfiles.sh
+      - name: Every place that names the release version agrees (a v* tag can never be corrected)
+        run: python scripts/check-release-version.py
       - name: No client-secret credential path anywhere in the application
         run: |
           set -euo pipefail
@@ -43,7 +46,7 @@ jobs:
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
       - run: python -m pip install "uv==${{ env.UV_VERSION }}"
       - run: uv sync --frozen --all-packages
-      - name: Unit, security and acceptance tests with the 85 percent coverage gate
+      - name: Unit, security and acceptance tests with the 96 percent coverage gate
         run: uv run pytest -q --cov=packages --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=96
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: coverage, path: coverage.xml, if-no-files-found: error }
