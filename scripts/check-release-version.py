@@ -2,14 +2,18 @@
 
 Why this exists: a `v*` tag cannot be moved or deleted once it is pushed (the "Protect release tags" ruleset), so a
 tag that disagrees with the package version is a permanent mistake, and a wheel whose file name says one version while
-the code inside says another is worse. The check has two modes, both stdlib only.
+the code inside says another is worse. The check has three modes, all stdlib only.
 
 * Without `--tag` (CI, every pull request, `make lint`): the version in the engine's `pyproject.toml`, the appliance's
   `pyproject.toml`, both `__version__` constants and both `uv.lock` entries must be the same plain `X.Y.Z`.
-* With `--tag vX.Y.Z` (release.yml and publish-core.yml on a tag): the same, plus the tag must be `v` + that version,
-  `CHANGELOG.md` must have a dated, non-empty `## [X.Y.Z] - YYYY-MM-DD` section and an empty `## [Unreleased]`
-  section (so the release notes are complete), and, with `--ancestor-of REF`, the tagged commit must already be on
-  that branch (only reviewed commits are released).
+* With `--tag vX.Y.Z` (publish-core.yml on a tag): the same, plus the tag must be `v` + that version,
+  `CHANGELOG.md` must have a dated (a real calendar date, not in the future), non-empty `## [X.Y.Z] - YYYY-MM-DD`
+  section, no duplicate version heading, and an empty Unreleased section (`## [Unreleased]`, in any letter case, with
+  or without the brackets), so the release notes are complete. With `--ancestor-of REF`, the tagged commit must already
+  be on that branch (only reviewed commits are released).
+* With `--rehearse` (publish-core.yml started by hand on `main`, the dry run): the tag is derived as `v` + the package
+  version and every check of the `--tag` mode runs, so the dry run is red in exactly the states in which the real tag
+  would be refused. Because there is no tag yet, it also fails when that tag already exists.
 
 `--notes-out FILE` writes the changelog section for the version (the release notes). `--dist DIR` checks the built
 files: exactly the wheel and the sdist, named for the version, and the wheel's own `__version__` equal to it.
@@ -20,6 +24,8 @@ Exit 0 when everything agrees, 1 with one line per problem otherwise (GitHub `::
 from __future__ import annotations
 
 import argparse
+import contextlib
+import datetime
 import os
 import re
 import subprocess  # nosec B404 - only runs git, with a fixed argument list and no shell
@@ -29,8 +35,18 @@ import zipfile
 from pathlib import Path
 
 VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-HEADING = re.compile(r"^## \[(?P<name>[^\]]+)\](?: - (?P<date>\S+))?\s*$")
-DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# `## [1.2.3] - 2026-10-25`, `## [Unreleased]` and bracket-less `## Unreleased`; any other `## ...` line ends a section
+HEADING = re.compile(
+    r"^##[ \t]+(?:\[(?P<bracketed>[^\]]+)\]|(?P<bare>(?i:unreleased)))"
+    r"(?:[ \t]+-[ \t]+(?P<date>\S+))?[ \t]*$"
+)
+UNRELEASED = "Unreleased"
+DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+FENCE = re.compile(r"^ {0,3}(?P<mark>`{3,}|~{3,})(?P<info>.*)$")
+LINK_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:[ \t]*\S+.*$")
+HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+# a release may be dated "today" in a time zone ahead of the runner's UTC clock, so one day ahead is tolerated
+FUTURE_TOLERANCE = datetime.timedelta(days=1)
 DUNDER = re.compile(r'^__version__\s*=\s*"([^"]*)"\s*$', re.M)
 ENGINE = "packages/cloud-crawler-core"
 SOURCES = {
@@ -76,28 +92,100 @@ def read_versions(root: Path) -> tuple[dict[str, str], list[str]]:
     return found, problems
 
 
-def changelog_sections(text: str) -> dict[str, tuple[str | None, str]]:
-    """Map each `## [name]` heading to (date, body). Headings inside code fences are ignored."""
+def parse_changelog(text: str) -> tuple[dict[str, tuple[str | None, str]], list[str]]:
+    """Map each release heading to (date, body), and list the headings that appear more than once.
+
+    A release heading is `## [name]` (optionally ` - date`), or `## Unreleased` without brackets; Unreleased is matched
+    in any letter case and always stored under the key "Unreleased". Headings inside code fences (backticks or tildes,
+    as CommonMark closes them) and inside HTML comments are ignored. Trailing link reference definitions
+    (`[0.1.0]: https://...`) are not part of the last section's body. The first of two equal headings is kept; the
+    duplicate is reported, never silently preferred."""
     sections: dict[str, tuple[str | None, list[str]]] = {}
+    duplicates: list[str] = []
     current: list[str] | None = None
-    fenced = False
+    fence: tuple[str, int] | None = None
+    in_comment = False
     for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-        match = None if fenced else HEADING.match(line)
+        if in_comment:
+            in_comment = "-->" not in line
+            if current is not None:
+                current.append(line)
+            continue
+        opened = FENCE.match(line)
+        if fence is not None:
+            if (
+                opened
+                and opened["mark"][0] == fence[0]
+                and len(opened["mark"]) >= fence[1]
+                and not opened["info"].strip()
+            ):
+                fence = None
+            if current is not None:
+                current.append(line)
+            continue
+        if opened and not (opened["mark"][0] == "`" and "`" in opened["info"]):
+            fence = (opened["mark"][0], len(opened["mark"]))
+            if current is not None:
+                current.append(line)
+            continue
+        if "<!--" in line and "-->" not in line.rsplit("<!--", 1)[1]:
+            in_comment = True
+        match = HEADING.match(line)
         if match:
-            current = []
-            sections[match.group("name")] = (match.group("date"), current)
-        elif not fenced and line.startswith("## "):
+            bare = match["bare"]
+            name = (
+                UNRELEASED
+                if bare or match["bracketed"].strip().casefold() == UNRELEASED.casefold()
+                else match["bracketed"]
+            )
+            if name in sections:
+                duplicates.append(name)
+                current = None
+            else:
+                current = []
+                sections[name] = (match["date"], current)
+        elif line.startswith("## "):
             current = None
         elif current is not None:
             current.append(line)
-    return {name: (date, "\n".join(body).strip("\n")) for name, (date, body) in sections.items()}
+    bodies = {name: (date, _trim(body)) for name, (date, body) in sections.items()}
+    return bodies, sorted(set(duplicates))
+
+
+def _trim(body: list[str]) -> str:
+    """The section text without the blank lines around it and without trailing link reference definitions."""
+    lines = list(body)
+    while lines and (not lines[-1].strip() or LINK_DEFINITION.match(lines[-1])):
+        lines.pop()
+    return "\n".join(lines).strip("\n")
+
+
+def changelog_sections(text: str) -> dict[str, tuple[str | None, str]]:
+    """Map each release heading to (date, body); see `parse_changelog`, which also reports duplicate headings."""
+    return parse_changelog(text)[0]
 
 
 def has_content(body: str) -> bool:
-    """True when a section holds more than empty sub-headings (`### Fixed` with nothing under it is not content)."""
-    return any(line.strip() and not line.startswith("#") for line in body.splitlines())
+    """True when a section holds more than empty sub-headings (`### Fixed` with nothing under it is not content).
+
+    HTML comments and link reference definitions are not content either: they render as nothing."""
+    visible = HTML_COMMENT.sub("", body)
+    return any(
+        line.strip() and not line.startswith("#") and not LINK_DEFINITION.match(line) for line in visible.splitlines()
+    )
+
+
+def release_date_problem(date: str | None, version: str, today: datetime.date) -> str | None:
+    """None when `date` is a real calendar date that is not in the future, otherwise the reason it is refused."""
+    if not date or not DATE.match(date):
+        return f"the CHANGELOG.md section for {version} has no release date (found {date!r})"
+    try:
+        released = datetime.date.fromisoformat(date)
+    except ValueError:
+        return f"the CHANGELOG.md section for {version} has a date that does not exist ({date})"
+    if released > today + FUTURE_TOLERANCE:
+        return f"the CHANGELOG.md section for {version} is dated {date}, which is in the future (today is {today})"
+    return None
 
 
 def check_dist(dist: Path, version: str) -> list[str]:
@@ -135,7 +223,25 @@ def on_branch(sha: str, ref: str, root: Path) -> str | None:
     return f"could not compare {sha[:12]} with {ref}: {result.stderr.strip() or 'git failed'}"
 
 
-def check(root: Path, tag: str | None = None, dist: Path | None = None) -> tuple[list[str], str | None]:
+def utc_today() -> datetime.date:
+    return datetime.datetime.now(datetime.UTC).date()
+
+
+def tag_exists(tag: str, root: Path) -> str | None:
+    """None when no tag of that name exists here, otherwise the reason the rehearsal must stop."""
+    result = _git(root, "rev-parse", "--quiet", "--verify", f"refs/tags/{tag}")
+    if result.returncode == 0:
+        return (
+            f"the tag {tag} already exists: this version was released (or burned); change all six version places first"
+        )
+    if result.returncode == 1:
+        return None
+    return f"could not look up the tag {tag}: {result.stderr.strip() or 'git failed'}"
+
+
+def check(
+    root: Path, tag: str | None = None, dist: Path | None = None, *, today: datetime.date | None = None
+) -> tuple[list[str], str | None]:
     """Return (problems, version). `version` is None when the sources disagree so much that none can be trusted."""
     versions, problems = read_versions(root)
     distinct = sorted(set(versions.values()))
@@ -149,64 +255,86 @@ def check(root: Path, tag: str | None = None, dist: Path | None = None) -> tuple
         version = None
     if tag is not None:
         tag = tag.removeprefix("refs/tags/")
-        if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
             problems.append(f"tag {tag!r} is not v followed by X.Y.Z")
         elif version is not None and tag != f"v{version}":
             problems.append(f"tag {tag} does not match the package version {version}")
     if version is not None and tag is not None:
-        try:
-            sections = changelog_sections((root / "CHANGELOG.md").read_text(encoding="utf-8"))
-        except OSError as error:
-            problems.append(f"cannot read CHANGELOG.md: {error.strerror or error}")
-            sections = {}
-        date, body = sections.get(version, (None, ""))
-        if version not in sections:
-            problems.append(f"CHANGELOG.md has no '## [{version}] - YYYY-MM-DD' section")
-        elif not date or not DATE.match(date):
-            problems.append(f"the CHANGELOG.md section for {version} has no release date (found {date!r})")
-        elif not has_content(body):
-            problems.append(f"the CHANGELOG.md section for {version} is empty")
-        if "Unreleased" in sections and has_content(sections["Unreleased"][1]):
-            problems.append("CHANGELOG.md still has entries under [Unreleased]: fold them into the release section")
+        problems.extend(changelog_problems(root, version, today or utc_today()))
     if dist is not None and version is not None:
         problems.extend(check_dist(dist, version))
     return problems, version
 
 
+def changelog_problems(root: Path, version: str, today: datetime.date) -> list[str]:
+    """Everything in CHANGELOG.md that would make the release notes for `version` wrong or incomplete."""
+    try:
+        sections, duplicates = parse_changelog((root / "CHANGELOG.md").read_text(encoding="utf-8"))
+    except OSError as error:
+        return [f"cannot read CHANGELOG.md: {error.strerror or error}"]
+    problems = [
+        f"CHANGELOG.md has the heading '## [{name}]' more than once: which one is the release?" for name in duplicates
+    ]
+    date, body = sections.get(version, (None, ""))
+    if version not in sections:
+        problems.append(f"CHANGELOG.md has no '## [{version}] - YYYY-MM-DD' section")
+    elif (reason := release_date_problem(date, version, today)) is not None:
+        problems.append(reason)
+    elif not has_content(body):
+        problems.append(f"the CHANGELOG.md section for {version} is empty")
+    if UNRELEASED in sections and has_content(sections[UNRELEASED][1]):
+        problems.append("CHANGELOG.md still has entries under [Unreleased]: fold them into the release section")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
-    parser.add_argument("--tag", help="the tag being released, for example v0.1.0 (refs/tags/ prefix allowed)")
+    which = parser.add_mutually_exclusive_group()
+    which.add_argument("--tag", help="the tag being released, for example v0.1.0 (refs/tags/ prefix allowed)")
+    which.add_argument(
+        "--rehearse",
+        action="store_true",
+        help="dry run: take the tag to be v + the package version and run every check a real tag runs",
+    )
     parser.add_argument("--dist", type=Path, help="directory holding the built wheel and sdist")
     parser.add_argument("--notes-out", type=Path, help="write the changelog section for the version to this file")
-    parser.add_argument("--ancestor-of", metavar="REF", help="with --tag: the tagged commit must be reachable from REF")
+    parser.add_argument(
+        "--ancestor-of", metavar="REF", help="with --tag or --rehearse: the commit must be reachable from REF"
+    )
     args = parser.parse_args(argv)
-    problems, version = check(args.root, args.tag, args.dist)
-    if args.tag and args.ancestor_of and version:
+    tag = args.tag
+    if args.rehearse:
+        version = check(args.root)[1]
+        tag = f"v{version}" if version else None
+    problems, version = check(args.root, tag, args.dist)
+    if args.rehearse and version and (reason := tag_exists(f"v{version}", args.root)):
+        problems.append(reason)
+    if tag and args.ancestor_of and version:
         sha = os.environ.get("GITHUB_SHA") or _git(args.root, "rev-parse", "HEAD").stdout.strip()
         reason = on_branch(sha, args.ancestor_of, args.root)
         if reason:
             problems.append(reason)
+    sections: dict[str, tuple[str | None, str]] = {}
+    if (args.notes_out or not tag) and version:
+        # an unreadable file: with a tag, check() reported it; without one, the missing notes are reported below
+        with contextlib.suppress(OSError):
+            sections = changelog_sections((args.root / "CHANGELOG.md").read_text(encoding="utf-8"))
     if args.notes_out and version:
-        sections = changelog_sections((args.root / "CHANGELOG.md").read_text(encoding="utf-8"))
         body = sections.get(version, (None, ""))[1]
         if has_content(body):
             args.notes_out.write_text(body + "\n", encoding="utf-8")
         elif not any("CHANGELOG.md" in p for p in problems):
             problems.append(f"the CHANGELOG.md section for {version} is missing or empty: there are no release notes")
     github = os.environ.get("GITHUB_ACTIONS") == "true"
-    if args.notes_out and not args.tag and version:
-        sections = changelog_sections((args.root / "CHANGELOG.md").read_text(encoding="utf-8"))
-        if "Unreleased" in sections and has_content(sections["Unreleased"][1]):
-            warning = (
-                "CHANGELOG.md still has entries under [Unreleased]; a real tag is refused until they are folded in"
-            )
-            print(f"::warning::{warning}" if github else f"warning: {warning}")
+    if args.notes_out and not tag and version and UNRELEASED in sections and has_content(sections[UNRELEASED][1]):
+        warning = "CHANGELOG.md still has entries under [Unreleased]; a real tag is refused until they are folded in"
+        print(f"::warning::{warning}" if github else f"warning: {warning}")
     for problem in problems:
         print(f"::error::{problem}" if github else f"error: {problem}")
     if problems:
         return 1
-    tagged = f", tag {args.tag.removeprefix('refs/tags/')}" if args.tag else ""
+    tagged = f", tag {tag.removeprefix('refs/tags/')}" if tag else ""
     print(f"release version consistent: {version}{tagged}")
     return 0
 

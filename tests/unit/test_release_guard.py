@@ -4,6 +4,7 @@ only chance to catch a wrong one. No network; the git cases build a throwaway re
 
 from __future__ import annotations
 
+import datetime
 import importlib.util
 import shutil
 import subprocess
@@ -75,6 +76,12 @@ def make_repo(root: Path, *, version: str = "0.1.0", changelog: str = CHANGELOG,
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     return root
+
+
+@pytest.fixture(autouse=True)
+def _fixed_today(monkeypatch):
+    """The fixture changelog is dated 2026-10-25; the clock must not decide whether these tests pass."""
+    monkeypatch.setattr(guard, "utc_today", lambda: datetime.date(2026, 10, 25))
 
 
 def problems(root: Path, tag: str | None = None, dist: Path | None = None) -> list[str]:
@@ -280,3 +287,216 @@ def test_only_a_commit_on_the_protected_branch_may_be_released(tmp_path, monkeyp
     monkeypatch.delenv("GITHUB_SHA")
     git(root, "switch", "-q", "main")
     assert guard.main(["--root", str(root), "--tag", "v0.1.0", "--ancestor-of", "main"]) == 0
+
+
+# --- the changelog parser: every way a wrong changelog used to look right ---------------------------------------------
+
+
+def with_changelog(tmp_path: Path, text: str) -> Path:
+    return make_repo(tmp_path, changelog=text)
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["## [Unreleased]", "## [unreleased]", "## [UNRELEASED]", "## Unreleased", "## unreleased", "##  [Unreleased]"],
+)
+def test_unreleased_is_found_in_any_letter_case_with_or_without_brackets(tmp_path, heading):
+    text = CHANGELOG.replace("## [Unreleased]", f"{heading}\n\n- A late fix.")
+    found = problems(with_changelog(tmp_path, text), "v0.1.0")
+    assert any("still has entries under [Unreleased]" in p for p in found), heading
+    empty = CHANGELOG.replace("## [Unreleased]", heading)
+    assert problems(with_changelog(tmp_path / "empty", empty), "v0.1.0") == []
+
+
+def test_two_unreleased_headings_in_different_spellings_are_a_duplicate(tmp_path):
+    text = CHANGELOG.replace("## [Unreleased]\n", "## [Unreleased]\n\n## unreleased\n\n- hidden\n")
+    assert any("more than once" in p for p in problems(with_changelog(tmp_path, text), "v0.1.0"))
+
+
+def test_a_duplicate_version_heading_is_refused_not_resolved_by_taking_the_last(tmp_path):
+    text = CHANGELOG + "\n## [0.1.0] - 2026-10-25\n\n- A second, different section.\n"
+    sections, duplicates = guard.parse_changelog(text)
+    assert duplicates == ["0.1.0"] and sections["0.1.0"][1] == "### Added\n\n- The first release."
+    found = problems(with_changelog(tmp_path, text), "v0.1.0")
+    assert any("the heading '## [0.1.0]' more than once" in p for p in found)
+    assert problems(with_changelog(tmp_path / "plain", text)) == [], "ordinary work is not held up by it"
+
+
+@pytest.mark.parametrize("date", ["2026-13-45", "2026-02-30", "2026-00-10", "2027-02-29", "0000-01-01"])
+def test_a_date_that_does_not_exist_is_refused(tmp_path, date):
+    text = CHANGELOG.replace("2026-10-25", date)
+    assert any("date that does not exist" in p for p in problems(with_changelog(tmp_path, text), "v0.1.0")), date
+
+
+@pytest.mark.parametrize("date", ["20261025", "2026-1-5", "2026-W43-7", "２０２６-10-25", "2026-10-25T10:00"])
+def test_only_the_plain_iso_date_shape_is_a_date(tmp_path, date):
+    text = CHANGELOG.replace("2026-10-25", date)
+    assert any("has no release date" in p for p in problems(with_changelog(tmp_path, text), "v0.1.0")), date
+
+
+def test_a_date_in_the_future_is_refused_with_one_day_of_time_zone_slack(tmp_path):
+    root = with_changelog(tmp_path / "a", CHANGELOG.replace("2026-10-25", "2026-10-26"))
+    assert problems(root, "v0.1.0") == [], "tomorrow, because a release may be dated in a time zone ahead of UTC"
+    root = with_changelog(tmp_path / "b", CHANGELOG.replace("2026-10-25", "2026-10-27"))
+    found = problems(root, "v0.1.0")
+    assert any("dated 2026-10-27, which is in the future (today is 2026-10-25)" in p for p in found)
+    root = with_changelog(tmp_path / "c", CHANGELOG.replace("2026-10-25", "2999-01-01"))
+    assert any("in the future" in p for p in problems(root, "v0.1.0"))
+
+
+def test_the_real_clock_is_used_when_no_date_is_given(monkeypatch):
+    monkeypatch.undo()
+    assert guard.utc_today() == datetime.datetime.now(datetime.UTC).date()
+
+
+def test_headings_inside_tilde_fences_are_ignored_and_a_fence_closes_like_commonmark():
+    text = "## [1.0.0] - 2026-01-01\n\nText\n\n~~~markdown\n## [9.9.9] - 2030-01-01\n~~~\n\nAfter\n"
+    sections = guard.changelog_sections(text)
+    assert list(sections) == ["1.0.0"] and "After" in sections["1.0.0"][1]
+    # a backtick fence is not closed by tildes, nor by a shorter fence, nor by a line with text after it
+    text = "## [1.0.0] - 2026-01-01\n\n```\n~~~\n## [9.9.9] - 2030-01-01\n``\n```` x\n```\n\n## [0.9.0] - 2025-01-01\n"
+    assert list(guard.changelog_sections(text)) == ["1.0.0", "0.9.0"]
+    text = "## [1.0.0] - 2026-01-01\n\n````\n```\n## [9.9.9] - 2030-01-01\n````\n\n## [0.9.0] - 2025-01-01\n\nOld\n"
+    assert list(guard.changelog_sections(text)) == ["1.0.0", "0.9.0"]
+    # an unclosed fence hides the rest of the file: nothing after it can become a heading
+    assert list(guard.changelog_sections("## [1.0.0] - 2026-01-01\n\n~~~\n## [0.9.0] - 2025-01-01\n")) == ["1.0.0"]
+    # an inline run of backticks is not a fence
+    inline = "## [1.0.0] - 2026-01-01\n\n``` not a fence ```\n## [0.9.0] - 2025-01-01\n"
+    assert list(guard.changelog_sections(inline)) == ["1.0.0", "0.9.0"]
+
+
+def test_a_heading_inside_an_html_comment_is_not_a_heading():
+    text = "## [1.0.0] - 2026-01-01\n\n<!--\n## [9.9.9] - 2030-01-01\n-->\n\nText\n\n## [0.9.0] - 2025-01-01\n\nOld\n"
+    assert list(guard.changelog_sections(text)) == ["1.0.0", "0.9.0"]
+    one_line = "## [1.0.0] - 2026-01-01\n\n<!-- a note -->\n## [0.9.0] - 2025-01-01\n\nOld\n"
+    assert list(guard.changelog_sections(one_line)) == ["1.0.0", "0.9.0"]
+
+
+def test_link_reference_definitions_at_the_end_are_not_release_notes(tmp_path):
+    definitions = "\n[Unreleased]: https://example.invalid/compare\n[0.1.0]: https://example.invalid/tag\n"
+    root = make_repo(tmp_path / "repo", changelog=CHANGELOG + definitions)
+    assert guard.changelog_sections(CHANGELOG + definitions)["0.0.9"][1] == "### Fixed\n\n- Something older."
+    notes = tmp_path / "notes.md"
+    assert guard.main(["--root", str(root), "--tag", "v0.1.0", "--notes-out", str(notes)]) == 0
+    assert notes.read_text(encoding="utf-8") == "### Added\n\n- The first release.\n"
+    # definitions that are the only thing under the 0.1.0 heading are not content
+    only_definitions = CHANGELOG.replace("- The first release.\n", "[x]: https://example.invalid/x\n")
+    root = make_repo(tmp_path / "d", changelog=only_definitions)
+    assert any("section for 0.1.0 is empty" in p for p in problems(root, "v0.1.0"))
+    # a definition in the middle of the notes stays, because the text above it may use it
+    middle = CHANGELOG.replace("- The first release.\n", "- See [x].\n\n[x]: https://example.invalid/x\n\n- More.\n")
+    assert "[x]: https://example.invalid/x" in guard.changelog_sections(middle)["0.1.0"][1]
+
+
+@pytest.mark.parametrize(
+    "comment",
+    ["<!-- nothing yet -->", "<!--\nTODO: write the notes\n-->", "<!-- a --><!-- b -->"],
+)
+def test_an_html_comment_is_not_content(tmp_path, comment):
+    release = CHANGELOG.replace("- The first release.\n", f"{comment}\n")
+    found = problems(with_changelog(tmp_path / "r", release), "v0.1.0")
+    assert any("section for 0.1.0 is empty" in p for p in found), comment
+    unreleased = CHANGELOG.replace("## [Unreleased]\n", f"## [Unreleased]\n\n{comment}\n")
+    assert problems(with_changelog(tmp_path / "u", unreleased), "v0.1.0") == [], comment
+
+
+def test_an_unterminated_html_comment_hides_the_rest_so_the_check_fails_loudly(tmp_path):
+    text = CHANGELOG.replace("## [Unreleased]\n", "## [Unreleased]\n\n<!-- unterminated\n")
+    found = problems(with_changelog(tmp_path, text), "v0.1.0")
+    assert found == ["CHANGELOG.md has no '## [0.1.0] - YYYY-MM-DD' section"]
+
+
+def test_text_next_to_an_html_comment_is_still_content():
+    assert guard.has_content("<!-- c --> real words")
+    assert guard.has_content("<!-- c -->\n- an entry\n<!-- d -->")
+    assert not guard.has_content("### Added\n\n<!-- c -->\n\n### Fixed\n")
+    assert not guard.has_content("[x]: https://example.invalid/x\n\n### Fixed\n"), "a definition renders as nothing"
+
+
+# --- the dry run (--rehearse) is the tag run without the tag ------------------------------------------------------
+
+
+def git_repo(root: Path) -> Path:
+    """`root` as a git repository with one commit on main, so that the rehearsal's tag and ancestry lookups work."""
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", ".")
+    git(root, "commit", "-q", "-m", "main commit")
+    return root
+
+
+def errors(capsys) -> list[str]:
+    """The problem lines printed so far, whether they are GitHub annotations (under Actions) or plain lines."""
+    lines = capsys.readouterr().out.splitlines()
+    return [line.removeprefix("::error::").removeprefix("error: ") for line in lines if "error" in line.split(" ")[0]]
+
+
+@needs_git
+def test_rehearse_derives_the_tag_and_runs_every_tag_check(tmp_path, capsys):
+    root = git_repo(make_repo(tmp_path / "ok"))
+    assert guard.main(["--root", str(root), "--rehearse"]) == 0
+    assert "release version consistent: 0.1.0, tag v0.1.0" in capsys.readouterr().out
+    bad = {
+        "missing section": "# Changelog\n",
+        "undated": CHANGELOG.replace(" - 2026-10-25", ""),
+        "empty section": CHANGELOG.replace("### Added\n\n- The first release.\n", ""),
+        "impossible date": CHANGELOG.replace("2026-10-25", "2026-13-45"),
+        "future date": CHANGELOG.replace("2026-10-25", "2999-01-01"),
+        "unreleased entries": CHANGELOG.replace("## [Unreleased]\n", "## [Unreleased]\n\n- late\n"),
+        "lowercase unreleased entries": CHANGELOG.replace("## [Unreleased]\n", "## unreleased\n\n- late\n"),
+        "duplicate heading": CHANGELOG + "\n## [0.1.0] - 2026-10-25\n\n- again\n",
+    }
+    for label, text in bad.items():
+        root = git_repo(make_repo(tmp_path / label.replace(" ", "-"), changelog=text))
+        assert guard.main(["--root", str(root), "--rehearse"]) == 1, label
+        rehearsal = errors(capsys)
+        assert guard.main(["--root", str(root), "--tag", "v0.1.0"]) == 1, f"{label}: the tag run must refuse it too"
+        assert rehearsal and rehearsal == errors(capsys), f"{label}: the dry run and the tag run must say the same"
+
+
+def test_rehearse_is_red_for_a_disagreeing_version_and_is_never_a_second_way_to_pick_the_tag(tmp_path, capsys):
+    root = make_repo(tmp_path / "repo", app_py="0.2.0")
+    assert guard.main(["--root", str(root), "--rehearse"]) == 1
+    assert "the version differs between files" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        guard.main(["--root", str(root), "--rehearse", "--tag", "v0.1.0"])
+
+
+@needs_git
+def test_rehearse_also_checks_the_built_files(tmp_path, capsys):
+    root = git_repo(make_repo(tmp_path / "repo"))
+    assert guard.main(["--root", str(root), "--rehearse", "--dist", str(build_dist(tmp_path / "ok"))]) == 0
+    lie = build_dist(tmp_path / "lie", inner="0.0.9")
+    assert guard.main(["--root", str(root), "--rehearse", "--dist", str(lie)]) == 1
+    assert "the wheel's own __version__ is 0.0.9" in capsys.readouterr().out
+
+
+@needs_git
+def test_rehearse_checks_ancestry_and_that_the_tag_is_still_free(tmp_path, monkeypatch, capsys):
+    root = make_repo(tmp_path)
+    git(root, "init", "-q", "-b", "main")
+    git(root, "add", ".")
+    git(root, "commit", "-q", "-m", "main commit")
+    on_main = git(root, "rev-parse", "HEAD")
+    git(root, "switch", "-q", "-c", "feature")
+    (root / "extra.txt").write_text("unreviewed", encoding="utf-8")
+    git(root, "add", ".")
+    git(root, "commit", "-q", "-m", "feature commit")
+    on_feature = git(root, "rev-parse", "HEAD")
+    monkeypatch.setenv("GITHUB_SHA", on_main)
+    assert guard.main(["--root", str(root), "--rehearse", "--ancestor-of", "main"]) == 0
+    monkeypatch.setenv("GITHUB_SHA", on_feature)
+    assert guard.main(["--root", str(root), "--rehearse", "--ancestor-of", "main"]) == 1
+    assert "is not on main" in capsys.readouterr().out
+    monkeypatch.setenv("GITHUB_SHA", on_main)
+    git(root, "tag", "-a", "v0.1.0", on_main, "-m", "already released")
+    assert guard.main(["--root", str(root), "--rehearse", "--ancestor-of", "main"]) == 1
+    assert "the tag v0.1.0 already exists" in capsys.readouterr().out
+    # the real tag run is the one that creates the tag, so the existing tag is not an error there
+    assert guard.main(["--root", str(root), "--tag", "v0.1.0", "--ancestor-of", "main"]) == 0
+
+
+@needs_git
+def test_rehearse_reports_a_tag_lookup_that_cannot_be_made(tmp_path, capsys):
+    root = make_repo(tmp_path)  # a directory that is not a git repository
+    assert guard.main(["--root", str(root), "--rehearse"]) == 1
+    assert "could not look up the tag v0.1.0" in capsys.readouterr().out
