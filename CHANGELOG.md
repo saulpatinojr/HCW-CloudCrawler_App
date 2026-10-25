@@ -144,6 +144,24 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
 
 ### Changed
 
+- **`repository-admin.yml` can no longer lower the live rules by accident** (2026-10-25). Its `protect-main` and
+  `protect-release-tags` tasks replace the whole ruleset with a list kept in the file, and that list was out of date:
+  the live `Protect main` ruleset now needs one approving review, a code-owner review, approval of the last push and
+  resolved review threads, and the live `Protect release tags` ruleset also blocks creating a tag and lets repository
+  admins bypass it, while the file still said zero reviews and none of the rest. Running either task with "apply" would
+  have switched all of that off without a word. Now both tasks read the live ruleset first and print what the update
+  would remove or weaken and what it would add or change. With "apply" ticked they stop with an error, and change
+  nothing, if the update would remove a rule, a required check, a bypass actor or a tag pattern, lower a number, or
+  switch a protection off, unless the new "allow_weakening" box is ticked as well (it is off by default, and so is
+  "apply"). A broken `REQUIRED_CHECKS` list (empty, not a list, a repeated or empty name) stops the task before
+  anything is sent. The two payloads in the file now equal the live rulesets read on 2026-10-25 (the same six required
+  checks as before), so an apply changes nothing today. New `tests/unit/test_repository_admin_required_checks.py`
+  (51 tests): every required check must be a real job name in `ci.yml` or `security.yml` and equal an explicit list,
+  the payloads must equal the live values, and the real step runs against a stand-in `gh` that answers from sample
+  rulesets and records every call, including 16 one-setting-at-a-time weakenings that must each be refused. If you
+  change the live ruleset, change `REQUIRED_CHECKS` and that test's lists in the same pull request. **Not verified: a
+  real `protect-main` or `protect-release-tags` run (only the stand-in `gh` was used); after merging, run `show-plan`
+  and `protect-main` without "apply" and check that both print "removes and weakens nothing".**
 - Review round on the first pull request: `adr_create` refuses a claim its
   detector cannot evaluate (unknown detector, an expectation of the wrong
   shape, bad parameters) instead of failing every later `drift_evaluate`;
