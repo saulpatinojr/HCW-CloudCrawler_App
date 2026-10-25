@@ -127,6 +127,20 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
 
 - `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
   instructions, links).
+- **A weekly scan of the container image, and a written record of the risks accepted** (ticket #15). The new workflow
+  `image-scan.yml` builds the appliance image every Monday (05:37 UTC), on **Run workflow**, and on a pull request that
+  changes `infrastructure/docker/`, `requirements.lock.txt` or the scan files. It runs `scripts/scan-image.sh`, which scans
+  the image with Trivy 0.76.1 (pinned by digest, in a read-only container with no capabilities and no Docker socket) and
+  **fails on a HIGH or CRITICAL vulnerability that has a fix available**. Vulnerabilities with no fix yet are listed in the
+  new accepted-risk file `.trivyignore.yaml`; every entry has an id, a reason, an owner and an expiry date, and
+  `tests/unit/test_image_scan.py` fails when one is missing or past its date. The first scan (2026-10-25) found 164
+  findings in the Debian base image, none with a fix and none CRITICAL; the 44 HIGH ones are 8 distinct vulnerabilities,
+  each recorded with a reason (proposed; the owner accepts them by merging). The Python packages had no findings. The scan
+  is not one of the six required checks. `tests/unit/test_workflows.py` now lists `image-scan.yml` among the expected
+  workflow files.
+- Issue form "Work item (maintainers)" (`.github/ISSUE_TEMPLATE/work_item.yml`), for planned work with acceptance
+  criteria, the way the portfolio's other repositories use it. The bug, feature and decision forms now also add the label
+  `product:cloudcrawler`.
 
 ### Changed
 
@@ -177,6 +191,16 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
   `docs/TEMPLATE.md` removed (ticket #14).
 - `CLAUDE.md`: the form-filling rule now says secrets are never written in chat, pull requests, issues or documentation; the owner enters each secret
   only in the secure settings field or through a script that reads it from a file.
+- **Leftover repository-template content removed or rewritten** (ticket #12). `.github/CODEOWNERS` lists the real owner
+  and no placeholders. The folder `.github/templates/` (blog, gist, task and workflow-document templates) and the
+  FinOps-finding and infrastructure-change issue forms were deleted: nothing here uses them. `CONTRIBUTING.md` now
+  describes this repository (its commands, the pinned Azure MCP Server, the changelog rule, the plain-language rule, the
+  AddOn rule, the image scan) instead of generic Terraform guidance. The pull request template's "Infrastructure changes
+  only" section became "Image or workflow changes only" and gained the AddOn and changelog check boxes;
+  `.github/copilot-instructions.md` no longer asks for Terraform plans. The README no longer says the repository was
+  created from a template. The reminder to re-resolve the base image digest in `infrastructure/docker/versions.env` is
+  resolved: the pinned digest still resolves to `python:3.14.8-slim-trixie` (checked 2026-10-25), and the file records that
+  the tag has since been rebuilt, so moving the pin is a separate, reviewed change.
 
 ### Fixed
 

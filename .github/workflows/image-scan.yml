@@ -1,0 +1,33 @@
+# Weekly vulnerability scan of the appliance image (ticket #15). It builds infrastructure/docker/Dockerfile and runs
+# scripts/scan-image.sh, which runs Trivy pinned by digest in a hardened container. The run fails on HIGH or CRITICAL
+# findings that have a fix available, and warns about unfixed ones that .trivyignore.yaml (the accepted-risk file)
+# does not list. It also runs on a pull request that changes the Dockerfile, the base image pin, the runtime lock, the
+# accepted-risk file or the scan itself, so a base-image update is scanned before it merges. It is not one of the
+# required checks of the `main` ruleset: a vulnerability published tomorrow must not block an unrelated pull request.
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot proposes updates.
+name: image-scan
+on:
+  schedule: [{ cron: "37 5 * * 1" }]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "infrastructure/docker/**"
+      - "requirements.lock.txt"
+      - ".trivyignore.yaml"
+      - "scripts/scan-image.sh"
+      - ".github/workflows/image-scan.yml"
+permissions:
+  contents: read
+concurrency:
+  group: image-scan-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  trivy:
+    name: Trivy scan of the appliance image
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - name: Build the appliance image and scan it with Trivy (fixable HIGH and CRITICAL fail the run)
+        run: bash scripts/scan-image.sh

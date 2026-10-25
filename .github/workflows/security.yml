@@ -1,6 +1,6 @@
 # Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
-# proposes updates. CodeQL and dependency review run from the template's own workflows (codeql.yml,
-# dependency-review.yml) and are not duplicated here.
+# proposes updates. CodeQL and dependency review run from their own workflows (codeql.yml,
+# dependency-review.yml) and are not duplicated here; the image scan is image-scan.yml.
 name: security
 on:
   pull_request:
