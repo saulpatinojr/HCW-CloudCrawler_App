@@ -1,0 +1,50 @@
+# The documentation site (GitHub Pages), built from docs/ plus the release notes taken from CHANGELOG.md.
+# Build it with: uv run --group docs mkdocs build --strict   (then: python scripts/check-site-links.py site)
+# .github/workflows/docs.yml builds it on every pull request that touches the docs and publishes it from main.
+# Nothing here says the appliance is ready for production: /api/health reports "production": false, and the pages
+# say the same (ticket #11).
+site_name: Cloud Crawler, App edition
+site_description: >-
+  Hybrid Cloud Works' Azure architecture appliance: an evidence ledger, architecture decision records, deterministic
+  drift detection and review proposals over Azure MCP Server 3.0. First implementation slice; not production.
+site_url: https://saulpatinojr.github.io/HCW-CloudCrawler_App/
+repo_url: https://github.com/saulpatinojr/HCW-CloudCrawler_App
+repo_name: saulpatinojr/HCW-CloudCrawler_App
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+strict: true
+# The readthedocs theme collapses its side menu into a button on a narrow screen, so it reads on a phone.
+theme:
+  name: readthedocs
+  navigation_depth: 3
+hooks:
+  - scripts/mkdocs_hooks.py
+exclude_docs: |
+  adr/template.md
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+    absolute_links: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+nav:
+  - Home: index.md
+  - Security: security.md
+  - Known limitations: known-limitations.md
+  - Release notes: release-notes.md
+  - Decisions:
+      - Index: adr/README.md
+      - "ADR 0001, Azure MCP Server 3.0.0": adr/0001-pin-azure-mcp-server-3-0-0.md
+      - "ADR 0002, the engine moves downstream": adr/0002-engine-moves-downstream-unchanged.md
+      - "ADR 0003, the AddOn never calls Azure": adr/0003-the-addon-never-calls-azure.md
+      - "ADR 0004, Microsoft Entra sign-in": adr/0004-entra-token-validation-on-api-and-mcp.md
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true

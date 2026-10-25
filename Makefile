@@ -1,5 +1,5 @@
 # Cloud Crawler App edition. Every target is a plain uv invocation. Nothing here reaches Azure in this slice.
-.PHONY: setup lock lint test test-contract run run-recorded run-stdio image clean
+.PHONY: setup lock lint test test-contract docs run run-recorded run-stdio image clean
 
 setup:
 	uv python pin 3.14.6
@@ -21,6 +21,11 @@ test:
 # Starts the real Azure MCP Server 3.0.0 through npx (Node.js 22 and network needed; no Azure sign-in).
 test-contract:
 	uv run pytest tests/contract -q -m azmcp
+
+# The documentation site, as CI builds it (strict), then the link check; the result is in ./site (open site/index.html).
+docs:
+	uv run --group docs mkdocs build --strict
+	python scripts/check-site-links.py site
 
 run:
 	PORT=8080 uv run python -m cloud_crawler_appliance

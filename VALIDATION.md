@@ -77,6 +77,20 @@ only. Nothing was pushed to a registry and no workflow was started.
 | Workflow and script syntax | `actionlint -shellcheck= -pyflakes= <file>` per workflow; `shellcheck scripts/scan-image.sh`; `yamllint -c .yamllint.yaml` on the new and changed YAML; `zizmor` on `image-scan.yml` and `security.yml` | actionlint: only the known `ubuntu-26.04` label message on every file. shellcheck: clean. yamllint: clean for `image-scan.yml`, `security.yml`, `.trivyignore.yaml`, the issue forms, `dependabot.yml` and `.coderabbit.yaml`; it still reports line-length and end-of-file findings in `rehearse-self-merging-pr.yml` and `repository-admin.yml`, which this change does not touch. zizmor: no findings (one informational note, a missing job name, was fixed). Syntax only: this does not run the workflow |
 | The ticket's own validation grep | The `grep -rn` in ticket #12 (placeholder owners, the missing template document, the open verification marker) over `README.md`, `VALIDATION.md`, `CONTRIBUTING.md`, `.github` and `infrastructure` | No hits |
 
+## Ran for the documentation site, phase 1 (ticket #11)
+
+Run on the branch `cc/pages-site-phase-1` on 2026-10-25, Python 3.14.7, uv 0.12.0 (the lock was written with uv 0.11.32, the CI version), MkDocs 1.6.1. Nothing was published and Pages was not changed by these checks.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Site build | `uv run --frozen --only-group docs mkdocs build --strict` | Built 10 pages (Home, Security, Known limitations, Release notes, the decisions index and four decisions, plus the theme's search page) in 0.17 s with no warning |
+| Link check | `python scripts/check-site-links.py site` | 10 pages; every link inside the site lands (files, headings, viewport tag, every page reachable from Home); 92 links to other sites were not fetched |
+| Tests | `uv run --frozen pytest -q --cov=packages --cov=src --cov-fail-under=96` | 546 passed, 45 skipped (bash and jq tools missing here), 1 deselected; 31 of them are new (`tests/unit/test_docs_site.py` and the workflow set in `tests/unit/test_workflows.py`) |
+| Lint, lockfile | `ruff check .`, `ruff format --check .`, `bash scripts/check-lockfiles.sh`, `python scripts/check-release-version.py` | All clean; `requirements.lock.txt` is unchanged (MkDocs is in its own `docs` group); version 0.1.0 consistent |
+| Workflow syntax | `actionlint` and `yamllint -c .yamllint.yaml` on `docs.yml` | Only the known `ubuntu-26.04` label message; yamllint clean |
+
+Not run for the site: the workflow on GitHub (the first run is the pull request), the deploy job (it needs the repository's Pages source set to GitHub Actions), a read of the site on a phone-sized screen (the theme and the viewport tag are checked, the rendering is not), and the outside links (the check is offline).
+
 ## Did not run
 
 | Check | Why | Where it runs |

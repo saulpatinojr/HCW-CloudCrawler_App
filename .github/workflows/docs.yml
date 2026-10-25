@@ -1,0 +1,69 @@
+# The documentation site on GitHub Pages (ticket #11): built from docs/, mkdocs.yml and CHANGELOG.md.
+# Every pull request that touches the docs builds the site with mkdocs --strict (a broken link or a missing page fails
+# the build) and runs scripts/check-site-links.py over the result. A push to main that touches them publishes it.
+# Nothing is published from a pull request, and the deploy job is the only one that can write to Pages.
+# Pages itself is a repository setting (Settings, Pages, Source: GitHub Actions); until it is on, the deploy job fails
+# with a message saying so and the build job is unaffected. It is not one of the required checks of the `main` ruleset.
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot proposes updates.
+name: docs
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/mkdocs_hooks.py"
+      - "scripts/check-site-links.py"
+      - ".github/workflows/docs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "scripts/mkdocs_hooks.py"
+      - "scripts/check-site-links.py"
+      - ".github/workflows/docs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  UV_VERSION: "0.11.32"
+  PYTHON_VERSION: "3.14"
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      - run: python -m pip install "uv==${{ env.UV_VERSION }}"
+      - name: Build the site (strict, so any warning fails the build)
+        run: uv run --frozen --only-group docs mkdocs build --strict
+      - name: Every link inside the site lands, and every page has the phone viewport tag
+        run: python scripts/check-site-links.py site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with: { path: site }
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      pages: write # to publish the site
+      id-token: write # to prove to Pages that the deploy came from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

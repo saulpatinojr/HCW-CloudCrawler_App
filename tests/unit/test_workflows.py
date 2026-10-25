@@ -20,6 +20,7 @@ EXPECTED = {
     "ci.yml",
     "codeql.yml",
     "dependency-review.yml",
+    "docs.yml",
     "image-scan.yml",
     "publish-core.yml",
     "rehearse-self-merging-pr.yml",
