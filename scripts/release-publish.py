@@ -36,12 +36,19 @@ LOOKUP_PAUSE_SECONDS = 3.0
 # a new attestation can take a moment to be readable; a wrong one still fails after the last try
 VERIFY_TRIES = 3
 VERIFY_PAUSE_SECONDS = 5.0
+GH_TIMEOUT_SECONDS = 300.0
 
 
 def gh(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # nosec B603 B607 - gh by name, arguments are a fixed list, no shell
-        ["gh", *args], capture_output=True, text=True, check=False
-    )
+    """Run gh; a call that hangs is cut off and reported as a failure, so the job cannot sit on a half-made release."""
+    try:
+        return subprocess.run(  # nosec B603 B607 - gh by name, arguments are a fixed list, no shell
+            ["gh", *args], capture_output=True, text=True, check=False, timeout=GH_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            ["gh", *args], 124, "", f"gh {args[0]} did not answer within {GH_TIMEOUT_SECONDS:.0f} seconds"
+        )
 
 
 def sleep(seconds: float) -> None:
@@ -203,7 +210,10 @@ def publish(repo: str, tag: str, directory: Path) -> list[str]:
         "--notes-file", str(notes), *map(str, expected.values()),
     )  # fmt: skip
     if created.returncode != 0:
-        return [f"could not create the draft release {tag}: {(created.stderr or created.stdout).strip()}"]
+        return [
+            f"could not create the draft release {tag}: {(created.stderr or created.stdout).strip()}",
+            "a draft may have been left behind: delete it on the Releases page before re-running",
+        ]
     print(f"draft release for {tag} created with {len(expected)} files; checking it before it becomes public")
 
     draft: dict | None = None

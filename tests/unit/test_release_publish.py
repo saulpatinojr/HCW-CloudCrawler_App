@@ -267,7 +267,8 @@ def test_a_listing_that_fails_stops_before_anything_is_created(files, monkeypatc
 def test_a_draft_that_cannot_be_created_leaves_nothing_public(files, monkeypatch):
     fake = use(monkeypatch, FakeGitHub(files, create_fails=True))
     found = rp.publish(REPO, TAG, files)
-    assert len(found) == 1 and "could not create the draft release" in found[0] and "tag does not exist" in found[0]
+    assert "could not create the draft release" in found[0] and "tag does not exist" in found[0]
+    assert "a draft may have been left behind" in found[1]
     assert "PATCH" not in verbs(fake)
 
 
@@ -416,6 +417,14 @@ def test_the_real_gh_wrapper_runs_gh_without_a_shell(monkeypatch):
     monkeypatch.setattr(rp.subprocess, "run", fake_run)
     assert rp.gh("release", "view").stdout == "ok"
     assert seen["command"] == ["gh", "release", "view"] and not seen["kwargs"].get("shell")
+    assert seen["kwargs"]["timeout"] == rp.GH_TIMEOUT_SECONDS, "a hung gh must not hold the job"
+
+    def hang(command, **kwargs):
+        raise rp.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(rp.subprocess, "run", hang)
+    cut_off = rp.gh("release", "create")
+    assert cut_off.returncode == 124 and "did not answer within" in cut_off.stderr
     slept = []
     monkeypatch.setattr(rp.time, "sleep", slept.append)
     REAL_SLEEP(2.5)
