@@ -154,3 +154,10 @@ def test_the_release_step_reports_lookup_failures_instead_of_creating_blindly():
     create = jobs(text("release.yml"))["create"]
     assert "--verify-tag" in create and "release not found" in create and "--notes-file release-notes.md" in create
     assert "See CHANGELOG.md for" not in text("release.yml"), "a missing changelog section must fail, not fall back"
+
+
+def test_attestations_are_verified_before_anything_is_attached_or_published():
+    body = steps(text("publish-core.yml"))
+    markers = ("actions/attest@", "gh attestation verify", "gh release upload", "uv publish")
+    order = [next(n for n, step in enumerate(body) if marker in step) for marker in markers]
+    assert order == sorted(order) and len(set(order)) == 4, "attest, then verify, then attach, then PyPI"

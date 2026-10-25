@@ -3,8 +3,8 @@
 # On every v* tag: check that the tag, the package versions, the changelog and the tagged commit agree
 # (scripts/check-release-version.py), build the cloud-crawler-core wheel and sdist, verify the wheel carries the
 # detector registry, no cloud SDK import and no Azure endpoint, write a CycloneDX SBOM (the engine's locked runtime
-# dependencies), attest provenance and the SBOM, attach the wheel, sdist and SBOM to the GitHub Release (release.yml
-# creates it) and verify the attestations. A re-run never replaces a published file: the upload fails if an asset of
+# dependencies), attest provenance and the SBOM, verify the attestations, then attach the wheel, sdist and SBOM to the
+# GitHub Release (release.yml creates it). A re-run never replaces a published file: the upload fails if an asset of
 # the same name exists (delete the asset by hand if a replacement is really intended).
 # The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by URL on its
 # CORE_REF line
@@ -88,6 +88,15 @@ jobs:
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         if: github.event_name == 'push' || inputs.attest
         with: { subject-path: "dist/*", sbom-path: "sbom/cloud-crawler-core.cdx.json" }
+      - name: Verify the attestations against this repository (provenance, then SBOM)
+        if: github.event_name == 'push' || inputs.attest
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: |
+          set -euo pipefail
+          for file in dist/cloud_crawler_core-*.whl dist/cloud_crawler_core-*.tar.gz; do
+            gh attestation verify "$file" --repo "$GH_REPO"
+            gh attestation verify "$file" --repo "$GH_REPO" --predicate-type https://cyclonedx.org/bom
+          done
       - name: Attach the wheel, sdist and SBOM to the GitHub Release (never replaces a published file)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", TAG: "${{ github.ref_name }}" }
@@ -110,15 +119,6 @@ jobs:
             if ! printf '%s\n' "$assets" | grep -Fxq "$name"; then
               echo "::error::asset $name is not on release $TAG"; exit 1
             fi
-          done
-      - name: Verify the attestations against this repository (provenance, then SBOM)
-        if: github.event_name == 'push' || inputs.attest
-        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
-        run: |
-          set -euo pipefail
-          for file in dist/cloud_crawler_core-*.whl dist/cloud_crawler_core-*.tar.gz; do
-            gh attestation verify "$file" --repo "$GH_REPO"
-            gh attestation verify "$file" --repo "$GH_REPO" --predicate-type https://cyclonedx.org/bom
           done
       - name: PyPI trusted publishing (repository variable PYPI_ENABLED)
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'

@@ -249,8 +249,8 @@ from the changelog section. `publish-core.yml` checks, builds the wheel and the
 sdist, verifies the wheel with `scripts/verify-core-wheel.py` (the engine, no
 cloud SDK, no HTTP client, no Azure endpoint, pydantic as its only
 requirement), writes a CycloneDX SBOM (the engine's locked runtime
-dependencies), attests provenance and the SBOM, attaches **three files** to the
-release and verifies the attestations. Nothing is published to PyPI unless the
+dependencies), attests provenance and the SBOM, verifies the attestations, then attaches
+**three files** to the release. Nothing is published to PyPI unless the
 repository variable `PYPI_ENABLED` is `true` (it is not set), and no container
 image is published by any workflow.
 
