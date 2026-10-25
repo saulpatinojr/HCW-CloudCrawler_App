@@ -160,7 +160,9 @@ uv run pytest tests/contract -q -m azmcp
 **Interim note: with sign-in off, which is the default, nobody is asked who they are.** Anyone who can reach the
 port can read evidence and accept decisions as if they were a trusted person. Run the appliance only on a trusted lab
 network until you turn sign-in on. Turning it on is a decision recorded in
-[ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md).
+[ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md). The defaults described here are decided, not open
+(the owner's answers of 2026-10-25 are in that ADR's "Owner decisions" section): sign-in stays off by default, with the
+warning below, and the appliance does not refuse to start without it.
 
 Two things make the default less exposed than it used to be. The server now listens on `127.0.0.1` (this machine
 only) unless `CC_BIND_HOST` says otherwise; the container image sets `CC_BIND_HOST=0.0.0.0`, so the image still
@@ -173,7 +175,8 @@ With `CC_AUTH_MODE=entra`, every route except `GET /api/health` needs `Authoriza
 your Microsoft Entra tenant. The appliance checks the token's signature against your tenant's published signing keys
 (RS256 only), its issuer, audience, expiry and not-before time (with a small clock skew), and that it was issued by
 your tenant. Anything else gets `401` with `WWW-Authenticate: Bearer` and `{"error": {"code", "message"}}`; if the
-signing keys cannot be fetched it answers `503` and tries again later. Nothing about the token is logged or stored.
+signing keys cannot be fetched it answers `503` and tries again later (decided: an outage is the server's fault, so it
+is not a `401`, and the request is never let through). Nothing about the token is logged or stored.
 Background: [access tokens](https://learn.microsoft.com/en-us/entra/identity-platform/access-tokens) and
 [claims validation](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation) on Microsoft Learn.
 
@@ -181,6 +184,9 @@ The tools for a person (`adr_accept`, `review_decide`, and `collection_run_azure
 `actorId` from the token's `oid` claim. You can leave `actorId` out; if you send one it must be the same object id,
 or the call is refused. They also need a token a person signed in to get (it carries the scope `access_as_user`), so a
 service or an agent that signs in as itself can read, ingest, propose and evaluate, but cannot accept or decide.
+There is no list of allowed client applications and no role check on those model tools yet: any valid token for your
+tenant and audience can call them. That is a decision for now (ADR 0004), so control who can obtain a token with
+"Assignment required" in step 4 below.
 
 ### Settings
 
@@ -230,29 +236,81 @@ Not yet checked against a real tenant: see `VALIDATION.md`.
 
 The AddOn adopts the engine as the wheel attached to a GitHub Release of
 this repository, pinned by URL and sha256 (ADR 0002; the AddOn's
-`core-update.yml` opens the bump pull request). A release is one tag:
+`core-update.yml` opens the bump pull request). A release is one tag, and
+**a `v*` tag can never be moved or deleted once it is pushed** (see "Branch
+and tag protection"), so the checks below run before the tag is accepted and
+there is a dry run that publishes nothing. Releases are listed at
+[github.com/saulpatinojr/HCW-CloudCrawler_App/releases](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases);
+the `v0.1.0` page appears there once the tag has been pushed and
+`release.yml` has finished (until then no release exists).
 
-1. `CHANGELOG.md` already has a `## [0.1.0]` section, dated 2026-10-21 when the release was first prepared.
-   `v0.1.0` has not been tagged yet (no tag and no release exist), so everything under `[Unreleased]` ships with
-   it: fold those entries into the `## [0.1.0]` section and set its date to the release day (`release.yml` takes
-   the release notes from that section). Keep `packages/cloud-crawler-core/pyproject.toml` at the same version
-   (`release.yml` refuses a tag that does not match it).
-2. Tag `main` and push the tag. PowerShell:
+What a tag does. `release.yml` checks, then creates the release with the notes
+from the changelog section. `publish-core.yml` checks, builds the wheel and the
+sdist, verifies the wheel with `scripts/verify-core-wheel.py` (the engine, no
+cloud SDK, no HTTP client, no Azure endpoint, pydantic as its only
+requirement), writes a CycloneDX SBOM (the engine's locked runtime
+dependencies), attests provenance and the SBOM, attaches **three files** to the
+release and verifies the attestations. Nothing is published to PyPI unless the
+repository variable `PYPI_ENABLED` is `true` (it is not set), and no container
+image is published by any workflow.
 
-```powershell
-git switch main; git pull origin main; git tag -a v0.1.0 -m "cloud-crawler-core 0.1.0"; git push origin v0.1.0
-```
+The check that cannot be skipped is `scripts/check-release-version.py`. On
+every pull request it fails when the engine's `pyproject.toml`, the appliance's
+`pyproject.toml`, the two `__version__` constants and the two `uv.lock` entries
+do not all name the same `X.Y.Z`. On a tag it also requires that the tag is
+`v` plus that version, that `CHANGELOG.md` has a dated, non-empty `## [X.Y.Z]`
+section and nothing left under `[Unreleased]`, that the tagged commit is on
+`main`, and that the build produced exactly the wheel and the sdist for that
+version. To release a new version, change all six places in one pull request
+(`make lock` updates `uv.lock`).
 
-`release.yml` creates the release from the changelog section; `publish-core.yml`
-builds the wheel and sdist, verifies the wheel with
-`scripts/verify-core-wheel.py` (the engine, no cloud SDK, no HTTP client,
-no Azure endpoint, pydantic as its only requirement), attests provenance
-and attaches both. A successful run shows two assets on
-`https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0`:
-`cloud_crawler_core-0.1.0-py3-none-any.whl` and `cloud_crawler_core-0.1.0.tar.gz`.
-Within six hours the AddOn's `core-update.yml` opens its bump pull request;
-`gh workflow run core-update.yml --repo saulpatinojr/HCW-CloudCrawler_AddOn`
-(bash or PowerShell) runs it at once.
+### Release steps
+
+1. **Get the changelog ready.** `CHANGELOG.md` has a `## [0.1.0]` section, and
+   everything under `[Unreleased]` ships with it. Fold those entries into the
+   `## [0.1.0]` section and set its date to the release day; `release.yml` takes
+   the release notes from that section and refuses a tag while `[Unreleased]`
+   still has entries. Keep both `pyproject.toml` files at the same version.
+2. **Dry run on `main`** (publishes nothing, writes no tag or release). bash or
+   PowerShell, with the GitHub CLI signed in:
+
+   ```bash
+   gh workflow run release.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main
+   gh workflow run publish-core.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main -f attest=true
+   ```
+
+   Open the Actions tab and wait for both runs to turn green. The `release`
+   run shows the release notes a tag would publish. The `publish-core` run
+   shows the sha256 of the wheel, the sdist and the SBOM and keeps the three
+   files in the artifact `cloud-crawler-core-release-files`. With `attest=true`
+   it also creates and verifies the attestations; they are permanent entries
+   in the public signing log, so use `-f attest=false` to skip them.
+3. **Tag `main` and push the tag.** PowerShell:
+
+   ```powershell
+   git switch main; git pull origin main; git tag -a v0.1.0 -m "cloud-crawler-core 0.1.0"; git push origin v0.1.0
+   ```
+
+4. **Check the result.** Both runs for the tag are green, and
+   [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0)
+   lists three assets: `cloud_crawler_core-0.1.0-py3-none-any.whl`,
+   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`.
+   Within six hours the AddOn's `core-update.yml` opens its bump pull request;
+   `gh workflow run core-update.yml --repo saulpatinojr/HCW-CloudCrawler_AddOn`
+   (bash or PowerShell) runs it at once. To check where a wheel came from:
+
+   ```bash
+   gh attestation verify cloud_crawler_core-0.1.0-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --source-ref refs/tags/v0.1.0
+   ```
+
+If a release goes wrong, the tag stays (it cannot be deleted) and the AddOn may
+already have pinned the wheel's sha256, so do not replace files under the same
+version. Delete the bad release and its assets on the release page, fix the
+problem on `main`, and release the next version (`0.1.1`), which also needs all
+six version places and the changelog section. If a run fails before the files
+are attached, re-run it from the Actions tab (Re-run failed jobs). If it
+fails after some files were attached, delete those assets by hand first,
+because an upload never replaces a file.
 
 ## Repository layout
 
@@ -264,7 +322,7 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
-scripts/                       the lockfile check and the release wheel verifier
+scripts/                       the lockfile check, the release version guard and the release wheel verifier
 .github/workflows/             ci, security, codeql, dependency-review, release, publish-core, repository-admin
 docs/adr/                      this edition's decisions
 ```

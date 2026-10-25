@@ -1,21 +1,31 @@
 # Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
 # proposes updates.
-# On every v* tag: build the cloud-crawler-core wheel and sdist, verify the wheel carries the detector registry, no
-# cloud SDK import and no Azure endpoint, write a CycloneDX SBOM (the engine's locked runtime dependencies), attach the
-# wheel, sdist and SBOM to the GitHub Release (release.yml creates it), attest provenance and the SBOM. A re-run never
-# replaces a published file: the upload fails if an asset of the same name exists (delete the asset by hand if a
-# replacement is really intended). The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by
-# URL on its CORE_REF line
+# On every v* tag: check that the tag, the package versions, the changelog and the tagged commit agree
+# (scripts/check-release-version.py), build the cloud-crawler-core wheel and sdist, verify the wheel carries the
+# detector registry, no cloud SDK import and no Azure endpoint, write a CycloneDX SBOM (the engine's locked runtime
+# dependencies), attest provenance and the SBOM, attach the wheel, sdist and SBOM to the GitHub Release (release.yml
+# creates it) and verify the attestations. A re-run never replaces a published file: the upload fails if an asset of
+# the same name exists (delete the asset by hand if a replacement is really intended).
+# The AddOn (HCW-CloudCrawler_AddOn, ADR 0001 there; ADR 0002 here) pins the wheel this job attaches, by URL on its
+# CORE_REF line
 # (https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl)
 # and by the sha256 `uv lock` records; its core-update.yml bumps the tag. A git+https pin cannot be verified by the
 # AddOn image's `pip install --require-hashes`, which is why the asset, not the tag, is the contract.
 # PyPI trusted publishing is gated on the repository variable PYPI_ENABLED == 'true': `uv publish --trusted-publishing
 # always` exchanges the job's OIDC token with PyPI; no registry token exists anywhere.
+# Dry run (no tag, nothing published): Actions, publish-core, Run workflow, on the main branch. It runs every step up
+# to and including the attestations, keeps the wheel, sdist and SBOM as a workflow artifact, and skips the release
+# upload and PyPI. Untick "attest" to skip the attestations too (they are permanent entries in the public signing log).
 name: publish-core
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      attest:
+        description: "Dry run: also create and verify the attestations (permanent entries in the public signing log)"
+        type: boolean
+        default: true
 permissions:
   contents: read
 jobs:
@@ -27,35 +37,87 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with: { persist-credentials: false }
+        with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with: { python-version: "3.14" }
       - run: python -m pip install "uv==0.11.32"
-      - run: uv build --package cloud-crawler-core --out-dir dist
+      - name: The tag, the versions and the changelog agree (before anything is built or attested)
+        env: { REF_TYPE: "${{ github.ref_type }}", REF_NAME: "${{ github.ref_name }}" }
+        run: |
+          set -euo pipefail
+          if [ "$REF_TYPE" = "tag" ]; then
+            python scripts/check-release-version.py --tag "$REF_NAME" --ancestor-of origin/main
+          else
+            echo "::notice::dry run: no tag, so the checks that need one are skipped"
+            python scripts/check-release-version.py
+          fi
+      - run: uv build --no-create-gitignore --package cloud-crawler-core --out-dir dist
+      - name: Only the wheel and the sdist for this version were built, and the wheel's own version agrees
+        env: { REF_TYPE: "${{ github.ref_type }}", REF_NAME: "${{ github.ref_name }}" }
+        run: |
+          set -euo pipefail
+          args=(--dist dist)
+          if [ "$REF_TYPE" = "tag" ]; then args+=(--tag "$REF_NAME"); fi
+          python scripts/check-release-version.py "${args[@]}"
       - name: The wheel carries the engine, no cloud SDK import, no HTTP client and no Azure endpoint
-        run: uv run --no-project --with pydantic python scripts/verify-core-wheel.py dist/cloud_crawler_core-*.whl
+        run: python -I scripts/verify-core-wheel.py 'dist/cloud_crawler_core-*.whl'
       - name: SBOM (CycloneDX) of the engine's locked runtime dependencies
         run: |
           set -euo pipefail
           mkdir sbom
-          uv export --frozen --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 -o sbom/cloud-crawler-core.cdx.json
+          uv export --frozen --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 \
+            -o sbom/cloud-crawler-core.cdx.json
           test -s sbom/cloud-crawler-core.cdx.json
+      - name: sha256 of every file (the AddOn's uv.lock records the wheel's)
+        run: |
+          set -euo pipefail
+          { echo '### sha256'; echo; echo '```text'; sha256sum dist/* sbom/*; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          sha256sum dist/* sbom/*
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cloud-crawler-core-release-files
+          path: |
+            dist
+            sbom
+          if-no-files-found: error
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
         with: { subject-path: "dist/*" }
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
         with: { subject-path: "dist/*", sbom-path: "sbom/cloud-crawler-core.cdx.json" }
       - name: Attach the wheel, sdist and SBOM to the GitHub Release (never replaces a published file)
         if: startsWith(github.ref, 'refs/tags/v')
-        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", TAG: "${{ github.ref_name }}" }
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF#refs/tags/}"
-          for i in 1 2 3 4 5 6; do gh release view "$tag" >/dev/null 2>&1 && break; sleep 10; done
-          gh release upload "$tag" dist/* sbom/cloud-crawler-core.cdx.json
+          for i in $(seq 1 30); do
+            if gh release view "$TAG" >/dev/null 2>&1; then break; fi
+            if [ "$i" = 30 ]; then
+              echo "::error::release $TAG did not appear in five minutes; release.yml creates it (see its run)"; exit 1
+            fi
+            sleep 10
+          done
+          version="${TAG#v}"
+          wheel="cloud_crawler_core-${version}-py3-none-any.whl"
+          sdist="cloud_crawler_core-${version}.tar.gz"
+          sbom="cloud-crawler-core.cdx.json"
+          gh release upload "$TAG" "dist/$wheel" "dist/$sdist" "sbom/$sbom"
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          for name in "$wheel" "$sdist" "$sbom"; do
+            if ! printf '%s\n' "$assets" | grep -Fxq "$name"; then
+              echo "::error::asset $name is not on release $TAG"; exit 1
+            fi
+          done
+      - name: Verify the attestations against this repository (provenance, then SBOM)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.attest
+        env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}" }
+        run: |
+          set -euo pipefail
+          for file in dist/cloud_crawler_core-*.whl dist/cloud_crawler_core-*.tar.gz; do
+            gh attestation verify "$file" --repo "$GH_REPO"
+            gh attestation verify "$file" --repo "$GH_REPO" --predicate-type https://cyclonedx.org/bom
+          done
       - name: PyPI trusted publishing (repository variable PYPI_ENABLED)
         if: startsWith(github.ref, 'refs/tags/v') && vars.PYPI_ENABLED == 'true'
         run: uv publish --trusted-publishing always dist/*
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with: { name: cloud-crawler-core-dist, path: dist, if-no-files-found: error }

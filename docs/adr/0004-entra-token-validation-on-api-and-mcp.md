@@ -112,6 +112,24 @@ and take `actorId` from the token.
 4. Make the caller (the website or another client) request tokens for the scope
    `api://<application client id>/access_as_user`.
 
+## Owner decisions
+
+On 2026-10-25 the owner (saulpatinojr) answered "go ahead" to the recommendations written in
+[pull request 34](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/34), the pull request that implemented this
+decision. Four open design questions are therefore settled. They are the intended behaviour, not gaps, and each one
+names what would reopen it.
+
+| # | Question | Decision | Where it lives | Reopen when |
+| --- | --- | --- | --- | --- |
+| 1 | What should the appliance answer when it cannot fetch the Entra signing keys? | Keep `503 auth_unavailable` with `Retry-After`. It fails closed, and it tells the caller the server, not the token, is at fault. It never answers `401` for this, and never lets the request through. | `security/entra.py`; Decision item 2 above | Callers need to tell an outage from a bad token in a different way |
+| 2 | Should `CC_AUTH_MODE=off` stay the default? | Yes. Sign-in stays off unless the operator turns it on, so the lab and a laptop keep working with no tenant. Starting unauthenticated on a non-loopback address writes one `warning` line and `GET /api/health` reports `"auth": "off"`. The appliance does **not** refuse to start in that case. | `config.py` (`auth_mode = "off"`), `__main__.py`; Decision items 1 and 8 | A deployment target exists that is not a trusted lab network (then make `entra` the default for the image, or refuse to start unauthenticated on a non-loopback address) |
+| 3 | Where should the server listen by default? | On `127.0.0.1` (this machine only). `0.0.0.0` is used only inside the container image, which sets `CC_BIND_HOST=0.0.0.0`, and wherever an operator sets `CC_BIND_HOST` on purpose. | `config.py` (`bind_host`), `infrastructure/docker/Dockerfile`; Decision item 8 | The image is deployed somewhere without a network boundary in front of it |
+| 4 | Who may call the model tools (read, ingest, propose, evaluate)? | Any valid token for the configured tenant and audience. There is no client-application allow-list and no role check yet, which the owner called "fine for now". Who can obtain a token is controlled in Entra ("Assignment required" on the enterprise application). The person-only tools still need a person's delegated token (Decision item 5); that part is unchanged. | `security/entra.py`, `mcp_server.py`; Consequences above | A second client application, a service account with narrower rights, or per-role authorisation is wanted (see the revisit triggers below) |
+
+Nothing in the code changed because of these answers: they confirm what pull request 34 already merged. Ticket
+[#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) stays open, because the real-tenant check
+(`VALIDATION.md`) is still to do.
+
 ## Rollback or revisit trigger
 
 Set `CC_AUTH_MODE=off` (and remove the `CC_ENTRA_*` settings) to return to the lab behaviour; no data changes. Revisit

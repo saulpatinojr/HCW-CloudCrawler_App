@@ -13,6 +13,7 @@ lint:
 	uv run ruff check .
 	uv run ruff format --check .
 	bash scripts/check-lockfiles.sh
+	uv run python scripts/check-release-version.py
 
 test:
 	uv run pytest -q --cov=packages --cov=src --cov-report=term-missing
