@@ -500,3 +500,35 @@ def test_rehearse_reports_a_tag_lookup_that_cannot_be_made(tmp_path, capsys):
     root = make_repo(tmp_path)  # a directory that is not a git repository
     assert guard.main(["--root", str(root), "--rehearse"]) == 1
     assert "could not look up the tag v0.1.0" in capsys.readouterr().out
+
+
+# --- a stale date is advisory -------------------------------------------------------------------------------------
+
+
+def test_a_stale_release_date_is_a_warning_not_a_refusal(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    week_old = make_repo(tmp_path / "a", changelog=CHANGELOG.replace("2026-10-25", "2026-10-18"))
+    monkeypatch.setattr(guard, "utc_today", lambda: datetime.date(2026, 10, 25))
+    assert guard.main(["--root", str(week_old), "--tag", "v0.1.0"]) == 0
+    assert "warning" not in capsys.readouterr().out, "seven days old is still fresh"
+    stale = make_repo(tmp_path / "b", changelog=CHANGELOG.replace("2026-10-25", "2026-10-17"))
+    assert guard.main(["--root", str(stale), "--tag", "v0.1.0"]) == 0, "the guard refuses only future dates"
+    out = capsys.readouterr().out
+    assert "warning: the CHANGELOG.md section for 0.1.0 is dated 2026-10-17, 8 days ago" in out
+    assert "release version consistent: 0.1.0, tag v0.1.0" in out
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert guard.main(["--root", str(stale), "--tag", "v0.1.0"]) == 0
+    assert "::warning::the CHANGELOG.md section for 0.1.0 is dated 2026-10-17" in capsys.readouterr().out
+
+
+def test_no_stale_warning_without_a_tag_or_when_the_date_is_refused_anyway(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    stale = make_repo(tmp_path / "a", changelog=CHANGELOG.replace("2026-10-25", "2020-01-01"))
+    assert guard.main(["--root", str(stale)]) == 0
+    assert "warning" not in capsys.readouterr().out
+    assert guard.stale_date_warning(stale / "missing", "0.1.0", datetime.date(2026, 10, 25)) is None
+    bad = make_repo(tmp_path / "b", changelog=CHANGELOG.replace("2026-10-25", "2026-13-45"))
+    assert guard.main(["--root", str(bad), "--tag", "v0.1.0"]) == 1
+    assert "warning" not in capsys.readouterr().out
+    assert guard.stale_date_warning(bad, "0.1.0", datetime.date(2026, 10, 25)) is None
+    assert guard.stale_date_warning(stale, "9.9.9", datetime.date(2026, 10, 25)) is None

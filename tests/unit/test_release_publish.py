@@ -64,6 +64,10 @@ class FakeGitHub:
         self.patch_keeps_draft = options.pop("patch_keeps_draft", False)
         self.list_fails = options.pop("list_fails", False)
         self.invisible_lists = options.pop("invisible_lists", 0)  # listings that do not show the new draft yet
+        self.listing_stale = options.pop("listing_stale", False)  # the listing shows drafts without their files
+        self.open_reads = options.pop("open_reads", 0)  # reads by id that show every file in state `open`
+        self.reread_fails = options.pop("reread_fails", 0)  # reads of the draft by id that fail
+        self.patch_error = options.pop("patch_error", None)  # for example "HTTP 404: Not Found"
         self.verify_results = options.pop("verify_results", [0])  # return codes of the attestation checks, in turn
         assert not options, options
 
@@ -78,13 +82,20 @@ class FakeGitHub:
             if self.invisible_lists > 0 and any(c[:2] == ("release", "create") for c in self.calls):
                 self.invisible_lists -= 1
                 return _Done(0, "[]", "")
-            return _Done(0, "".join(json.dumps([release]) for release in self.releases) or "[]", "")
+            listed = [dict(r, assets=[]) if self.listing_stale and r.get("draft") else r for r in self.releases]
+            return _Done(0, "".join(json.dumps([release]) for release in listed) or "[]", "")
         if args[:2] == ("release", "create"):
             return self.create(args)
         if args[:3] == ("api", "--method", "PATCH"):
             return self.patch(args)
         if args[0] == "api" and "/releases/" in args[1]:
             release = next(r for r in self.releases if r["id"] == int(args[1].rsplit("/", 1)[1]))
+            if release["draft"] and self.reread_fails > 0:
+                self.reread_fails -= 1
+                return _Done(1, "", "HTTP 502")
+            if release["draft"] and self.open_reads > 0:
+                self.open_reads -= 1
+                release = dict(release, assets=[dict(a, state="open") for a in release["assets"]])
             return _Done(0, json.dumps(release), "")
         raise AssertionError(f"unexpected gh call: {args}")
 
@@ -105,6 +116,8 @@ class FakeGitHub:
         return _Done(0, "https://x", "")
 
     def patch(self, args: tuple[str, ...]):
+        if self.patch_error:
+            return _Done(1, "", self.patch_error)
         if self.patch_fails:
             return _Done(1, "", "HTTP 403")
         if not self.patch_keeps_draft:
@@ -125,6 +138,9 @@ def files(tmp_path):
 @pytest.fixture(autouse=True)
 def _no_waiting(monkeypatch):
     monkeypatch.setattr(rp, "sleep", lambda seconds: None)
+    # the same output whether the tests run on a laptop or under Actions; a test that needs them sets them itself
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
 
 
 def use(monkeypatch, fake: FakeGitHub) -> FakeGitHub:
@@ -191,24 +207,25 @@ def test_an_attestation_that_does_not_match_is_a_problem_naming_what_was_missing
     assert all(f"from {WORKFLOW} on {REF} at {SHA[:12]}" in p and "no attestations found" in p for p in found)
 
 
-def test_a_slow_attestation_is_retried_a_few_times_but_a_wrong_one_still_fails(files, monkeypatch):
+def test_a_slow_attestation_is_waited_for_with_growing_pauses(files, monkeypatch):
+    pauses: list[float] = []
+    monkeypatch.setattr(rp, "sleep", pauses.append)
     fake = use(monkeypatch, FakeGitHub(files, verify_results=[1, 1, 0]))
     assert rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA) == []
+    assert pauses == [5.0, 10.0]
     assert len(fake.calls) == 6  # the first check needed three tries, the other three passed at once
+
+
+def test_the_attestation_wait_is_a_few_minutes_with_backoff_and_one_budget_for_the_whole_step(files, monkeypatch):
+    pauses: list[float] = []
+    monkeypatch.setattr(rp, "sleep", pauses.append)
+    assert list(rp.VERIFY_DELAYS) == sorted(rp.VERIFY_DELAYS), "the pauses grow"
+    assert 180 <= rp.VERIFY_BUDGET_SECONDS <= 300, "a few minutes"
     fake = use(monkeypatch, FakeGitHub(files, verify_results=[1]))
-    rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA)
-    assert len(fake.calls) == 4 * rp.VERIFY_TRIES
-
-
-def test_the_directory_must_hold_exactly_one_wheel_and_one_sdist(files, monkeypatch):
-    fake = use(monkeypatch, FakeGitHub(files))
-    (files / "dist" / WHEEL).unlink()
     found = rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA)
-    assert len(found) == 1 and "exactly one wheel and one sdist" in found[0] and fake.calls == []
-    (files / "dist" / WHEEL).write_bytes(b"w")
-    (files / "dist" / "other-0.1.0-py3-none-any.whl").write_bytes(b"w")
-    assert "exactly one wheel and one sdist" in rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA)[0]
-    assert fake.calls == []
+    assert len(found) == 4, "a wrong attestation still fails, for every file and predicate"
+    assert sum(pauses) == rp.VERIFY_BUDGET_SECONDS, "all four checks together wait no longer than the budget"
+    assert len(fake.calls) == (1 + len(rp.VERIFY_DELAYS)) + 3, "once the budget is spent each check tries once"
 
 
 # --- publish: draft first, public last -----------------------------------------------------------------------------
@@ -217,9 +234,11 @@ def test_the_directory_must_hold_exactly_one_wheel_and_one_sdist(files, monkeypa
 def test_the_release_is_created_as_a_draft_checked_and_only_then_made_public(files, monkeypatch, capsys):
     fake = use(monkeypatch, FakeGitHub(files))
     assert rp.publish(REPO, TAG, files) == []
-    assert verbs(fake) == ["list", "create", "list", "PATCH", "get"], (
-        "check for a release, draft, look, publish, re-read"
+    assert verbs(fake) == ["list", "create", "list", "get", "PATCH", "get"], (
+        "check for a release, draft, look, re-read the draft by id, publish, re-read"
     )
+    by_id = [c for c in fake.calls if c[0] == "api" and c[1].startswith("repos/")]
+    assert [c[1] for c in by_id] == [f"repos/{REPO}/releases/77"] * 2
     create = next(c for c in fake.calls if c[0] == "release")
     assert create[:3] == ("release", "create", TAG)
     for flag in ("--draft", "--verify-tag"):
@@ -268,7 +287,7 @@ def test_a_draft_that_cannot_be_created_leaves_nothing_public(files, monkeypatch
     fake = use(monkeypatch, FakeGitHub(files, create_fails=True))
     found = rp.publish(REPO, TAG, files)
     assert "could not create the draft release" in found[0] and "tag does not exist" in found[0]
-    assert "a draft may have been left behind" in found[1]
+    assert "nothing was made public" in found[1] and "A draft may be left behind" in found[1]
     assert "PATCH" not in verbs(fake)
 
 
@@ -277,8 +296,10 @@ def test_a_draft_missing_one_of_the_three_files_is_never_published(files, monkey
     fake = use(monkeypatch, FakeGitHub(files, drop=missing))
     found = rp.publish(REPO, TAG, files)
     assert any(f"asset {missing} is not on the release" in p for p in found)
-    assert any("draft stays unpublished" in p for p in found)
+    assert any("nothing was made public" in p and f"https://github.com/{REPO}/releases" in p for p in found)
     assert "PATCH" not in verbs(fake) and fake.releases[0]["draft"] is True
+    assert verbs(fake).count("get") == rp.SETTLE_TRIES, "bounded: it waited, then gave up"
+    assert f"after {rp.SETTLE_TRIES} reads of the draft" in found[0]
 
 
 def test_a_draft_with_an_extra_file_is_never_published(files, monkeypatch):
@@ -296,10 +317,46 @@ def test_a_draft_with_an_extra_file_is_never_published(files, monkeypatch):
     assert "PATCH" not in verbs(fake)
 
 
-def test_an_asset_that_is_not_fully_uploaded_is_never_published(files, monkeypatch):
-    fake = use(monkeypatch, FakeGitHub(files, state="starter"))
+def test_an_asset_that_stays_open_is_never_published(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files, state="open"))  # GitHub's real states are `uploaded` and `open`
     found = rp.publish(REPO, TAG, files)
-    assert any("is in state 'starter', not 'uploaded'" in p for p in found) and "PATCH" not in verbs(fake)
+    assert any("is in state 'open', not 'uploaded'" in p for p in found) and "PATCH" not in verbs(fake)
+    assert verbs(fake).count("get") == rp.SETTLE_TRIES
+
+
+def test_a_listed_draft_with_stale_or_missing_files_is_not_trusted_the_draft_is_re_read_by_id(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files, listing_stale=True))
+    assert rp.publish(REPO, TAG, files) == []
+    assert verbs(fake).count("get") == 2, "one read of the draft before publishing, one of the release afterwards"
+
+
+def test_files_that_are_still_open_when_the_draft_first_appears_are_waited_for(files, monkeypatch):
+    pauses: list[float] = []
+    monkeypatch.setattr(rp, "sleep", pauses.append)
+    fake = use(monkeypatch, FakeGitHub(files, listing_stale=True, open_reads=3))
+    assert rp.publish(REPO, TAG, files) == []
+    assert verbs(fake).count("get") == 3 + 1 + 1, "three reads still open, one settled, one after publishing"
+    assert pauses.count(rp.SETTLE_PAUSE_SECONDS) == 3
+
+
+def test_a_draft_that_cannot_be_read_by_id_for_a_moment_is_retried(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files, reread_fails=2))
+    assert rp.publish(REPO, TAG, files) == []
+    assert verbs(fake).count("get") == 2 + 1 + 1
+
+
+def test_a_draft_that_can_never_be_read_by_id_publishes_nothing(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files, reread_fails=999))
+    found = rp.publish(REPO, TAG, files)
+    assert f"after {rp.SETTLE_TRIES} reads of the draft: could not read release 77: HTTP 502" in found[0]
+    assert "PATCH" not in verbs(fake) and verbs(fake).count("get") == rp.SETTLE_TRIES
+
+
+def test_a_problem_that_time_cannot_fix_ends_the_wait_at_once(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files, digest="wrong"))
+    found = rp.publish(REPO, TAG, files)
+    assert verbs(fake).count("get") == 1 and "PATCH" not in verbs(fake)
+    assert any("not the sha256 of the attested file" in p for p in found)
 
 
 def test_an_asset_whose_digest_differs_from_the_attested_file_is_never_published(files, monkeypatch):
@@ -308,9 +365,27 @@ def test_an_asset_whose_digest_differs_from_the_attested_file_is_never_published
     assert any("not the sha256 of the attested file" in p for p in found) and "PATCH" not in verbs(fake)
 
 
-def test_a_github_that_reports_no_digest_does_not_block_the_release(files, monkeypatch):
+def test_a_github_that_reports_no_digest_does_not_block_the_release_but_says_so(files, monkeypatch, capsys):
     use(monkeypatch, FakeGitHub(files, digest=None))
     assert rp.publish(REPO, TAG, files) == []
+    out = capsys.readouterr().out
+    assert "notice: GitHub reports no sha256 for " in out
+    for name in (WHEEL, SDIST, SBOM):
+        assert name in out
+    assert "integrity rests on the sha256 list checked in this job and on the attestations" in out
+
+
+def test_no_notice_is_printed_when_github_reports_the_digests(files, monkeypatch, capsys):
+    use(monkeypatch, FakeGitHub(files))
+    assert rp.publish(REPO, TAG, files) == []
+    assert "no sha256" not in capsys.readouterr().out
+
+
+def test_the_missing_digest_notice_is_an_annotation_under_actions(files, monkeypatch, capsys):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    use(monkeypatch, FakeGitHub(files, digest=None))
+    rp.publish(REPO, TAG, files)
+    assert "::notice::GitHub reports no sha256" in capsys.readouterr().out
 
 
 def test_a_draft_that_is_slow_to_appear_in_the_listing_is_waited_for(files, monkeypatch):
@@ -340,10 +415,47 @@ def test_two_releases_for_the_tag_after_creating_one_publish_nothing(files, monk
     assert found and "2 releases now exist" in found[0] and "PATCH" not in verbs(fake)
 
 
-def test_a_publish_request_that_fails_leaves_the_draft_unpublished(files, monkeypatch):
-    use(monkeypatch, FakeGitHub(files, patch_fails=True))
+@pytest.mark.parametrize("error", ["HTTP 403: Resource not accessible by integration", "HTTP 404: Not Found"])
+def test_a_publish_request_refused_with_403_or_404_leaves_the_draft_with_clear_instructions(files, monkeypatch, error):
+    fake = use(monkeypatch, FakeGitHub(files, patch_error=error))
     found = rp.publish(REPO, TAG, files)
-    assert "could not make release" in found[0] and any("draft stays unpublished" in p for p in found)
+    assert f"could not make release {TAG} public: {error}" == found[0]
+    assert any("nothing was made public" in p and f"https://github.com/{REPO}/releases" in p for p in found)
+    assert any("the tag stays" in p for p in found)
+    assert rp.WORKFLOWS_NOTE in found, "the likely cause is named: a token cannot modify a release touching workflows"
+    assert fake.releases[0]["draft"] is True, "the draft is left as it is, unpublished"
+
+
+def test_a_publish_request_that_fails_for_another_reason_still_says_nothing_is_public(files, monkeypatch):
+    use(monkeypatch, FakeGitHub(files, patch_error="HTTP 500: server error"))
+    found = rp.publish(REPO, TAG, files)
+    assert "could not make release" in found[0] and any("nothing was made public" in p for p in found)
+    assert rp.WORKFLOWS_NOTE not in found
+
+
+def test_a_draft_that_cannot_be_created_because_of_workflow_permission_says_why(files, monkeypatch):
+    class Refused(FakeGitHub):
+        def create(self, args):
+            return _Done(
+                1,
+                "",
+                "HTTP 403: refusing to allow a GitHub App to create or update workflow without workflows permission",
+            )
+
+    use(monkeypatch, Refused(files))
+    found = rp.publish(REPO, TAG, files)
+    assert "could not create the draft release" in found[0] and rp.WORKFLOWS_NOTE in found
+    assert any("nothing was made public" in p for p in found)
+
+
+def test_a_failed_step_is_also_written_to_the_job_summary(tmp_path, monkeypatch, capsys):
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    rp.report(["one thing", "another"])
+    assert summary.read_text(encoding="utf-8") == "### The release step stopped\n\n- one thing\n- another\n\n"
+    rp.report([])  # nothing to say, nothing written
+    assert summary.read_text(encoding="utf-8").count("The release step stopped") == 1
+    capsys.readouterr()
 
 
 def test_a_release_that_is_still_a_draft_afterwards_is_reported(files, monkeypatch):
@@ -380,7 +492,8 @@ def test_a_release_that_cannot_be_read_back_is_reported(files, monkeypatch):
     original = fake.__call__
 
     def fail_reread(*args):
-        if args[0] == "api" and "--paginate" not in args and "PATCH" not in args:
+        published = any(c[:3] == ("api", "--method", "PATCH") for c in fake.calls)
+        if published and args[0] == "api" and "--paginate" not in args and "PATCH" not in args:
             return _Done(1, "", "HTTP 502")
         return original(*args)
 

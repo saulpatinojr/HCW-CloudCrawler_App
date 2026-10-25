@@ -31,6 +31,8 @@ PUBLISHING = ("gh release", "release-publish.py publish", "uv publish")
 RELEASE_FILE = "publish-core.yml"
 JOB_ORDER = ["build", "attest", "release", "pypi"]
 SHA_CHECK = "sha256sum --check --strict SHA256SUMS"
+TAG_PATTERN = "v[0-9]+.[0-9]+.[0-9]+"
+TAG_FILTER = f'  push:\n    tags: ["{TAG_PATTERN}"]\n'
 
 
 def text(name: str) -> str:
@@ -106,8 +108,53 @@ def test_the_whole_release_is_one_workflow_with_one_ordered_path():
     assert re.search(r"(?m)^    needs: build$", job_head("attest"))
     assert re.search(r"(?m)^    needs: \[build, attest\]$", job_head("release"))
     assert re.search(r"(?m)^    needs: release$", job_head("pypi")), "PyPI only after the GitHub release is public"
-    assert re.search(r'(?m)^  push:\n    tags: \["v\*"\]$', body)
+    assert TAG_FILTER in body
     assert re.search(r"(?m)^  workflow_dispatch:", body), "no dry run"
+
+
+def filter_matches(pattern: str, name: str) -> bool:
+    """GitHub's branch/tag filter for the characters this pattern uses, as the documentation defines them: `[...]` one
+    character of the set, `+` one or more of the preceding character, `*` anything but `/`, `**` anything, `?` zero
+    or one of the preceding character; any other character, the dot included, stands for itself. The whole name
+    must match."""
+    out, i = "", 0
+    while i < len(pattern):
+        char = pattern[i]
+        if char == "[":
+            j = pattern.index("]", i)
+            out += pattern[i : j + 1]
+            i = j
+        elif char == "*" and pattern[i : i + 2] == "**":
+            out += ".*"
+            i += 1
+        elif char == "*":
+            out += "[^/]*"
+        elif char in "+?":
+            out += char
+        else:
+            out += re.escape(char)
+        i += 1
+    return re.fullmatch(out, name) is not None
+
+
+@pytest.mark.parametrize("tag", ["v0.1.0", "v1.2.3", "v10.20.30", "v0.0.0"])
+def test_a_release_tag_starts_the_workflow(tag):
+    assert filter_matches(TAG_PATTERN, tag)
+
+
+@pytest.mark.parametrize(
+    "tag", ["vtest", "v", "v0.1.0-rc.1", "v0.1.0rc1", "v0.1", "v0.1.0.1", "v1.2.x", "0.1.0", "release-1", "v0.1.0/x"]
+)
+def test_a_tag_that_is_not_vMAJOR_MINOR_PATCH_never_starts_a_run(tag):
+    assert not filter_matches(TAG_PATTERN, tag)
+
+
+def test_the_old_filter_would_have_started_runs_for_stray_tags():
+    assert filter_matches("v*", "vtest") and filter_matches("v*", "v0.1.0-rc.1"), "the helper models the old filter"
+
+
+def test_the_sbom_export_fails_on_a_stale_lockfile_instead_of_updating_it():
+    assert "uv export --locked" in text(RELEASE_FILE) and "--frozen" not in text(RELEASE_FILE)
 
 
 def test_nothing_is_published_without_a_tag():
@@ -224,4 +271,6 @@ def test_the_version_guard_runs_everywhere_it_should():
     guard = "scripts/check-release-version.py"
     assert guard in text("ci.yml"), "pull requests must run the guard"
     assert guard in text(RELEASE_FILE)
-    assert (ROOT / guard).is_file() and (ROOT / "scripts" / "release-publish.py").is_file()
+    for script in ("release-publish.py", "pre-tag-check.py"):
+        assert (ROOT / "scripts" / script).is_file(), script
+    assert (ROOT / guard).is_file()

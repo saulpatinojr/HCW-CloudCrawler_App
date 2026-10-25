@@ -8,8 +8,9 @@ Stdlib only; it calls the GitHub CLI (`gh`), authenticated by `GH_TOKEN` in the 
   CycloneDX SBOM, and insist that the attestation came from THIS workflow file, on THIS ref, at THIS commit. Without
   those three, "some attestation for this file exists in this repository" would be enough, and a dry-run attestation
   of the same bytes would satisfy a real release.
-* `publish`: create the GitHub Release as a DRAFT with the three files, check that the draft holds exactly those files
-  (names, upload state and, where GitHub reports one, the sha256), and only then make it public. A release that
+* `publish`: create the GitHub Release as a DRAFT with the three files, re-read the draft by its id until the three
+  files are `uploaded` (bounded), check that it holds exactly those files (names, upload state and, where GitHub
+  reports one, the sha256; when it reports none, say so), and only then make it public. A release that
   already exists for the tag (draft or public) is never touched, and no file is ever replaced: the job stops and
   says what to delete by hand. Until the last step succeeds no release is visible to anyone but the repository's
   writers, so a failure never leaves a public empty release next to the permanent tag.
@@ -33,10 +34,21 @@ SBOM = "https://cyclonedx.org/bom"
 SBOM_NAME = "cloud-crawler-core.cdx.json"
 LOOKUP_TRIES = 10
 LOOKUP_PAUSE_SECONDS = 3.0
-# a new attestation can take a moment to be readable; a wrong one still fails after the last try
-VERIFY_TRIES = 3
-VERIFY_PAUSE_SECONDS = 5.0
+# a draft that is listed can still show stale or missing assets, or assets in state `open` (GitHub's states are
+# `uploaded` and `open`); it is re-read by id, at most SETTLE_TRIES times (about two minutes)
+SETTLE_TRIES = 20
+SETTLE_PAUSE_SECONDS = 6.0
+# a new attestation can take a while to be readable. The waits between tries back off, and they share one budget for
+# the whole step (about four minutes), so a wrong attestation cannot keep the job waiting four minutes per file.
+VERIFY_DELAYS = (5.0, 10.0, 20.0, 30.0, 45.0, 60.0, 60.0)
+VERIFY_BUDGET_SECONDS = sum(VERIFY_DELAYS)
 GH_TIMEOUT_SECONDS = 300.0
+WORKFLOWS_NOTE = (
+    "GitHub refuses a token without workflow permission to create or change a release whose target commit modifies "
+    ".github/workflows/ compared with the default branch (https://docs.github.com/en/rest/releases/releases), and "
+    "answers 403 or 404 for it. If that is the cause, publish the release by hand from this run's files: README, "
+    '"If a release goes wrong"'
+)
 
 
 def gh(*args: str) -> subprocess.CompletedProcess[str]:
@@ -59,6 +71,25 @@ def report(problems: list[str]) -> None:
     github = os.environ.get("GITHUB_ACTIONS") == "true"
     for problem in problems:
         print(f"::error::{problem}" if github else f"error: {problem}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if problems and summary:
+        with open(summary, "a", encoding="utf-8") as handle:
+            handle.write("### The release step stopped\n\n" + "".join(f"- {p}\n" for p in problems) + "\n")
+
+
+def notice(message: str) -> None:
+    print(f"::notice::{message}" if os.environ.get("GITHUB_ACTIONS") == "true" else f"notice: {message}")
+
+
+def failure_help(repo: str, text: str) -> list[str]:
+    """What to tell the owner after a failed GitHub call: nothing is public, how to clean up, the likely cause."""
+    lines = [
+        f"nothing was made public. A draft may be left behind: delete it on https://github.com/{repo}/releases "
+        "(the tag stays) before re-running"
+    ]
+    if any(word in text.lower() for word in ("workflow", "403", "404", "not accessible", "forbidden")):
+        lines.append(WORKFLOWS_NOTE)
+    return lines
 
 
 def verify_command(
@@ -87,14 +118,17 @@ def verify_attestations(directory: Path, repo: str, workflow: str, source_ref: s
     if len(files) != 2 or {f.suffix for f in files} != {".whl", ".gz"}:
         return [f"{directory} must hold exactly one wheel and one sdist to verify, found {[f.name for f in files]}"]
     problems: list[str] = []
+    budget = VERIFY_BUDGET_SECONDS
     for path in files:
         for predicate in (PROVENANCE, SBOM):
             command = verify_command(path, repo, predicate, workflow, source_ref, source_digest)
             result = gh(*command)
-            for _ in range(VERIFY_TRIES - 1):
-                if result.returncode == 0:
+            for delay in VERIFY_DELAYS:
+                if result.returncode == 0 or budget <= 0:
                     break
-                sleep(VERIFY_PAUSE_SECONDS)
+                pause = min(delay, budget)
+                budget -= pause
+                sleep(pause)
                 result = gh(*command)
             if result.returncode != 0:
                 detail = (result.stderr or result.stdout).strip().splitlines()
@@ -155,26 +189,42 @@ def releases_for_tag(repo: str, tag: str) -> tuple[list[dict], str | None]:
     return found, None
 
 
-def release_problems(release: dict, expected: dict[str, Path], *, draft: bool) -> list[str]:
-    """What is wrong with a release that should hold exactly `expected` and be (or not be) a draft."""
-    problems: list[str] = []
+def assess(release: dict, expected: dict[str, Path], *, draft: bool) -> tuple[list[str], list[str]]:
+    """(problems that may pass with time, problems that will not) for a release that should hold exactly `expected`.
+
+    Time can fix a missing file or a file whose state is not yet `uploaded` (GitHub's other state is `open`); nothing
+    but a new release fixes a wrong draft flag, a stray file or a digest that differs from the attested file."""
+    waiting: list[str] = []
+    wrong: list[str] = []
     if bool(release.get("draft")) is not draft:
         now, wanted = ("public", "a draft") if draft else ("still a draft", "public")
-        problems.append(f"the release is {now}, expected it to be {wanted}")
+        wrong.append(f"the release is {now}, expected it to be {wanted}")
     assets = {a.get("name"): a for a in release.get("assets", []) if isinstance(a, dict)}
     for name in sorted(set(expected) - set(assets)):
-        problems.append(f"asset {name} is not on the release")
+        waiting.append(f"asset {name} is not on the release")
     for name in sorted(set(assets) - set(expected)):
-        problems.append(f"asset {name} is on the release but is not one of the three expected files")
+        wrong.append(f"asset {name} is on the release but is not one of the three expected files")
     for name, asset in assets.items():
         if name not in expected:
             continue
         if asset.get("state") != "uploaded":
-            problems.append(f"asset {name} is in state {asset.get('state')!r}, not 'uploaded'")
+            waiting.append(f"asset {name} is in state {asset.get('state')!r}, not 'uploaded'")
         reported = asset.get("digest")
         if reported and reported != f"sha256:{sha256_of(expected[name])}":
-            problems.append(f"asset {name} on the release has digest {reported}, not the sha256 of the attested file")
-    return problems
+            wrong.append(f"asset {name} on the release has digest {reported}, not the sha256 of the attested file")
+    return waiting, wrong
+
+
+def release_problems(release: dict, expected: dict[str, Path], *, draft: bool) -> list[str]:
+    """Everything that is wrong with the release right now."""
+    waiting, wrong = assess(release, expected, draft=draft)
+    return [*wrong, *waiting]
+
+
+def without_digest(release: dict, expected: dict[str, Path]) -> list[str]:
+    """The expected files for which GitHub reports no sha256."""
+    assets = {a.get("name"): a for a in release.get("assets", []) if isinstance(a, dict)}
+    return sorted(name for name in expected if name in assets and not assets[name].get("digest"))
 
 
 def get_release(repo: str, release_id: int) -> tuple[dict | None, str | None]:
@@ -186,6 +236,29 @@ def get_release(repo: str, release_id: int) -> tuple[dict | None, str | None]:
     except ValueError as error:
         return None, f"could not read release {release_id}: {error}"
     return (value, None) if isinstance(value, dict) else (None, f"release {release_id} did not come back as an object")
+
+
+def settle_draft(repo: str, release_id: int, expected: dict[str, Path]) -> tuple[dict | None, list[str]]:
+    """Re-read the draft by its id until its three files are `uploaded` (at most SETTLE_TRIES reads).
+
+    The listing can show a draft before its files are complete, so the listing's copy is never trusted. A problem that
+    time cannot fix (a stray file, a different digest) ends the wait at once."""
+    release: dict | None = None
+    problems: list[str] = []
+    for attempt in range(SETTLE_TRIES):
+        release, reason = get_release(repo, release_id)
+        if release is None:
+            problems = [reason or f"could not read release {release_id}"]
+        else:
+            waiting, wrong = assess(release, expected, draft=True)
+            if wrong:
+                return release, wrong
+            if not waiting:
+                return release, []
+            problems = waiting
+        if attempt + 1 < SETTLE_TRIES:
+            sleep(SETTLE_PAUSE_SECONDS)
+    return release, [f"after {SETTLE_TRIES} reads of the draft: {problem}" for problem in problems]
 
 
 def publish(repo: str, tag: str, directory: Path) -> list[str]:
@@ -210,10 +283,8 @@ def publish(repo: str, tag: str, directory: Path) -> list[str]:
         "--notes-file", str(notes), *map(str, expected.values()),
     )  # fmt: skip
     if created.returncode != 0:
-        return [
-            f"could not create the draft release {tag}: {(created.stderr or created.stdout).strip()}",
-            "a draft may have been left behind: delete it on the Releases page before re-running",
-        ]
+        text = (created.stderr or created.stdout).strip()
+        return [f"could not create the draft release {tag}: {text}", *failure_help(repo, text)]
     print(f"draft release for {tag} created with {len(expected)} files; checking it before it becomes public")
 
     draft: dict | None = None
@@ -229,17 +300,21 @@ def publish(repo: str, tag: str, directory: Path) -> list[str]:
     if draft is None or not isinstance(draft.get("id"), int):
         return [f"the draft release for {tag} could not be found after it was created; nothing was made public"]
 
-    problems = release_problems(draft, expected, draft=True)
-    if problems:
-        return [*problems, "the draft stays unpublished: delete it on the Releases page before re-running"]
-
     release_id = draft["id"]
+    settled, problems = settle_draft(repo, release_id, expected)
+    if problems:
+        return [*problems, *failure_help(repo, " ".join(problems))]
+    missing_digest = without_digest(settled, expected) if settled else []
+    if missing_digest:
+        notice(
+            f"GitHub reports no sha256 for {', '.join(missing_digest)}: the files are not compared with GitHub's own "
+            "record, so their integrity rests on the sha256 list checked in this job and on the attestations"
+        )
+
     made = gh("api", "--method", "PATCH", f"repos/{repo}/releases/{release_id}", "-F", "draft=false")
     if made.returncode != 0:
-        return [
-            f"could not make release {tag} public: {(made.stderr or made.stdout).strip()}",
-            "the draft stays unpublished: delete it on the Releases page before re-running",
-        ]
+        text = (made.stderr or made.stdout).strip()
+        return [f"could not make release {tag} public: {text}", *failure_help(repo, text)]
     final, reason = get_release(repo, release_id)
     if final is None:
         return [f"{reason}; the publish request was sent, so check the release page"]
