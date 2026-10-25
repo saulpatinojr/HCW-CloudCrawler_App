@@ -25,15 +25,23 @@
 # nothing under Unreleased, the tag not yet used, the commit on main, the built files), builds, and keeps the files as a
 # workflow artifact. It publishes nothing: the release and PyPI jobs run only for a pushed v* tag, so a manual run can
 # never publish, whatever ref it names. "attest" is off by default because attestations are permanent entries in the
-# public signing log; tick it once to rehearse them too (they are then verified with the same strict flags, naming the
-# branch instead of the tag).
+# public signing log, but a dry run with "attest" ticked, green in build AND attest on the very commit that will be
+# tagged, is REQUIRED before the first tag (scripts/pre-tag-check.py enforces it): the attestation steps are the part
+# nothing else can rehearse, and they are then verified with the same strict flags, naming the branch instead of the
+# tag. What a dry run cannot reproduce: a tag on an OLDER commit runs that commit's older copy of this file (so tag the
+# tip of main, which pre-tag-check.py checks), and the tag event itself (whether GitHub starts this workflow for the
+# tag, and the token's behaviour when the release job runs for real).
+# The tag filter below matches only vMAJOR.MINOR.PATCH, so a tag such as vtest or v0.1.0-rc.1 never starts a run.
 # Re-running: "Re-run failed jobs" on a tag run uses THIS FILE AS IT IS AT THE TAGGED COMMIT and the files built by
 # that run, so a fix merged to main later cannot reach it. A release that already exists (draft or public) for the tag
 # is never touched and no file is ever replaced: the job stops and says what to delete by hand.
+# The release job uses GITHUB_TOKEN. GitHub refuses a token without workflow permission to create or change a release
+# whose target commit modifies .github/workflows/ compared with the default branch, so tag only when no pull request
+# that touches the workflows is waiting on main. If the job fails, nothing is public (see the README).
 name: publish-core
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
     inputs:
       attest:
@@ -83,7 +91,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir sbom
-          uv export --frozen --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 \
+          uv export --locked --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 \
             -o sbom/cloud-crawler-core.cdx.json
           test -s sbom/cloud-crawler-core.cdx.json
       - name: sha256 of every file (the AddOn's uv.lock records the wheel's; the later jobs check the list)

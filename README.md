@@ -235,8 +235,7 @@ Not yet checked against a real tenant: see `VALIDATION.md`.
 ## Releasing the engine
 
 The AddOn adopts the engine as the wheel attached to a GitHub Release of
-this repository, pinned by URL and sha256 (ADR 0002; the AddOn's
-`core-update.yml` opens the bump pull request). A release is one tag, and
+this repository, pinned by URL and sha256 (ADR 0002). A release is one tag, and
 **a `v*` tag can never be moved or deleted once it is pushed** (see "Branch
 and tag protection"). Releases are listed at
 [github.com/saulpatinojr/HCW-CloudCrawler_App/releases](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases);
@@ -246,14 +245,23 @@ the public).
 **What the checks can and cannot do.** The checks below run on GitHub *after*
 you push the tag. They stop a bad tag from being *published*; they cannot
 un-push it, so a wrong tag stays for ever and the only way forward is the next
-version. That is why the dry run (step 2) comes first: it runs the same checks
-against `main` without a tag, and it is where mistakes should be caught. One more
-limit: the workflow that runs for a tag is the copy stored *in the tagged commit*.
-A tag on a commit from before these checks existed would run that older workflow,
-without them. Nothing inside a workflow can detect that about itself, so step 3
-tags the exact commit the dry run built, not "whatever `git pull` gives you".
+version (or, as a last resort, the recovery below). That is why the dry run (step 2) comes first: it runs the same
+checks against `main` without a tag. It is a rehearsal, not a guarantee. It cannot reproduce:
 
-**What a tag does.** One workflow, `publish-core.yml`, runs four jobs in a fixed
+- **A tag on an older commit.** The workflow that runs for a tag is the copy stored *in the tagged commit*. A tag on a
+  commit from before these checks existed would run that older workflow, without them, and nothing inside a workflow can
+  detect that about itself. Step 3 therefore checks, before the tag exists, that the commit is the tip of `main` and
+  that a dry run with attestations was green on exactly that commit (`scripts/pre-tag-check.py`).
+- **The tag event itself.** The dry run never runs the `release` or `pypi` jobs. Whether GitHub starts the workflow for
+  the tag, whether the workflow's token may create, check and publish the release, and the attestation fields for a tag
+  (the dry run checks the same flags against `refs/heads/main`) are first exercised by the real tag. If the `release` job
+  fails, nothing is public (see "If a release goes wrong").
+One more limit, of the check rather than of the dry run: it refuses a changelog date that is *in the future*, but a date
+that is merely old (more than a week) only gives a warning, because the release page will show that date and fixing it is
+up to you.
+
+**What a tag does.** One workflow, `publish-core.yml`, starts only for a tag of the exact form
+`vMAJOR.MINOR.PATCH` (so `vtest` or `v0.1.0-rc.1` start nothing; the format is also checked by the guard). It runs four jobs in a fixed
 order, and the release becomes public only as the very last step of the third:
 
 1. `build` (read-only): `scripts/check-release-version.py` checks the tag, the
@@ -263,17 +271,28 @@ order, and the release becomes public only as the very last step of the third:
    SBOM (the engine's locked runtime dependencies), the release notes and a list of
    sha256 checksums are written. Everything is kept as one workflow artifact.
 2. `attest` (may sign, cannot write to the repository): attests provenance and the
-   SBOM for the wheel and the sdist, then verifies the attestations.
+   SBOM for the wheel and the sdist, then verifies the attestations. A new attestation can take a
+   while to become readable, so the check retries with growing pauses for up to about four minutes in total.
 3. `release` (the only job that can write to the repository, tag runs only):
    re-checks the checksums, verifies the attestations again, creates the release as a
-   **draft** (not visible to the public) with the three files, checks that the draft
+   **draft** (not visible to the public) with the three files, re-reads the draft by its id until all three files are
+   `uploaded` (GitHub's states are `uploaded` and `open`; it waits up to about two minutes), checks that the draft
    holds exactly `cloud_crawler_core-0.1.0-py3-none-any.whl`,
-   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json` (all fully
-   uploaded, and with the sha256 GitHub reports where it reports one), and only then
+   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`, and only then
    makes it public. A failure before that last step leaves no public release.
 4. `pypi` (tag runs only): nothing is published to PyPI unless the repository
    variable `PYPI_ENABLED` is `true` (it is not set). No container image is published
    by any workflow.
+
+Two things about what is checked. First, GitHub may report a sha256 ("digest") for each uploaded file. When it does, the
+job compares it with the attested file; when it reports none, the job prints a notice and does **not** call the file
+checked against GitHub's record: its integrity then rests on the sha256 list (checked in every job) and on the
+attestations. Second, the SBOM file `cloud-crawler-core.cdx.json` is not a subject of any attestation. The attestation
+covers the wheel and the sdist, with the SBOM as the attested statement about them (predicate type
+`https://cyclonedx.org/bom`); the file on the release is covered by the sha256 list. To compare the two by hand, run
+`gh attestation verify <wheel> --repo saulpatinojr/HCW-CloudCrawler_App --predicate-type https://cyclonedx.org/bom --format json`
+and look at `verificationResult.statement.predicate` (GitHub documents that structure; this comparison has not been run
+here).
 
 The attestation check names the exact workflow file, the exact tag and the exact
 commit (`gh attestation verify ... --signer-workflow --source-ref --source-digest`).
@@ -296,58 +315,101 @@ in one pull request (`make lock` updates `uv.lock`).
 
 ### Release steps
 
-1. **Check the changelog.** `CHANGELOG.md` has the `## [0.1.0] - 2026-10-25` section holding everything that ships, and
-   nothing under `[Unreleased]`. If you tag on a different day, change the date in that heading in a pull request first
-   (the notes come from that section, and a tag is refused while `[Unreleased]` has entries or the section has no
-   valid date). Keep both `pyproject.toml` files, both `__version__` constants and `uv.lock` at the same version.
-2. **Dry run on `main`** (publishes nothing, writes no tag and no release, and runs only on the `main` branch). bash or
-   PowerShell, with the GitHub CLI signed in:
-
-   ```bash
-   gh workflow run publish-core.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main
-   ```
-
-   Open [the Actions page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/actions/workflows/publish-core.yml)
-   and wait for the run to turn green (only the `build` job runs). Its summary shows the release notes a tag would publish
-   and the sha256 of the wheel, the sdist and the SBOM; the three files are kept in the artifact
-   `cloud-crawler-core-release-files`. It is red in exactly the states in which the real tag would be refused (for example an
-   empty or undated changelog section, entries left under Unreleased, or a tag that already exists).
-
-   *Recommended, once: rehearse the attestations too.* Attestations are permanent entries in the public signing log, so the
-   dry run does not create them unless you ask. They are the one part of the pipeline that has never run, and if they fail on the
-   real tag, that tag is lost for good. So we recommend running this once and accepting two permanent log entries that name
-   `refs/heads/main` (they cannot be mistaken for a release, because the tag run only accepts attestations for
-   `refs/tags/v0.1.0`). Wait for all of `build` and `attest` to turn green:
+1. **Check the changelog, and the pull requests.** `CHANGELOG.md` has the `## [0.1.0] - 2026-10-25` section holding
+   everything that ships, and nothing under `[Unreleased]`. If you tag on a different day, change the date in that heading
+   in a pull request first (the notes come from that section; a tag is refused while `[Unreleased]` has entries or the
+   section has no valid date, and a date more than a week old only gives a warning). Keep both `pyproject.toml` files,
+   both `__version__` constants and `uv.lock` at the same version. Then merge or close every open pull request that
+   changes `.github/workflows/`, and do not merge a new one between the dry run and the tag: GitHub does not let a
+   token without workflow permission create or change a release whose target commit modifies `.github/workflows/`
+   compared with the default branch ([GitHub documentation](https://docs.github.com/en/rest/releases/releases)), and it
+   answers 404 or 403. The release job uses such a token.
+2. **Dry run on `main`, with attestations. This step is required, not optional.** It publishes nothing, writes no tag and
+   no release, and runs only on the `main` branch. bash or PowerShell, with the GitHub CLI signed in:
 
    ```bash
    gh workflow run publish-core.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main -f attest=true
    ```
 
-3. **Tag the exact commit the dry run built, and push the tag.** Do not tag whatever `git pull` gives you: `main` may have
-   moved since the dry run. PowerShell:
+   Open [the Actions page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/actions/workflows/publish-core.yml)
+   and wait until **both** `build` and `attest` are green on the commit you are going to tag. The summary shows the release
+   notes a tag would publish and the sha256 of the wheel, the sdist and the SBOM; the three files are kept in the artifact
+   `cloud-crawler-core-release-files`. The `attest` job is why this step is required: the attestation steps are the one
+   part nothing else can rehearse, and if they fail on the real tag, that tag is lost for good. The price is two permanent
+   entries in the public signing log that name `refs/heads/main`; they cannot be mistaken for a release, because the tag
+   run only accepts attestations for `refs/tags/v0.1.0`. Without `-f attest=true` only `build` runs, which is a
+   cheaper check of the changelog and the build but does not satisfy step 3. If the run is red, read the message, fix
+   `main` in a pull request, and run this step again.
+3. **Check, then tag the commit the dry run built.** Do not tag whatever `git pull` gives you. `main` may have moved since
+   the dry run, and a tag on an older commit would run that commit's older workflow. PowerShell, from your clone of this
+   repository:
 
    ```powershell
-   git fetch origin
-   $sha = gh run list --repo saulpatinojr/HCW-CloudCrawler_App --workflow publish-core.yml --event workflow_dispatch --branch main --status success --limit 1 --json headSha --jq ".[0].headSha"
-   $sha
+   git switch main
+   git pull origin main
+   $sha = git rev-parse origin/main
+   uv run python scripts/pre-tag-check.py --sha $sha --tag v0.1.0
+   ```
+
+   (`git pull` only brings your copy up to date; what gets tagged is `$sha`.) The check prints `ok:` lines and ends with
+   `safe to tag`, or prints `error:` lines and ends with `NOT safe to tag`. It fails unless `$sha` is a full commit id
+   that is the tip of `origin/main` (or is identical to the tip in `.github` and `scripts`), unless a dry run on `main`
+   was green for exactly that commit with `build` **and** `attest` successful, and unless the tag does not exist in your
+   clone. If `main` has moved since the dry run, run step 2 again first. Only after `safe to tag`:
+
+   ```powershell
    git tag -a v0.1.0 $sha -m "cloud-crawler-core 0.1.0"
    git push origin v0.1.0
    ```
 
-   `$sha` must print one 40-character commit id, and it should be the commit of the dry run you just watched. Stop and
-   ask if it prints nothing or something you do not recognise. If `main` has moved on since that dry run and you
-   still want the newer commit, run the dry run again first, then repeat this step.
 4. **Check the result.** The run for the tag is green (all of `build`, `attest` and `release`), and
    [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0)
    lists three assets: `cloud_crawler_core-0.1.0-py3-none-any.whl`,
-   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`.
-   Within six hours the AddOn's `core-update.yml` opens its bump pull request;
-   `gh workflow run core-update.yml --repo saulpatinojr/HCW-CloudCrawler_AddOn`
-   (bash or PowerShell) runs it at once. To check where a wheel came from:
+   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`. To check where a wheel came from:
 
    ```bash
    gh attestation verify cloud_crawler_core-0.1.0-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0
    ```
+
+5. **Adopt it in the AddOn (first time only).** See the next section: the AddOn's `core-update.yml` does **not** pick up
+   the first release by itself.
+
+### Adopting 0.1.0 in the AddOn (first time)
+
+The AddOn's
+[`core-update.yml`](https://github.com/saulpatinojr/HCW-CloudCrawler_AddOn/blob/main/.github/workflows/core-update.yml)
+runs every six hours and when started by hand, but it only *bumps* a pin that already exists. Today the AddOn's
+`pyproject.toml` has no line carrying `# CORE_REF`, so the workflow ends with the notice "no CORE_REF in pyproject.toml:
+the engine is not adopted yet; nothing to bump" and opens no pull request. The first pin is made by hand, once:
+
+1. In a clone of `HCW-CloudCrawler_AddOn`, create a branch and add this line to the `dependencies` list in `pyproject.toml`
+   (one line, with the comment at the end; the workflow reads it):
+
+   ```text
+   "cloud-crawler-core @ https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/download/v0.1.0/cloud_crawler_core-0.1.0-py3-none-any.whl",  # CORE_REF v0.1.0
+   ```
+
+2. Run `uv lock` (it records the wheel's sha256 in `uv.lock`), then `uv run ruff check .` and `uv run pytest -q`, commit
+   `pyproject.toml` and `uv.lock`, and open a pull request.
+3. Add this entry at the top of "What changed" in the AddOn's `docs/whats-new-upstream.md`, in the same pull request
+   (change the date if you tagged on another day):
+
+   ```markdown
+   ### 2026-10-25: App release v0.1.0 (engine cloud-crawler-core 0.1.0), first adoption
+
+   - The App published its first GitHub Release, `v0.1.0`: the engine wheel
+     `cloud_crawler_core-0.1.0-py3-none-any.whl`, the sdist, and a CycloneDX SBOM `cloud-crawler-core.cdx.json`, with
+     provenance and SBOM attestations for the wheel and the sdist (check with `gh attestation verify <file>
+     --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow
+     saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0`).
+   - Reaches this repository? Yes, once, by hand: `pyproject.toml` now pins the wheel by URL with a `# CORE_REF v0.1.0`
+     line and `uv.lock` records its sha256. `core-update.yml` had nothing to bump before this line existed; from now on it
+     opens a pull request for each new App release within six hours.
+   - The engine is unchanged by the release machinery; the release is made by one workflow, `publish-core.yml`.
+   ```
+
+4. After the pull request is merged, `gh workflow run core-update.yml --repo saulpatinojr/HCW-CloudCrawler_AddOn`
+   (bash or PowerShell) should answer "already at v0.1.0". Later App releases then arrive as bump pull requests.
 
 ### If a release goes wrong
 
@@ -356,12 +418,44 @@ The tag stays (it cannot be deleted), so version `0.1.0` can only ever mean the 
 the files built by that run. A fix merged to `main` afterwards cannot reach it. So a re-run helps only when the failure
 was temporary (a network error, a GitHub outage); it cannot fix a mistake in the workflow, the scripts or the changelog.
 
+**If the `release` job fails, nothing is public.** The step's error lines (also in the run's summary) say what stopped it.
+A *draft* release may be left behind on the
+[Releases page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases) (marked "Draft"; only people who can write
+to the repository see it). To clean up: open the draft, choose "Delete this release" (the tag stays), then "Re-run failed
+jobs" if the cause was temporary. The job refuses to touch a release that already exists and never replaces a file, so a
+leftover draft makes a re-run stop with a message saying so.
+
 | What happened | What the public sees | What to do |
 | --- | --- | --- |
-| `build` or `attest` failed | No release at all | If the cause was temporary, "Re-run failed jobs". Otherwise fix `main` and ship `0.1.1` (all six version places and a changelog section). |
-| `release` failed before the last step | No release. A **draft** may be listed on the Releases page, visible only to people who can write to the repository | Delete the draft on the Releases page (the tag stays). Then "Re-run failed jobs" if the cause was temporary, or ship `0.1.1`. The job refuses to touch a release that already exists and never replaces a file, so a draft left behind makes a re-run stop with a message saying so. |
+| `build` or `attest` failed | No release at all | If the cause was temporary, "Re-run failed jobs". Otherwise see "Publishing by hand" below if the artifact and the attestations exist, or fix `main` and ship `0.1.1` (all six version places and a changelog section). |
+| `release` failed before its last step | No release. A draft may be listed, visible only to writers | Delete the draft (above). Then "Re-run failed jobs" if temporary; if GitHub refused with 403 or 404, see "Publishing by hand"; otherwise ship `0.1.1`. |
 | `release` succeeded, `pypi` failed (only if `PYPI_ENABLED` is `true`) | The release is complete and public | Fix the PyPI side and "Re-run failed jobs" (only `pypi` runs). |
-| A release went public with a wrong file | A wrong release | The AddOn may already have pinned the wheel's sha256, so never replace files under the same version. Delete the release and its assets on the Releases page, fix `main`, and ship `0.1.1`. |
+| A release went public with a wrong file | A wrong release | The AddOn may already have pinned the wheel's sha256, so never replace files under the same version. Delete the release and its assets, fix `main`, and ship `0.1.1`. |
+
+**Publishing by hand, when the tag is burned but the built and attested files are fine.** Use this instead of shipping
+`0.1.1` when `build` and `attest` were green on the tag run, the `release` job could not publish, and no release for the tag was ever
+public. It creates the release for the same tag from the same files, with your own GitHub sign-in instead of the workflow's
+token. The run's artifact is kept for 90 days. bash (Git Bash on Windows works), from a clone of this repository on `main`,
+with the id of the tag run from `gh run list --repo saulpatinojr/HCW-CloudCrawler_App --workflow publish-core.yml --event push --limit 5`
+(use the run for `v0.1.0`; call its id `RUN`):
+
+```bash
+gh run download RUN --repo saulpatinojr/HCW-CloudCrawler_App -n cloud-crawler-core-release-files -D release-files
+(cd release-files && sha256sum --check --strict SHA256SUMS)
+python scripts/release-publish.py verify-attestations --dir release-files/dist --repo saulpatinojr/HCW-CloudCrawler_App --workflow .github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0 --source-digest "$(git rev-parse 'v0.1.0^{commit}')"
+python scripts/release-publish.py publish --repo saulpatinojr/HCW-CloudCrawler_App --tag v0.1.0 --dir release-files
+```
+
+The last command is the same code the workflow runs: draft first, the three files checked, then public. If GitHub answers
+with a message about workflows, run `gh auth refresh -s workflow` and try again. Nothing here changes the tag.
+
+**Last resort: lifting the tag rule.** That a `v*` tag cannot be moved or deleted is a *repository rule* (the ruleset
+"Protect release tags"), not a law of GitHub. The owner can lift it under
+[Settings, Rules, Rulesets](https://github.com/saulpatinojr/HCW-CloudCrawler_App/settings/rules), and the
+`repository-admin` task `protect-release-tags` re-applies it afterwards. **Decision recorded here: do not lift it.** The only
+case that would justify it is a tag that points at the wrong commit, with no release for it ever public and nothing pinned to
+it (then the tag could be deleted and created again on the right commit, and the rule restored at once). If any release for
+the tag was ever public, ship the next version instead.
 
 Immutable releases are currently off for this repository (checked on 2026-10-25 with
 `gh api repos/saulpatinojr/HCW-CloudCrawler_App/immutable-releases`, which answered `enabled: false`). If you turn them on
@@ -380,7 +474,7 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
-scripts/                       the lockfile check, the release version guard, the release publisher and the release wheel verifier
+scripts/                       the lockfile check, the release version guard, the pre-tag check, the release publisher and the release wheel verifier
 .github/workflows/             ci, security, codeql, dependency-review, publish-core (the whole release), repository-admin
 docs/adr/                      this edition's decisions
 ```
@@ -413,7 +507,9 @@ Two GitHub rulesets protect this repository. They are applied by the owner-appro
 
 - **Protect main:** `main` cannot be deleted or force-pushed, changes arrive through a pull request, and the six
   checks `lint`, `test`, `contract`, `pip-audit`, `secret-scan` and `image` must pass.
-- **Protect release tags:** a `v*` tag cannot be moved or deleted once pushed. Check the version before tagging.
+- **Protect release tags:** a `v*` tag cannot be moved or deleted once pushed. This is a repository rule that the owner
+  could lift, not a law of GitHub (see "Last resort: lifting the tag rule" under "Releasing the engine"). Check the
+  version before tagging.
 
 ## Repository standards
 

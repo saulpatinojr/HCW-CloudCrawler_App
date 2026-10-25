@@ -12,8 +12,12 @@ the code inside says another is worse. The check has three modes, all stdlib onl
   or without the brackets), so the release notes are complete. With `--ancestor-of REF`, the tagged commit must already
   be on that branch (only reviewed commits are released).
 * With `--rehearse` (publish-core.yml started by hand on `main`, the dry run): the tag is derived as `v` + the package
-  version and every check of the `--tag` mode runs, so the dry run is red in exactly the states in which the real tag
-  would be refused. Because there is no tag yet, it also fails when that tag already exists.
+  version and every check of the `--tag` mode runs, so the dry run is red for every state this script would refuse the
+  tag for. It cannot reproduce an older commit's workflow or the tag event itself. Because there is no tag yet, it also
+  fails when that tag already exists.
+
+A release date that is valid but more than a week old only prints a warning (the release page will show it); the date
+is refused only when it does not exist or is in the future.
 
 `--notes-out FILE` writes the changelog section for the version (the release notes). `--dist DIR` checks the built
 files: exactly the wheel and the sdist, named for the version, and the wheel's own `__version__` equal to it.
@@ -47,6 +51,8 @@ LINK_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:[ \t]*\S+.*$")
 HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
 # a release may be dated "today" in a time zone ahead of the runner's UTC clock, so one day ahead is tolerated
 FUTURE_TOLERANCE = datetime.timedelta(days=1)
+# an old date is only advisory: the release page would show it, so say so, but do not refuse the release
+STALE_AFTER = datetime.timedelta(days=7)
 DUNDER = re.compile(r'^__version__\s*=\s*"([^"]*)"\s*$', re.M)
 ENGINE = "packages/cloud-crawler-core"
 SOURCES = {
@@ -188,6 +194,21 @@ def release_date_problem(date: str | None, version: str, today: datetime.date) -
     return None
 
 
+def stale_date_warning(root: Path, version: str, today: datetime.date) -> str | None:
+    """A sentence when the release date is a valid one that is more than STALE_AFTER old, otherwise None."""
+    try:
+        date = parse_changelog((root / "CHANGELOG.md").read_text(encoding="utf-8"))[0].get(version, (None, ""))[0]
+        released = datetime.date.fromisoformat(date) if date and DATE.match(date) else None
+    except OSError, ValueError:
+        return None
+    if released is None or today - released <= STALE_AFTER:
+        return None
+    return (
+        f"the CHANGELOG.md section for {version} is dated {date}, {(today - released).days} days ago: the release page "
+        "will show that date. Change it to the day you tag, or leave it if it is right"
+    )
+
+
 def check_dist(dist: Path, version: str) -> list[str]:
     problems: list[str] = []
     wheel_name = f"cloud_crawler_core-{version}-py3-none-any.whl"
@@ -327,6 +348,8 @@ def main(argv: list[str] | None = None) -> int:
         elif not any("CHANGELOG.md" in p for p in problems):
             problems.append(f"the CHANGELOG.md section for {version} is missing or empty: there are no release notes")
     github = os.environ.get("GITHUB_ACTIONS") == "true"
+    if tag and version and not problems and (stale := stale_date_warning(args.root, version, utc_today())):
+        print(f"::warning::{stale}" if github else f"warning: {stale}")
     if args.notes_out and not tag and version and UNRELEASED in sections and has_content(sections[UNRELEASED][1]):
         warning = "CHANGELOG.md still has entries under [Unreleased]; a real tag is refused until they are folded in"
         print(f"::warning::{warning}" if github else f"warning: {warning}")
