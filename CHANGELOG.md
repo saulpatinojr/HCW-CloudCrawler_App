@@ -11,83 +11,22 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-25
+
+The first release of the engine `cloud-crawler-core` 0.1.0 and the App edition 0.1.0, first merged in
+[saulpatinojr/HCW-CloudCrawler_App#2](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/2). The release
+carries the engine wheel the AddOn adopts (ADR 0002), the sdist and a CycloneDX SBOM, and provenance and SBOM
+attestations for the wheel and the sdist.
+
+In short: the engine (`cloud_crawler_core-0.1.0-py3-none-any.whl`, which depends on pydantic only); the appliance with its
+MCP server and `/api/health`; optional Microsoft Entra sign-in (off by default, so use it on a trusted lab network only until
+it is turned on, ADR 0004); a pipeline that checks the tag against every package version before it builds anything. Check
+where a file came from with `gh attestation verify <file> --repo saulpatinojr/HCW-CloudCrawler_App`.
+
 ### Security
 
 - Microsoft Entra sign-in for `/api` and `/mcp` (ticket #8, [ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md)). With `CC_AUTH_MODE=entra` every route except `GET /api/health` needs a valid Entra access token: RS256 signature against the tenant's signing keys (JWKS, fetched over HTTPS with a timeout and a short cache), `iss` (v2.0 and v1.0 forms), `aud`, `exp` and `nbf` with a declared clock skew, and `tid`. A failure is `401` with `WWW-Authenticate: Bearer` and the usual error shape; unreachable signing keys are `503`. The token and its claims are never logged. The human-only tools (`adr_accept`, `review_decide`, `collection_run_azure`) take the actor from the token's `oid`, need a person's delegated token (scope `access_as_user`, not an app-only token), and refuse a typed `actorId` that differs; `adr_create` records the token as author. New settings: `CC_AUTH_MODE`, `CC_ENTRA_TENANT_ID`, `CC_ENTRA_AUDIENCE`, `CC_ENTRA_HUMAN_SCOPE`, `CC_ENTRA_CLOCK_SKEW_SECONDS`, `CC_ENTRA_JWKS_CACHE_SECONDS`, `CC_BIND_HOST` (all in `.env.example`). The default is still `off`: a lab-only warning stays in the README. Entra settings with sign-in off, or `entra` without a tenant or audience, stop the start-up. Not tested against a real tenant (`VALIDATION.md`). The engine package is unchanged; the tool schemas make `actorId` optional, which the AddOn's `docs/whats-new-upstream.md` should record.
 - The server binds `127.0.0.1` unless `CC_BIND_HOST` is set; the container image sets `CC_BIND_HOST=0.0.0.0`, so the image listens as before. `/api/health` reports `auth`.
-
-### Changed
-
-- Dependencies: `pyjwt[crypto]==2.15.1` is now a direct, exactly pinned dependency of the appliance (host only, not the engine). It was already locked through the `mcp` SDK, so the resolved set is the same. `uv.lock` and `requirements.lock.txt` regenerated with `make lock`.
-- `CLAUDE.md`: next ADR number is 0005.
-- **Release workflows hardened before their first run (ticket #7).** `release.yml` is two jobs: `check` (read-only: the guard, then the notes) and `create` (the only job with `contents: write`, only for a `v*` tag); it no longer falls back to the words "See CHANGELOG.md" when the section is missing (it fails instead), no longer matches a section by a loose substring (`10.1.0` could have matched `0.1.0`), and tells a missing release apart from a failed lookup. `publish-core.yml` runs the guard before it builds or attests anything (before, a wrong tag would have produced permanent attestations first), builds with `--no-create-gitignore` (otherwise `dist/.gitignore` sits next to the wheel and the `dist/*` glob can make it an attested subject), verifies the wheel without downloading an unpinned `pydantic` inside the job that holds the write and signing permissions, keeps the SBOM in the workflow artifact (it was not), waits up to five minutes for the release and then fails with a clear message (before: one minute, then a bare `gh` error), verifies the attestations with `gh attestation verify` before it attaches anything (a failed check leaves nothing on the release), then uploads the three files by name and checks they are on the release. Both set `GH_REPO` so `gh` does not depend on the checkout's git remote, and check out the full history so the tagged commit can be compared with `main`.
-- **Owner decisions of 2026-10-25 recorded** in [ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md), new section "Owner decisions": the `503` when the Entra signing keys cannot be fetched stays; `CC_AUTH_MODE=off` stays the default, with the warning and without a refusal to start; the loopback bind is the default and `0.0.0.0` only inside the image; any valid token for the configured tenant and audience may call the model tools (no client allow-list or role check yet). The README and `VALIDATION.md` now state these as decided, not open. No code changed. Ticket #8 stays open for the real-tenant check.
-- `README.md`: the release section is now a numbered checklist (changelog, dry run, tag, check, rollback), says that a release carries three files, not two (the SBOM `cloud-crawler-core.cdx.json` was missing from the text), and links to the releases list, which resolves today; the `v0.1.0` page resolves once the tag is pushed.
-- `VALIDATION.md` re-run on 2026-10-25 at `ae2f271` plus this change: `fastapi` 0.159.1, 363 tests (302 on `main` plus 61 new), coverage 97.91 percent, the appliance image built and checked locally, the SBOM, the action pins checked against the real tags, and the release pipeline listed as not yet run.
-- AddOn note (for `HCW-CloudCrawler_AddOn`'s `docs/whats-new-upstream.md`, not edited from here): from `v0.1.0` the release carries a third asset, `cloud-crawler-core.cdx.json` (CycloneDX 1.5), and provenance and SBOM attestations for the wheel and sdist; the wheel's file name and URL pattern are unchanged. Nothing in `core-update.yml` needs to change.
-
-- Tests (ticket #13): the real-identifier scan in `tests/security/test_no_secrets.py` now asks git which files exist (`git ls-files --cached --others --exclude-standard`) instead of walking the folders, so ignored build output (bytecode caches, virtual environments) is never read, whatever the checkout path is. Where git is not available it falls back to the old walk with the same exclusions. What it catches is unchanged: the same folders, the same GUID rule, the same allow-list. Two new tests prove it: one plants a real-looking GUID in a throwaway git repository and in a checkout whose own folder name is a GUID (the scan must name it), and shows that an ignored cache holding the same GUID is not reported. Tests only; nothing reaches the lab edition.
-- Coverage (ticket #17): `pyproject.toml` now omits test files (`*/tests/*`, `*/conftest.py`) from measurement, so `--cov=packages` no longer counts `packages/cloud-crawler-core/tests`. The honest figure, source files only, is 97.38 percent (233 tests). The minimum is raised from 85 to 96 percent in `pyproject.toml` and in the `--cov-fail-under` flag in `.github/workflows/ci.yml` (which overrides the file). New `tests/unit/test_main_entry.py` runs `python -m cloud_crawler_appliance` in-process: each of the five refused credential variables, a bad setting, the uvicorn start-up options, and the `__main__` guard (`__main__.py` 0 to 100 percent). `tests/unit/test_mcp_host.py` now covers the stdio host with a stand-in client (open, call, close, wrong or missing server version, error results) and the base host interface (`host.py` 79 to 99 percent). Tests and configuration only; nothing reaches the lab edition.
-- `VALIDATION.md` re-run at `fc542be` on 2026-10-24 (218 tests, coverage 96.25 %, 59 files formatted, contract test, `pip-audit`, CI run 40101984078 including the `image` job). It now says plainly that the Dockerfile repeats the base image digest and does not read `infrastructure/docker/versions.env`, which is documentation only; the same note is in the header of `versions.env` (ticket #14). Documents only, so nothing reaches the lab edition.
-- Dependencies: `httpx2` and `httpcore2` 2.15.1 → 2.16.0 in `uv.lock` and `requirements.lock.txt` (both arrive through the `mcp` SDK; `httpx2` requires one exact `httpcore2`). This replaces the open Dependabot pull requests #26 (`httpcore2`) and #27 (`httpx2`): each failed alone, `lint` because Dependabot does not regenerate `requirements.lock.txt` and `pip-audit` because the half-moved pair could not be installed. `.github/dependabot.yml` now groups the two. No public surface changed, so nothing reaches the lab edition. Verified: `make lint`, `uv run pytest -q --cov=packages --cov=src` (218 passed, coverage 96.25 %), `make test-contract` (1 passed against the real Azure MCP Server 3.0.0) and `pip-audit -r requirements.lock.txt --strict` (no known vulnerabilities).
-- Dependencies: `pydantic` 2.14.0 → 2.14.1 (the exact pin in `pyproject.toml`) with `pydantic-core` 2.50.0 → 2.50.1 in `uv.lock` and `requirements.lock.txt`. This replaces the open Dependabot pull requests #3 and #4: #4 (`pydantic-core` alone) could not resolve because pydantic pins its core to one exact version. `.github/dependabot.yml` now groups `pydantic` and `pydantic-core` so they arrive in one pull request. The engine package's `pydantic>=2.14,<3` range is unchanged, so nothing reaches the lab edition. Verified: `make lint`, `uv run pytest -q --cov=packages --cov=src` (218 passed, coverage 96.25 %) and `make test-contract` (1 passed against the real Azure MCP Server 3.0.0).
-
-### Added
-
-- **Release version guard (ticket #7).** `scripts/check-release-version.py` fails when the engine's `pyproject.toml`, the appliance's `pyproject.toml`, the two `__version__` constants and the two `uv.lock` entries do not all name the same plain `X.Y.Z`. It runs in the `lint` job of `ci.yml` on every pull request and in `make lint`, so a version bump that misses a place is caught before anyone tags. On a `v*` tag, `release.yml` and `publish-core.yml` also require that the tag is `v` plus that version, that `CHANGELOG.md` has a dated, non-empty section for it and nothing left under `[Unreleased]`, that the tagged commit is on `main`, and that `dist/` holds exactly the wheel and the sdist for that version with the same version inside the wheel. A `v*` tag can never be moved or deleted (ruleset "Protect release tags"), so these checks stop a wrong tag from producing a release instead of trying to undo it. 33 tests in `tests/unit/test_release_guard.py`.
-- **Dry run of the release pipeline (ticket #7, ticket #16).** `release.yml` and `publish-core.yml` can be started by hand (Run workflow) on `main`: no tag, no release, nothing published. `release.yml` shows the release notes a tag would publish; `publish-core.yml` builds, verifies and writes the SBOM, keeps the three files as a workflow artifact, prints their sha256 and, unless "attest" is unticked, creates and verifies the attestations. How to run it: README, "Release steps". Only a pushed `v*` tag creates a release or attaches files, so a manual run can never publish, whatever ref it names; to repeat a failed tag run use "Re-run failed jobs".
-- `tests/unit/test_workflows.py` (28 tests) pins the eight workflow files: SHA-pinned actions with a version comment, `ubuntu-26.04`, top-level `contents: read`, no `--clobber`, nothing published without a `v*` tag, write permission only in the release-creating job, the guard wired in, and the coverage gate named in `ci.yml` matching `pyproject.toml`.
-- **Self-merging pull request, ready for the workflows that will need it.** The composite action `.github/actions/self-merging-pr` (the same file is in every HCW application repository) turns the files a job changed into one pull request on a fixed branch, opened with a short-lived GitHub App token scoped to this repository (Contents and Pull requests write), because `main` is protected by a ruleset that requires a pull request and a pull request opened with `GITHUB_TOKEN` neither is allowed here nor starts the required checks. It can turn on squash auto-merge and wait for the merge. `rehearse-self-merging-pr.yml` (Run workflow) rehearses it against a harmless file: by default it opens the pull request, turns on auto-merge, confirms the required checks start, and closes the pull request again; with `merge` ticked it really merges `.github/rehearsal.txt` once as the end-to-end proof. The credential is the repository-admin App (HCW Portfolio Admin) held by the `admin-ops` environment, an interim choice; `dependabot.yml` now also reads `.github/actions/*` so the action's pins stay current. **[VERIFY]** by running the rehearsal; it has not run yet.
-
-- `.github/workflows/repository-admin.yml` (pull request #19): a manual, owner-approved workflow for repository chores. Its tasks are `show-plan`,
-  `protect-main`, `protect-release-tags` and `delete-merged-branches`; it runs in the `admin-ops` environment, does nothing unless `apply` is ticked, and uses a
-  short-lived GitHub App token limited to this repository. No product code changed. The two rulesets it applied (main requires a pull request and the checks
-  `lint`, `test`, `contract`, `pip-audit`, `secret-scan` and `image`; `v*` tags cannot be moved or deleted) are described in the README.
-- README: a section "Is there a user interface?" (no: this edition is headless by design, the screens live in the website and the AddOn's pane) and a section on
-  branch and tag protection. `docs/adr/README.md` gains an index of the three decisions.
-- `docs/whats-new-upstream.md` in the AddOn repository (`HCW-CloudCrawler_AddOn`) records what changes here reach the AddOn; `CLAUDE.md` says to keep it current.
-
-- `tests/security/test_no_secrets.py`: the GUID-scan test now also checks that `.pyc` and `.pyo` files outside a
-  `__pycache__` folder are skipped, so the file-suffix filter is covered on its own.
-
-- `CLAUDE.md`: owner-communication rule to give the exact text for every form field, always with a description.
-
-- `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
-  instructions, links).
-
-### Changed
-
-- README: the repository layout lists `repository-admin`, and release step 1 now matches the changelog as it stands (the `## [0.1.0]` section already exists and
-  nothing is tagged yet, so the `[Unreleased]` entries are folded into it on release day).
-- `infrastructure/README.md` says plainly that the Dockerfile repeats the digest from `versions.env` and that nothing compares the two (ticket #14).
-- `VALIDATION.md` re-run from `main` at `697cdc4` on 2026-10-24 (218 tests, coverage 96.25 percent, contract test and pip-audit clean, CI runs on that commit).
-- `CLAUDE.md`: when a change reaches the AddOn, add an entry to the AddOn's `docs/whats-new-upstream.md` in the same change set, or say in the pull request why not.
-- `codeql.yml` and `dependency-review.yml` use the same runner label as every other workflow (`ubuntu-26.04`, not `ubuntu-latest`). `publish-core.yml` no
-  longer passes `--clobber`: attaching the wheel and sdist to a release fails if a file of the same name is already there, so a re-run cannot silently
-  replace published files. It also writes a CycloneDX SBOM of the engine's locked runtime dependencies (`uv export --format cyclonedx1.5`), attaches it to
-  the release and attests it with `actions/attest` v4.2.2 (SHA-pinned). The release path itself has not run yet; it first runs on the `v0.1.0` tag
-  (ticket #7). Part of ticket #16.
-- `VALIDATION.md` re-run from `main` at `fed357b` on 2026-10-24: current file counts, test and coverage numbers, CI evidence for the image job and the
-  security workflows, no `v0.1.0` tag yet, the missing sign-in on `/api` and `/mcp` recorded as a limitation, and the dead reference to
-  `docs/TEMPLATE.md` removed (ticket #14).
-- `CLAUDE.md`: the form-filling rule now says secrets are never written in chat, pull requests, issues or documentation; the owner enters each secret
-  only in the secure settings field or through a script that reads it from a file.
-
-### Fixed
-
-- `ci.yml`: the step that runs the tests was still named "85 percent coverage gate" although the gate has been 96 percent since ticket #17; the name and the header comment now say 96, and a test keeps the name, the flag and `pyproject.toml` in step.
-- `tests/security/test_no_secrets.py`: the real-identifier scan no longer reads compiled bytecode caches (`__pycache__`, `.pyc`, `.pyo`). They embed the
-  checkout's absolute path, so a checkout whose path contained a GUID (a temporary or CI directory) failed `test_no_real_guids_outside_placeholders`
-  with dozens of false hits. The scan of source files is unchanged, and a new test proves both halves: caches are skipped, and a real-looking GUID in a
-  source file is still reported (ticket #13).
-
-### Security
-
-## [0.1.0] - 2026-10-21
-
-The first release of the engine `cloud-crawler-core` 0.1.0 and the App edition 0.1.0, as merged in
-[saulpatinojr/HCW-CloudCrawler_App#2](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/2). The release
-workflows attach the engine wheel the AddOn adopts (ADR 0002).
 
 ### Added
 
@@ -170,6 +109,27 @@ workflows attach the engine wheel the AddOn adopts (ADR 0002).
 - Repository created from the template; initialised for the Python stack;
   MIT license; security policy filled in.
 
+- **Release version guard (ticket #7).** `scripts/check-release-version.py` fails when the engine's `pyproject.toml`, the appliance's `pyproject.toml`, the two `__version__` constants and the two `uv.lock` entries do not all name the same plain `X.Y.Z`. It runs in the `lint` job of `ci.yml` on every pull request and in `make lint`, so a version bump that misses a place is caught before anyone tags. On a `v*` tag, `release.yml` and `publish-core.yml` also require that the tag is `v` plus that version, that `CHANGELOG.md` has a dated, non-empty section for it and nothing left under `[Unreleased]`, that the tagged commit is on `main`, and that `dist/` holds exactly the wheel and the sdist for that version with the same version inside the wheel. A `v*` tag can never be moved or deleted (ruleset "Protect release tags"), so these checks stop a wrong tag from producing a release instead of trying to undo it. 33 tests in `tests/unit/test_release_guard.py`.
+- **Dry run of the release pipeline (ticket #7, ticket #16).** `release.yml` and `publish-core.yml` can be started by hand (Run workflow) on `main`: no tag, no release, nothing published. `release.yml` shows the release notes a tag would publish; `publish-core.yml` builds, verifies and writes the SBOM, keeps the three files as a workflow artifact, prints their sha256 and, unless "attest" is unticked, creates and verifies the attestations. How to run it: README, "Release steps". Only a pushed `v*` tag creates a release or attaches files, so a manual run can never publish, whatever ref it names; to repeat a failed tag run use "Re-run failed jobs".
+- `tests/unit/test_workflows.py` (28 tests) pins the eight workflow files: SHA-pinned actions with a version comment, `ubuntu-26.04`, top-level `contents: read`, no `--clobber`, nothing published without a `v*` tag, write permission only in the release-creating job, the guard wired in, and the coverage gate named in `ci.yml` matching `pyproject.toml`.
+- **Self-merging pull request, ready for the workflows that will need it.** The composite action `.github/actions/self-merging-pr` (the same file is in every HCW application repository) turns the files a job changed into one pull request on a fixed branch, opened with a short-lived GitHub App token scoped to this repository (Contents and Pull requests write), because `main` is protected by a ruleset that requires a pull request and a pull request opened with `GITHUB_TOKEN` neither is allowed here nor starts the required checks. It can turn on squash auto-merge and wait for the merge. `rehearse-self-merging-pr.yml` (Run workflow) rehearses it against a harmless file: by default it opens the pull request, turns on auto-merge, confirms the required checks start, and closes the pull request again; with `merge` ticked it really merges `.github/rehearsal.txt` once as the end-to-end proof. The credential is the repository-admin App (HCW Portfolio Admin) held by the `admin-ops` environment, an interim choice; `dependabot.yml` now also reads `.github/actions/*` so the action's pins stay current. **[VERIFY]** by running the rehearsal; it has not run yet.
+
+- `.github/workflows/repository-admin.yml` (pull request #19): a manual, owner-approved workflow for repository chores. Its tasks are `show-plan`,
+  `protect-main`, `protect-release-tags` and `delete-merged-branches`; it runs in the `admin-ops` environment, does nothing unless `apply` is ticked, and uses a
+  short-lived GitHub App token limited to this repository. No product code changed. The two rulesets it applied (main requires a pull request and the checks
+  `lint`, `test`, `contract`, `pip-audit`, `secret-scan` and `image`; `v*` tags cannot be moved or deleted) are described in the README.
+- README: a section "Is there a user interface?" (no: this edition is headless by design, the screens live in the website and the AddOn's pane) and a section on
+  branch and tag protection. `docs/adr/README.md` gains an index of the three decisions.
+- `docs/whats-new-upstream.md` in the AddOn repository (`HCW-CloudCrawler_AddOn`) records what changes here reach the AddOn; `CLAUDE.md` says to keep it current.
+
+- `tests/security/test_no_secrets.py`: the GUID-scan test now also checks that `.pyc` and `.pyo` files outside a
+  `__pycache__` folder are skipped, so the file-suffix filter is covered on its own.
+
+- `CLAUDE.md`: owner-communication rule to give the exact text for every form field, always with a description.
+
+- `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
+  instructions, links).
+
 ### Changed
 
 - Review round on the first pull request: `adr_create` refuses a claim its
@@ -189,6 +149,40 @@ workflows attach the engine wheel the AddOn adopts (ADR 0002).
   yamllint (spaced one-line mappings allowed by `.yamllint.yaml`, long
   workflow lines wrapped), markdownlint and shellcheck.
 
+- Dependencies: `pyjwt[crypto]==2.15.1` is now a direct, exactly pinned dependency of the appliance (host only, not the engine). It was already locked through the `mcp` SDK, so the resolved set is the same. `uv.lock` and `requirements.lock.txt` regenerated with `make lock`.
+- `CLAUDE.md`: next ADR number is 0005.
+- **Release workflows hardened before their first run (ticket #7).** `release.yml` is two jobs: `check` (read-only: the guard, then the notes) and `create` (the only job with `contents: write`, only for a `v*` tag); it no longer falls back to the words "See CHANGELOG.md" when the section is missing (it fails instead), no longer matches a section by a loose substring (`10.1.0` could have matched `0.1.0`), and tells a missing release apart from a failed lookup. `publish-core.yml` runs the guard before it builds or attests anything (before, a wrong tag would have produced permanent attestations first), builds with `--no-create-gitignore` (otherwise `dist/.gitignore` sits next to the wheel and the `dist/*` glob can make it an attested subject), verifies the wheel without downloading an unpinned `pydantic` inside the job that holds the write and signing permissions, keeps the SBOM in the workflow artifact (it was not), waits up to five minutes for the release and then fails with a clear message (before: one minute, then a bare `gh` error), verifies the attestations with `gh attestation verify` before it attaches anything (a failed check leaves nothing on the release), then uploads the three files by name and checks they are on the release. Both set `GH_REPO` so `gh` does not depend on the checkout's git remote, and check out the full history so the tagged commit can be compared with `main`.
+- **Owner decisions of 2026-10-25 recorded** in [ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md), new section "Owner decisions": the `503` when the Entra signing keys cannot be fetched stays; `CC_AUTH_MODE=off` stays the default, with the warning and without a refusal to start; the loopback bind is the default and `0.0.0.0` only inside the image; any valid token for the configured tenant and audience may call the model tools (no client allow-list or role check yet). The README and `VALIDATION.md` now state these as decided, not open. No code changed. Ticket #8 stays open for the real-tenant check.
+- `README.md`: the release section is now a numbered checklist (changelog, dry run, tag, check, rollback), says that a release carries three files, not two (the SBOM `cloud-crawler-core.cdx.json` was missing from the text), and links to the releases list, which resolves today; the `v0.1.0` page resolves once the tag is pushed.
+- `VALIDATION.md` re-run on 2026-10-25 at `ae2f271` plus this change: `fastapi` 0.159.1, 363 tests (302 on `main` plus 61 new), coverage 97.91 percent, the appliance image built and checked locally, the SBOM, the action pins checked against the real tags, and the release pipeline listed as not yet run.
+- AddOn note (for `HCW-CloudCrawler_AddOn`'s `docs/whats-new-upstream.md`, not edited from here): from `v0.1.0` the release carries a third asset, `cloud-crawler-core.cdx.json` (CycloneDX 1.5), and provenance and SBOM attestations for the wheel and sdist; the wheel's file name and URL pattern are unchanged. Nothing in `core-update.yml` needs to change.
+
+- Tests (ticket #13): the real-identifier scan in `tests/security/test_no_secrets.py` now asks git which files exist (`git ls-files --cached --others --exclude-standard`) instead of walking the folders, so ignored build output (bytecode caches, virtual environments) is never read, whatever the checkout path is. Where git is not available it falls back to the old walk with the same exclusions. What it catches is unchanged: the same folders, the same GUID rule, the same allow-list. Two new tests prove it: one plants a real-looking GUID in a throwaway git repository and in a checkout whose own folder name is a GUID (the scan must name it), and shows that an ignored cache holding the same GUID is not reported. Tests only; nothing reaches the lab edition.
+- Coverage (ticket #17): `pyproject.toml` now omits test files (`*/tests/*`, `*/conftest.py`) from measurement, so `--cov=packages` no longer counts `packages/cloud-crawler-core/tests`. The honest figure, source files only, is 97.38 percent (233 tests). The minimum is raised from 85 to 96 percent in `pyproject.toml` and in the `--cov-fail-under` flag in `.github/workflows/ci.yml` (which overrides the file). New `tests/unit/test_main_entry.py` runs `python -m cloud_crawler_appliance` in-process: each of the five refused credential variables, a bad setting, the uvicorn start-up options, and the `__main__` guard (`__main__.py` 0 to 100 percent). `tests/unit/test_mcp_host.py` now covers the stdio host with a stand-in client (open, call, close, wrong or missing server version, error results) and the base host interface (`host.py` 79 to 99 percent). Tests and configuration only; nothing reaches the lab edition.
+- `VALIDATION.md` re-run at `fc542be` on 2026-10-24 (218 tests, coverage 96.25 %, 59 files formatted, contract test, `pip-audit`, CI run 40101984078 including the `image` job). It now says plainly that the Dockerfile repeats the base image digest and does not read `infrastructure/docker/versions.env`, which is documentation only; the same note is in the header of `versions.env` (ticket #14). Documents only, so nothing reaches the lab edition.
+- Dependencies: `httpx2` and `httpcore2` 2.15.1 → 2.16.0 in `uv.lock` and `requirements.lock.txt` (both arrive through the `mcp` SDK; `httpx2` requires one exact `httpcore2`). This replaces the open Dependabot pull requests #26 (`httpcore2`) and #27 (`httpx2`): each failed alone, `lint` because Dependabot does not regenerate `requirements.lock.txt` and `pip-audit` because the half-moved pair could not be installed. `.github/dependabot.yml` now groups the two. No public surface changed, so nothing reaches the lab edition. Verified: `make lint`, `uv run pytest -q --cov=packages --cov=src` (218 passed, coverage 96.25 %), `make test-contract` (1 passed against the real Azure MCP Server 3.0.0) and `pip-audit -r requirements.lock.txt --strict` (no known vulnerabilities).
+- Dependencies: `pydantic` 2.14.0 → 2.14.1 (the exact pin in `pyproject.toml`) with `pydantic-core` 2.50.0 → 2.50.1 in `uv.lock` and `requirements.lock.txt`. This replaces the open Dependabot pull requests #3 and #4: #4 (`pydantic-core` alone) could not resolve because pydantic pins its core to one exact version. `.github/dependabot.yml` now groups `pydantic` and `pydantic-core` so they arrive in one pull request. The engine package's `pydantic>=2.14,<3` range is unchanged, so nothing reaches the lab edition. Verified: `make lint`, `uv run pytest -q --cov=packages --cov=src` (218 passed, coverage 96.25 %) and `make test-contract` (1 passed against the real Azure MCP Server 3.0.0).
+
+- README: the repository layout lists `repository-admin`, and release step 1 now matches the changelog as it stands (the `## [0.1.0]` section already exists and
+  nothing is tagged yet, so the `[Unreleased]` entries are folded into it on release day).
+- `infrastructure/README.md` says plainly that the Dockerfile repeats the digest from `versions.env` and that nothing compares the two (ticket #14).
+- `VALIDATION.md` re-run from `main` at `697cdc4` on 2026-10-24 (218 tests, coverage 96.25 percent, contract test and pip-audit clean, CI runs on that commit).
+- `CLAUDE.md`: when a change reaches the AddOn, add an entry to the AddOn's `docs/whats-new-upstream.md` in the same change set, or say in the pull request why not.
+- `codeql.yml` and `dependency-review.yml` use the same runner label as every other workflow (`ubuntu-26.04`, not `ubuntu-latest`). `publish-core.yml` no
+  longer passes `--clobber`: attaching the wheel and sdist to a release fails if a file of the same name is already there, so a re-run cannot silently
+  replace published files. It also writes a CycloneDX SBOM of the engine's locked runtime dependencies (`uv export --format cyclonedx1.5`), attaches it to
+  the release and attests it with `actions/attest` v4.2.2 (SHA-pinned). The release path itself has not run yet; it first runs on the `v0.1.0` tag
+  (ticket #7). Part of ticket #16.
+- `VALIDATION.md` re-run from `main` at `fed357b` on 2026-10-24: current file counts, test and coverage numbers, CI evidence for the image job and the
+  security workflows, no `v0.1.0` tag yet, the missing sign-in on `/api` and `/mcp` recorded as a limitation, and the dead reference to
+  `docs/TEMPLATE.md` removed (ticket #14).
+- `CLAUDE.md`: the form-filling rule now says secrets are never written in chat, pull requests, issues or documentation; the owner enters each secret
+  only in the secure settings field or through a script that reads it from a file.
+
 ### Fixed
 
-### Security
+- `ci.yml`: the step that runs the tests was still named "85 percent coverage gate" although the gate has been 96 percent since ticket #17; the name and the header comment now say 96, and a test keeps the name, the flag and `pyproject.toml` in step.
+- `tests/security/test_no_secrets.py`: the real-identifier scan no longer reads compiled bytecode caches (`__pycache__`, `.pyc`, `.pyo`). They embed the
+  checkout's absolute path, so a checkout whose path contained a GUID (a temporary or CI directory) failed `test_no_real_guids_outside_placeholders`
+  with dozens of false hits. The scan of source files is unchanged, and a new test proves both halves: caches are skipped, and a real-looking GUID in a
+  source file is still reported (ticket #13).
