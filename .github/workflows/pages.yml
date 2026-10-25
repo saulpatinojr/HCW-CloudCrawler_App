@@ -1,0 +1,83 @@
+# The documentation site (ticket #11): GitHub Pages, published by this workflow rather than from a branch
+# (https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
+# The pages are rendered from Markdown the repository already keeps (README, VALIDATION, CHANGELOG, CONTRIBUTING,
+# the security policy and the ADRs) by scripts/build-pages.py, which also checks every internal link and fragment
+# and fails the build on a broken one. Nothing is written twice, so the site cannot claim more than the repository does.
+# Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot proposes updates.
+#   build   (contents: read)  runs on a pull request too, so a broken link is caught before merge.
+#   deploy  (pages and id-token: write; the `github-pages` environment)  only on a push to main or a manual run, and
+#           only once the repository variable PAGES_ENABLED is 'true' (the same switch pattern as PYPI_ENABLED in
+#           publish-core.yml). Until then the workflow builds and checks but publishes nothing, so merging it does
+#           not turn a run red and does not make anything public.
+# To publish (the owner, once, after this workflow is on main; both need repository admin rights):
+#   gh api -X POST repos/saulpatinojr/HCW-CloudCrawler_App/pages -f build_type=workflow
+#   gh variable set PAGES_ENABLED --body true --repo saulpatinojr/HCW-CloudCrawler_App
+# then run this workflow (Actions, pages, Run workflow, branch main). Enabling Pages makes the rendered text public.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "VALIDATION.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - ".github/SECURITY.md"
+      - "docs/adr/**"
+      - "scripts/build-pages.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "README.md"
+      - "VALIDATION.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - ".github/SECURITY.md"
+      - "docs/adr/**"
+      - "scripts/build-pages.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: pages-build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with: { python-version: "3.14" }
+      - run: python -m pip install "uv==0.11.32"
+      - run: uv sync --locked --only-group docs
+      - name: Render the pages and check every internal link, every fragment and the phone viewport tag
+        run: uv run --locked --only-group docs python scripts/build-pages.py
+      - name: Check the Pages settings (only when a deployment will follow)
+        if: github.event_name != 'pull_request' && vars.PAGES_ENABLED == 'true'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Package the site
+        if: github.event_name != 'pull_request' && vars.PAGES_ENABLED == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with: { path: _site }
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      pages: write # to deploy to Pages
+      id-token: write # to prove, to Pages, that the deployment comes from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

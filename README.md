@@ -474,8 +474,8 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
-scripts/                       the lockfile check, the release version guard, the pre-tag check, the release publisher, the release wheel verifier and the image scan
-.github/workflows/             ci, security, image-scan, codeql, dependency-review, publish-core (the whole release), repository-admin
+scripts/                       the lockfile check, the release version guard, the pre-tag check, the release publisher, the release wheel verifier, the image scan and the documentation site builder
+.github/workflows/             ci, security, image-scan, codeql, dependency-review, pages (the documentation site), publish-core (the whole release), repository-admin
 docs/adr/                      this edition's decisions
 ```
 
@@ -539,6 +539,29 @@ It builds the image, scans it in a disposable, locked-down container (read-only 
 socket), prints a summary and removes everything it created. Trivy is pinned by digest (a tag alone can be moved; see
 [GHSA-69fq-xp46-6x23](https://github.com/advisories/GHSA-69fq-xp46-6x23)). Docs:
 [Trivy](https://trivy.dev/latest/docs/), [ignoring findings](https://trivy.dev/latest/docs/configuration/filtering/).
+
+## The documentation site
+
+The pages you are reading can also be published as a small website with GitHub Pages. The site is rendered from the
+files in this repository (this README, `VALIDATION.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `.github/SECURITY.md` and
+`docs/adr/`), so there is no second copy to keep up to date, and its menu points at sections of this page. To build it
+yourself and check every link, in bash or PowerShell, from the repository root:
+
+```bash
+uv sync --locked --only-group docs
+uv run --locked --only-group docs python scripts/build-pages.py
+```
+
+You should see `built 10 pages in _site; every internal link and fragment resolves`; open `_site/index.html` in a browser.
+The workflow `.github/workflows/pages.yml` runs the same build on every pull request that changes those files. It publishes
+only after the owner turns Pages on, which makes the rendered text public (the repository itself is already public):
+
+1. Run `gh api -X POST repos/saulpatinojr/HCW-CloudCrawler_App/pages -f build_type=workflow` (or choose **GitHub Actions**
+   as the source under [Settings, Pages](https://github.com/saulpatinojr/HCW-CloudCrawler_App/settings/pages)).
+2. Run `gh variable set PAGES_ENABLED --body true --repo saulpatinojr/HCW-CloudCrawler_App`.
+3. Under Actions, choose **pages**, **Run workflow**, branch `main`. The run's `deploy` job prints the site address.
+
+Docs: [Using custom workflows with GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
 ## Repository standards
 

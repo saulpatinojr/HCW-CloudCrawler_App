@@ -142,6 +142,19 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
 - Issue form "Work item (maintainers)" (`.github/ISSUE_TEMPLATE/work_item.yml`), for planned work with acceptance
   criteria, the way the portfolio's other repositories use it. The bug, feature and decision forms now also add the label
   `product:cloudcrawler`.
+- **A documentation site on GitHub Pages, ready to switch on** (ticket #11). `scripts/build-pages.py` renders the
+  README, `VALIDATION.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, the security policy and the ADRs into ten self-contained pages
+  (one inline style sheet, no script, no external request, a viewport tag for phones, a dark theme) and then checks every
+  internal link and `#fragment` in what it built; a broken one stops the build. Nothing is written twice, so the site says
+  only what the repository says, and every page carries a "Not production" notice that matches `/api/health` reporting
+  `production: false`. The new workflow `pages.yml` builds and checks on every pull request that touches those files, and
+  deploys with `actions/configure-pages`, `actions/upload-pages-artifact` and `actions/deploy-pages` (pinned by commit, the
+  `github-pages` environment, `pages: write` only in the deploy job) only on a push to `main` or a manual run and only when
+  the repository variable `PAGES_ENABLED` is `true`. Until the owner enables Pages and sets that variable (README, "The
+  documentation site"), the workflow publishes nothing and nothing becomes public. The build installs one new locked
+  dependency group, `docs` (`markdown-it-py` 4.2.0, which `uv.lock` already held); it is not a default group, so the image
+  and the engine are unchanged. The site has no separate pages yet for Installation, Configuration, Deployment,
+  Operations, Testing or Troubleshooting: those are sections of the home page.
 
 ### Changed
 

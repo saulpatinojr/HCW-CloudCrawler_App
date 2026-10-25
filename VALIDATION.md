@@ -77,10 +77,27 @@ only. Nothing was pushed to a registry and no workflow was started.
 | Workflow and script syntax | `actionlint -shellcheck= -pyflakes= <file>` per workflow; `shellcheck scripts/scan-image.sh`; `yamllint -c .yamllint.yaml` on the new and changed YAML; `zizmor` on `image-scan.yml` and `security.yml` | actionlint: only the known `ubuntu-26.04` label message on every file. shellcheck: clean. yamllint: clean for `image-scan.yml`, `security.yml`, `.trivyignore.yaml`, the issue forms, `dependabot.yml` and `.coderabbit.yaml`; it still reports line-length and end-of-file findings in `rehearse-self-merging-pr.yml` and `repository-admin.yml`, which this change does not touch. zizmor: no findings (one informational note, a missing job name, was fixed). Syntax only: this does not run the workflow |
 | The ticket's own validation grep | The `grep -rn` in ticket #12 (placeholder owners, the missing template document, the open verification marker) over `README.md`, `VALIDATION.md`, `CONTRIBUTING.md`, `.github` and `infrastructure` | No hits |
 
+## Ran for the documentation site (ticket #11)
+
+Run on the branch `cc-sweep-pages-site` on 2026-10-25 from a fresh clone of `main` at `7afaf3b`, Python 3.14.6, uv 0.12.0
+(and `uvx uv@0.11.32 lock --check`, the version the workflows install), Windows. Nothing was published and no workflow was
+started for this change.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| The site builds from the repository's own files | `uv sync --locked --only-group docs`, then `uv run --locked --only-group docs python scripts/build-pages.py` | `built 10 pages in _site; every internal link and fragment resolves` (home, the ADR index, four ADRs, validation, release notes, contributing, security policy) |
+| The link check can fail | A copy of the built site with a missing page, a missing `#fragment`, a plain `http://` link and no viewport tag | All four were reported by `check_site`; the real build reports none |
+| The lock still matches | `uv lock --check` with uv 0.12.0 and with uv 0.11.32; `bash scripts/check-lockfiles.sh` | Both pass; the lockfile export is unchanged (the new `docs` group is not in `requirements.lock.txt`) |
+| Lint, format, tests | `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest -q --cov=packages --cov=src` | All checks passed; 525 passed, 45 skipped on Windows (no `bash` and `jq` for `test_repository_admin_required_checks.py`), 1 deselected; the 4 new workflow tests are among the passes |
+| Workflow syntax | `yamllint -c .yamllint.yaml` and `actionlint` on `pages.yml` | yamllint clean; actionlint only the known `ubuntu-26.04` label message |
+| Looks right | Microsoft Edge headless screenshots of `index.html` and one ADR at 1280 pixels, and of `validation.html` at 500 pixels (the smallest width headless Edge uses) | Readable, no sideways scrolling at 500 pixels, dark theme applied. A screenshot at 390 pixels was cut off by the headless minimum width, so a real phone was not checked |
+
 ## Did not run
 
 | Check | Why | Where it runs |
 | --- | --- | --- |
+| GitHub Pages deployment (`configure-pages`, `upload-pages-artifact`, `deploy-pages`, the `github-pages` environment) and the public site address | Pages is not enabled and the deploy job is off until the repository variable `PAGES_ENABLED` is `true`; a pull request never deploys | The first run after the owner follows the README section "The documentation site". The `pages-build` job runs on the pull request |
+| External links on the site (https addresses inside the Markdown) | The check is offline and resolves internal links only | Not run anywhere; a link checker over the live site is the follow-up once it is public |
 | Entra sign-in against a real tenant | No Entra tenant and no network access to `login.microsoftonline.com` in the session; every token in the tests is minted locally and the key set is a local fixture | The owner's first deployment with `CC_AUTH_MODE=entra`: the README lists the app registration and the check (`/api/health` shows `"auth": "entra"`, `POST /mcp` without a token answers 401, then a real token from the website works) |
 | The image scan on a GitHub runner | The scan was run on Docker Desktop on Windows, and no workflow was started here. A runner differs in how bind-mounted folders are owned (the script runs Trivy as the runner's own user id) and in the Trivy database mirror it can reach | The first run is the pull request that adds `image-scan.yml` (its trigger covers its own files) and then the Monday schedule; the owner can also use **Run workflow**. If it fails on a permission error, the script's `--user` and cache folder are the place to look |
 | Container registry path for Azure MCP (`azure-sdk/azure-mcp` versus `azure-mcp`) | No registry read; not needed by this slice (no Azure MCP container yet) | ADR 0001 step 1, at the first derived-image build |
