@@ -110,7 +110,7 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
 
 - **Release version guard (ticket #7).** `scripts/check-release-version.py` fails when the engine's `pyproject.toml`, the appliance's `pyproject.toml`, the two `__version__` constants and the two `uv.lock` entries do not all name the same plain `X.Y.Z`. It runs in the `lint` job of `ci.yml` on every pull request and in `make lint`, so a version bump that misses a place is caught before anyone tags. For a `v*` tag, and in the dry run (`--rehearse`, which takes the tag to be `v` plus the version), `publish-core.yml` also requires that the tag is `v` plus that version, that `CHANGELOG.md` has exactly one section for it with a date that exists and is not in the future and with real entries (HTML comments and link reference definitions are not entries), that nothing is left under Unreleased (any letter case, with or without brackets), that the tagged commit is on `main`, and that `dist/` holds exactly the wheel and the sdist for that version with the same version inside the wheel. A date more than a week old is only a warning (the release page will show it). A `v*` tag can never be moved or deleted (ruleset "Protect release tags"), so these checks stop a wrong tag from producing a release instead of trying to undo it. 68 tests in `tests/unit/test_release_guard.py`.
 - **Dry run and pre-tag check (ticket #7, ticket #16).** `publish-core.yml` can be started by hand (Run workflow) on `main`, and only on `main`: no tag, no release, nothing published. It takes the tag to be `v` plus the package version and runs the same changelog, ancestry and build checks a real tag runs, builds, verifies, writes the SBOM, keeps the three files as a workflow artifact and prints their sha256 and the release notes. Attestations go into the permanent public signing log, so they are created only when "attest" is ticked; a dry run with "attest" ticked, green in `build` and `attest` on the commit that will be tagged, is required before any tag. `scripts/pre-tag-check.py` checks this before the owner tags: the commit must be the tip of `origin/main` (or identical to it in `.github` and `scripts`) and such a dry run must exist for exactly that commit, because a tag on an older commit runs that commit's older workflow. The dry run cannot reproduce an older commit's workflow, nor the tag event itself (whether GitHub starts the workflow for the tag, and the token's behaviour in the release job). 26 tests in `tests/unit/test_pre_tag_check.py`.
-- `tests/unit/test_workflows.py` (47 tests) pins the seven workflow files: SHA-pinned actions with a version comment, `ubuntu-26.04`, top-level `contents: read`, no `--clobber`, the tag filter (only `vMAJOR.MINOR.PATCH`), nothing published without a `v*` tag, the write and signing permissions only in the jobs that use them, a time limit on every release job, the guard wired in, and the coverage gate named in `ci.yml` matching `pyproject.toml`. `tests/unit/test_release_publish.py` (39 tests) runs the draft, check and publish steps and the attestation commands against a fake of `gh`.
+- `tests/unit/test_workflows.py` (49 tests) pins the eight workflow files: SHA-pinned actions with a version comment, `ubuntu-26.04`, top-level `contents: read`, no `--clobber`, the tag filter (only `vMAJOR.MINOR.PATCH`), nothing published without a `v*` tag, the write and signing permissions only in the jobs that use them, a time limit on every release job, the guard wired in, and the coverage gate named in `ci.yml` matching `pyproject.toml`. `tests/unit/test_release_publish.py` (39 tests) runs the draft, check and publish steps and the attestation commands against a fake of `gh`.
 - **Self-merging pull request, ready for the workflows that will need it.** The composite action `.github/actions/self-merging-pr` (the same file is in every HCW application repository) turns the files a job changed into one pull request on a fixed branch, opened with a short-lived GitHub App token scoped to this repository (Contents and Pull requests write), because `main` is protected by a ruleset that requires a pull request and a pull request opened with `GITHUB_TOKEN` neither is allowed here nor starts the required checks. It can turn on squash auto-merge and wait for the merge. `rehearse-self-merging-pr.yml` (Run workflow) rehearses it against a harmless file: by default it opens the pull request, turns on auto-merge, confirms the required checks start, and closes the pull request again; with `merge` ticked it really merges `.github/rehearsal.txt` once as the end-to-end proof. The credential is the repository-admin App (HCW Portfolio Admin) held by the `admin-ops` environment, an interim choice; `dependabot.yml` now also reads `.github/actions/*` so the action's pins stay current.
 
 - `.github/workflows/repository-admin.yml` (pull request #19): a manual, owner-approved workflow for repository chores. Its tasks are `show-plan`,
@@ -128,6 +128,20 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
 
 - `CLAUDE.md`: a communication-style section (plain language, junior-administrator audience, step-by-step
   instructions, links).
+- **A weekly scan of the container image, and a written record of the risks accepted** (ticket #15). The new workflow
+  `image-scan.yml` builds the appliance image every Monday (05:37 UTC), on **Run workflow**, and on a pull request that
+  changes `infrastructure/docker/`, `requirements.lock.txt` or the scan files. It runs `scripts/scan-image.sh`, which scans
+  the image with Trivy 0.76.1 (pinned by digest, in a read-only container with no capabilities and no Docker socket) and
+  **fails on a HIGH or CRITICAL vulnerability that has a fix available**. Vulnerabilities with no fix yet are listed in the
+  new accepted-risk file `.trivyignore.yaml`; every entry has an id, a reason, an owner and an expiry date, and
+  `tests/unit/test_image_scan.py` fails when one is missing or past its date. The first scan (2026-10-25) found 164
+  findings in the Debian base image, none with a fix and none CRITICAL; the 44 HIGH ones are 8 distinct vulnerabilities,
+  each recorded with a reason (proposed; the owner accepts them by merging). The Python packages had no findings. The scan
+  is not one of the six required checks. `tests/unit/test_workflows.py` now lists `image-scan.yml` among the expected
+  workflow files.
+- Issue form "Work item (maintainers)" (`.github/ISSUE_TEMPLATE/work_item.yml`), for planned work with acceptance
+  criteria, the way the portfolio's other repositories use it. The bug, feature and decision forms now also add the label
+  `product:cloudcrawler`.
 
 ### Changed
 
@@ -176,6 +190,16 @@ where a file came from with `gh attestation verify <file> --repo saulpatinojr/HC
   `docs/TEMPLATE.md` removed (ticket #14).
 - `CLAUDE.md`: the form-filling rule now says secrets are never written in chat, pull requests, issues or documentation; the owner enters each secret
   only in the secure settings field or through a script that reads it from a file.
+- **Leftover repository-template content removed or rewritten** (ticket #12). `.github/CODEOWNERS` lists the real owner
+  and no placeholders. The folder `.github/templates/` (blog, gist, task and workflow-document templates) and the
+  FinOps-finding and infrastructure-change issue forms were deleted: nothing here uses them. `CONTRIBUTING.md` now
+  describes this repository (its commands, the pinned Azure MCP Server, the changelog rule, the plain-language rule, the
+  AddOn rule, the image scan) instead of generic Terraform guidance. The pull request template's "Infrastructure changes
+  only" section became "Image or workflow changes only" and gained the AddOn and changelog check boxes;
+  `.github/copilot-instructions.md` no longer asks for Terraform plans. The README no longer says the repository was
+  created from a template. The reminder to re-resolve the base image digest in `infrastructure/docker/versions.env` is
+  resolved: the pinned digest still resolves to `python:3.14.8-slim-trixie` (checked 2026-10-25), and the file records that
+  the tag has since been rebuilt, so moving the pin is a separate, reviewed change.
 
 ### Fixed
 

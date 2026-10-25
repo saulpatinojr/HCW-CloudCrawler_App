@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
-# Complete on its own: a repository created from the template needs no central
-# configuration. inheritance: true is still set so that, if a repository named
+# Complete on its own: this repository needs no central configuration.
+# inheritance: true is still set so that, if a repository named
 # "coderabbit" is ever added to the account, its file merges underneath this
 # one (scalars here win, arrays are concatenated and de-duplicated by path).
 # Reference: https://docs.coderabbit.ai/reference/configuration

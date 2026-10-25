@@ -474,8 +474,8 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
-scripts/                       the lockfile check, the release version guard, the pre-tag check, the release publisher and the release wheel verifier
-.github/workflows/             ci, security, codeql, dependency-review, publish-core (the whole release), repository-admin
+scripts/                       the lockfile check, the release version guard, the pre-tag check, the release publisher, the release wheel verifier and the image scan
+.github/workflows/             ci, security, image-scan, codeql, dependency-review, publish-core (the whole release), repository-admin
 docs/adr/                      this edition's decisions
 ```
 
@@ -511,15 +511,42 @@ Two GitHub rulesets protect this repository. They are applied by the owner-appro
   could lift, not a law of GitHub (see "Last resort: lifting the tag rule" under "Releasing the engine"). Check the
   version before tagging.
 
+## Image scan and accepted risk
+
+The appliance image is built on a Debian base image, and Debian packages sometimes carry a known vulnerability that has no
+fixed version yet. So that the same findings do not keep resurfacing without anyone deciding about them, the workflow
+`.github/workflows/image-scan.yml` builds the image and scans it with Trivy every Monday at 05:37 UTC, on **Run workflow**,
+and on a pull request that changes `infrastructure/docker/`, `requirements.lock.txt` or the scan files. It is not one of
+the six required checks: a vulnerability published tomorrow must not block an unrelated pull request.
+
+- **It fails** (red run) on a HIGH or CRITICAL vulnerability that has a fix available and that `.trivyignore.yaml` does
+  not accept. The answer is to update the base image (see `infrastructure/README.md`).
+- **It warns** about a HIGH or CRITICAL vulnerability that has no fix and is not in `.trivyignore.yaml`. The answer is a
+  decision by the owner: add an entry, or act.
+- **`.trivyignore.yaml` is the accepted-risk file.** Each entry has an id, a reason, an owner and an expiry date
+  (at most 180 days ahead). When the date passes, Trivy stops hiding the finding and `tests/unit/test_image_scan.py` fails
+  until someone reads the entry again, then renews or removes it. Its header records the first scan (2026-10-25): 164
+  findings in the Debian packages, none with a fix; 44 of them HIGH, which are 8 distinct vulnerabilities, all accepted
+  for now with a reason; none CRITICAL; nothing in the Python packages.
+
+To run the scan yourself, with Docker running (on Windows, Docker Desktop with the `desktop-linux` context), in bash:
+
+```bash
+bash scripts/scan-image.sh
+```
+
+It builds the image, scans it in a disposable, locked-down container (read-only file system, no capabilities, no Docker
+socket), prints a summary and removes everything it created. Trivy is pinned by digest (a tag alone can be moved; see
+[GHSA-69fq-xp46-6x23](https://github.com/advisories/GHSA-69fq-xp46-6x23)). Docs:
+[Trivy](https://trivy.dev/latest/docs/), [ignoring findings](https://trivy.dev/latest/docs/configuration/filtering/).
+
 ## Repository standards
 
-This repository was created from the organisation's template repository. It
-carries `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
-`.github/SECURITY.md`, `.github/CODEOWNERS`, the pull request and issue
-templates, CodeQL, dependency review, Dependabot, CodeRabbit and Qlty
-configuration, and `docs/adr/`. Pull requests open ready for review and follow
-`.github/PULL_REQUEST_TEMPLATE.md`; `CHANGELOG.md` is updated in the same pull
-request as the change.
+This repository carries `CONTRIBUTING.md` (how a change gets into `main`), `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
+`.github/SECURITY.md`, `.github/CODEOWNERS`, the pull request template and the issue forms (bug report, feature request,
+decision record, work item), CodeQL, dependency review, Dependabot, CodeRabbit and Qlty configuration, and `docs/adr/`.
+Pull requests open ready for review and follow the pull request template in `.github/`; `CHANGELOG.md` is updated in the same
+pull request as the change.
 
 ## Contributing, security, license
 
