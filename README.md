@@ -238,59 +238,106 @@ The AddOn adopts the engine as the wheel attached to a GitHub Release of
 this repository, pinned by URL and sha256 (ADR 0002; the AddOn's
 `core-update.yml` opens the bump pull request). A release is one tag, and
 **a `v*` tag can never be moved or deleted once it is pushed** (see "Branch
-and tag protection"), so the checks below run before the tag is accepted and
-there is a dry run that publishes nothing. Releases are listed at
+and tag protection"). Releases are listed at
 [github.com/saulpatinojr/HCW-CloudCrawler_App/releases](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases);
-the `v0.1.0` page appears there once the tag has been pushed and
-`release.yml` has finished (until then no release exists).
+the `v0.1.0` page appears there only at the very end of a successful run (until then no release is visible to
+the public).
 
-What a tag does. `release.yml` checks, then creates the release with the notes
-from the changelog section. `publish-core.yml` checks, builds the wheel and the
-sdist, verifies the wheel with `scripts/verify-core-wheel.py` (the engine, no
-cloud SDK, no HTTP client, no Azure endpoint, pydantic as its only
-requirement), writes a CycloneDX SBOM (the engine's locked runtime
-dependencies), attests provenance and the SBOM, verifies the attestations, then attaches
-**three files** to the release. Nothing is published to PyPI unless the
-repository variable `PYPI_ENABLED` is `true` (it is not set), and no container
-image is published by any workflow.
+**What the checks can and cannot do.** The checks below run on GitHub *after*
+you push the tag. They stop a bad tag from being *published*; they cannot
+un-push it, so a wrong tag stays for ever and the only way forward is the next
+version. That is why the dry run (step 2) comes first: it runs the same checks
+against `main` without a tag, and it is where mistakes should be caught. One more
+limit: the workflow that runs for a tag is the copy stored *in the tagged commit*.
+A tag on a commit from before these checks existed would run that older workflow,
+without them. Nothing inside a workflow can detect that about itself, so step 3
+tags the exact commit the dry run built, not "whatever `git pull` gives you".
 
-The check that cannot be skipped is `scripts/check-release-version.py`. On
-every pull request it fails when the engine's `pyproject.toml`, the appliance's
-`pyproject.toml`, the two `__version__` constants and the two `uv.lock` entries
-do not all name the same `X.Y.Z`. On a tag it also requires that the tag is
-`v` plus that version, that `CHANGELOG.md` has a dated, non-empty `## [X.Y.Z]`
-section and nothing left under `[Unreleased]`, that the tagged commit is on
-`main`, and that the build produced exactly the wheel and the sdist for that
-version. To release a new version, change all six places in one pull request
-(`make lock` updates `uv.lock`).
+**What a tag does.** One workflow, `publish-core.yml`, runs four jobs in a fixed
+order, and the release becomes public only as the very last step of the third:
+
+1. `build` (read-only): `scripts/check-release-version.py` checks the tag, the
+   versions and the changelog (details below); the wheel and the sdist are built;
+   `scripts/verify-core-wheel.py` verifies the wheel (the engine, no cloud SDK, no
+   HTTP client, no Azure endpoint, pydantic as its only requirement); a CycloneDX
+   SBOM (the engine's locked runtime dependencies), the release notes and a list of
+   sha256 checksums are written. Everything is kept as one workflow artifact.
+2. `attest` (may sign, cannot write to the repository): attests provenance and the
+   SBOM for the wheel and the sdist, then verifies the attestations.
+3. `release` (the only job that can write to the repository, tag runs only):
+   re-checks the checksums, verifies the attestations again, creates the release as a
+   **draft** (not visible to the public) with the three files, checks that the draft
+   holds exactly `cloud_crawler_core-0.1.0-py3-none-any.whl`,
+   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json` (all fully
+   uploaded, and with the sha256 GitHub reports where it reports one), and only then
+   makes it public. A failure before that last step leaves no public release.
+4. `pypi` (tag runs only): nothing is published to PyPI unless the repository
+   variable `PYPI_ENABLED` is `true` (it is not set). No container image is published
+   by any workflow.
+
+The attestation check names the exact workflow file, the exact tag and the exact
+commit (`gh attestation verify ... --signer-workflow --source-ref --source-digest`).
+Without those, an attestation made by an earlier dry run of the same bytes would also
+pass.
+
+**The check that cannot be skipped in a pull request** is
+`scripts/check-release-version.py`. On every pull request it fails when the engine's
+`pyproject.toml`, the appliance's `pyproject.toml`, the two `__version__` constants
+and the two `uv.lock` entries do not all name the same `X.Y.Z`. For a tag, and for
+the dry run (which takes the tag to be `v` plus that version), it also requires that
+the tag is `v` plus that version; that `CHANGELOG.md` has exactly one
+`## [X.Y.Z] - YYYY-MM-DD` section, with a date that exists and is not in the future
+(one day of slack for time zones) and with real entries (not just headings, comments or
+link definitions); that nothing is left under Unreleased (`## [Unreleased]`, in any
+letter case, with or without brackets); that the tagged commit is on `main`; that the
+build produced exactly the wheel and the sdist for that version; and, in the dry run
+only, that the tag does not exist yet. To release a new version, change all six places
+in one pull request (`make lock` updates `uv.lock`).
 
 ### Release steps
 
 1. **Check the changelog.** `CHANGELOG.md` has the `## [0.1.0] - 2026-10-25` section holding everything that ships, and
    nothing under `[Unreleased]`. If you tag on a different day, change the date in that heading in a pull request first
-   (`release.yml` takes the release notes from that section, and refuses a tag while `[Unreleased]` has entries or the
-   section has no date). Keep both `pyproject.toml` files, both `__version__` constants and `uv.lock` at the same version.
-2. **Dry run on `main`** (publishes nothing, writes no tag or release). bash or
+   (the notes come from that section, and a tag is refused while `[Unreleased]` has entries or the section has no
+   valid date). Keep both `pyproject.toml` files, both `__version__` constants and `uv.lock` at the same version.
+2. **Dry run on `main`** (publishes nothing, writes no tag and no release, and runs only on the `main` branch). bash or
    PowerShell, with the GitHub CLI signed in:
 
    ```bash
-   gh workflow run release.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main
+   gh workflow run publish-core.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main
+   ```
+
+   Open [the Actions page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/actions/workflows/publish-core.yml)
+   and wait for the run to turn green (only the `build` job runs). Its summary shows the release notes a tag would publish
+   and the sha256 of the wheel, the sdist and the SBOM; the three files are kept in the artifact
+   `cloud-crawler-core-release-files`. It is red in exactly the states in which the real tag would be refused (for example an
+   empty or undated changelog section, entries left under Unreleased, or a tag that already exists).
+
+   *Recommended, once: rehearse the attestations too.* Attestations are permanent entries in the public signing log, so the
+   dry run does not create them unless you ask. They are the one part of the pipeline that has never run, and if they fail on the
+   real tag, that tag is lost for good. So we recommend running this once and accepting two permanent log entries that name
+   `refs/heads/main` (they cannot be mistaken for a release, because the tag run only accepts attestations for
+   `refs/tags/v0.1.0`). Wait for all of `build` and `attest` to turn green:
+
+   ```bash
    gh workflow run publish-core.yml --repo saulpatinojr/HCW-CloudCrawler_App --ref main -f attest=true
    ```
 
-   Open the Actions tab and wait for both runs to turn green. The `release`
-   run shows the release notes a tag would publish. The `publish-core` run
-   shows the sha256 of the wheel, the sdist and the SBOM and keeps the three
-   files in the artifact `cloud-crawler-core-release-files`. With `attest=true`
-   it also creates and verifies the attestations; they are permanent entries
-   in the public signing log, so use `-f attest=false` to skip them.
-3. **Tag `main` and push the tag.** PowerShell:
+3. **Tag the exact commit the dry run built, and push the tag.** Do not tag whatever `git pull` gives you: `main` may have
+   moved since the dry run. PowerShell:
 
    ```powershell
-   git switch main; git pull origin main; git tag -a v0.1.0 -m "cloud-crawler-core 0.1.0"; git push origin v0.1.0
+   git fetch origin
+   $sha = gh run list --repo saulpatinojr/HCW-CloudCrawler_App --workflow publish-core.yml --event workflow_dispatch --branch main --status success --limit 1 --json headSha --jq ".[0].headSha"
+   $sha
+   git tag -a v0.1.0 $sha -m "cloud-crawler-core 0.1.0"
+   git push origin v0.1.0
    ```
 
-4. **Check the result.** Both runs for the tag are green, and
+   `$sha` must print one 40-character commit id, and it should be the commit of the dry run you just watched. Stop and
+   ask if it prints nothing or something you do not recognise. If `main` has moved on since that dry run and you
+   still want the newer commit, run the dry run again first, then repeat this step.
+4. **Check the result.** The run for the tag is green (all of `build`, `attest` and `release`), and
    [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0)
    lists three assets: `cloud_crawler_core-0.1.0-py3-none-any.whl`,
    `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`.
@@ -299,17 +346,29 @@ version. To release a new version, change all six places in one pull request
    (bash or PowerShell) runs it at once. To check where a wheel came from:
 
    ```bash
-   gh attestation verify cloud_crawler_core-0.1.0-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --source-ref refs/tags/v0.1.0
+   gh attestation verify cloud_crawler_core-0.1.0-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0
    ```
 
-If a release goes wrong, the tag stays (it cannot be deleted) and the AddOn may
-already have pinned the wheel's sha256, so do not replace files under the same
-version. Delete the bad release and its assets on the release page, fix the
-problem on `main`, and release the next version (`0.1.1`), which also needs all
-six version places and the changelog section. If a run fails before the files
-are attached, re-run it from the Actions tab (Re-run failed jobs). If it
-fails after some files were attached, delete those assets by hand first,
-because an upload never replaces a file.
+### If a release goes wrong
+
+The tag stays (it cannot be deleted), so version `0.1.0` can only ever mean the commit it was pushed on.
+**What "Re-run failed jobs" does:** it runs the workflow file *as it is in the tagged commit*, and it reuses
+the files built by that run. A fix merged to `main` afterwards cannot reach it. So a re-run helps only when the failure
+was temporary (a network error, a GitHub outage); it cannot fix a mistake in the workflow, the scripts or the changelog.
+
+| What happened | What the public sees | What to do |
+| --- | --- | --- |
+| `build` or `attest` failed | No release at all | If the cause was temporary, "Re-run failed jobs". Otherwise fix `main` and ship `0.1.1` (all six version places and a changelog section). |
+| `release` failed before the last step | No release. A **draft** may be listed on the Releases page, visible only to people who can write to the repository | Delete the draft on the Releases page (the tag stays). Then "Re-run failed jobs" if the cause was temporary, or ship `0.1.1`. The job refuses to touch a release that already exists and never replaces a file, so a draft left behind makes a re-run stop with a message saying so. |
+| `release` succeeded, `pypi` failed (only if `PYPI_ENABLED` is `true`) | The release is complete and public | Fix the PyPI side and "Re-run failed jobs" (only `pypi` runs). |
+| A release went public with a wrong file | A wrong release | The AddOn may already have pinned the wheel's sha256, so never replace files under the same version. Delete the release and its assets on the Releases page, fix `main`, and ship `0.1.1`. |
+
+Immutable releases are currently off for this repository (checked on 2026-10-25 with
+`gh api repos/saulpatinojr/HCW-CloudCrawler_App/immutable-releases`, which answered `enabled: false`). If you turn them on
+([GitHub documentation](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)),
+a published release can no longer be edited or have files added, and its tag is locked. The draft-then-publish order here
+is the order GitHub recommends for that, so the pipeline keeps working; the only change is that a wrong public release then
+can never be repaired in place, only superseded by `0.1.1`.
 
 ## Repository layout
 
@@ -321,8 +380,8 @@ tests/                         unit, security, contract (Azure MCP 3.0.0 snapsho
 samples/                       fictional Resource Graph exports, decisions and recorded Azure MCP results
                                (subscription 00000000-0000-0000-0000-000000000001)
 infrastructure/docker/         the hardened Dockerfile and the pinned base image
-scripts/                       the lockfile check, the release version guard and the release wheel verifier
-.github/workflows/             ci, security, codeql, dependency-review, release, publish-core, repository-admin
+scripts/                       the lockfile check, the release version guard, the release publisher and the release wheel verifier
+.github/workflows/             ci, security, codeql, dependency-review, publish-core (the whole release), repository-admin
 docs/adr/                      this edition's decisions
 ```
 
