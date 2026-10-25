@@ -266,11 +266,10 @@ version. To release a new version, change all six places in one pull request
 
 ### Release steps
 
-1. **Get the changelog ready.** `CHANGELOG.md` has a `## [0.1.0]` section, and
-   everything under `[Unreleased]` ships with it. Fold those entries into the
-   `## [0.1.0]` section and set its date to the release day; `release.yml` takes
-   the release notes from that section and refuses a tag while `[Unreleased]`
-   still has entries. Keep both `pyproject.toml` files at the same version.
+1. **Check the changelog.** `CHANGELOG.md` has the `## [0.1.0] - 2026-10-25` section holding everything that ships, and
+   nothing under `[Unreleased]`. If you tag on a different day, change the date in that heading in a pull request first
+   (`release.yml` takes the release notes from that section, and refuses a tag while `[Unreleased]` has entries or the
+   section has no date). Keep both `pyproject.toml` files, both `__version__` constants and `uv.lock` at the same version.
 2. **Dry run on `main`** (publishes nothing, writes no tag or release). bash or
    PowerShell, with the GitHub CLI signed in:
 
