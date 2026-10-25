@@ -24,9 +24,12 @@ reviews:
   collapse_walkthrough: true
   # The author cannot clear CodeRabbit's own findings.
   allow_author_approval: false
-  # Off by default. Turn on only where CodeRabbit's approval is the ruleset's
-  # required review and the app has "Pull requests: Read and write".
-  request_changes_workflow: false
+  # On because CodeRabbit's approval is now the ruleset's required review
+  # (owner decision B1, https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1373).
+  # It asks for changes while a finding is open and approves the head once
+  # every thread is resolved. Needs the app to hold "Pull requests: Read and
+  # write".
+  request_changes_workflow: true
 
   auto_review:
     enabled: true
