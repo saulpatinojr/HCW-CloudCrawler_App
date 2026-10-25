@@ -425,7 +425,9 @@ def git_repo(root: Path) -> Path:
 
 
 def errors(capsys) -> list[str]:
-    return [line for line in capsys.readouterr().out.splitlines() if line.startswith("error: ")]
+    """The problem lines printed so far, whether they are GitHub annotations (under Actions) or plain lines."""
+    lines = capsys.readouterr().out.splitlines()
+    return [line.removeprefix("::error::").removeprefix("error: ") for line in lines if "error" in line.split(" ")[0]]
 
 
 @needs_git
