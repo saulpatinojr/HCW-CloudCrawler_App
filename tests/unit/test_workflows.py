@@ -21,6 +21,7 @@ EXPECTED = {
     "codeql.yml",
     "dependency-review.yml",
     "image-scan.yml",
+    "pages.yml",
     "publish-core.yml",
     "rehearse-self-merging-pr.yml",
     "repository-admin.yml",
@@ -274,3 +275,35 @@ def test_the_version_guard_runs_everywhere_it_should():
     for script in ("release-publish.py", "pre-tag-check.py"):
         assert (ROOT / "scripts" / script).is_file(), script
     assert (ROOT / guard).is_file()
+
+
+PAGES_FILE = "pages.yml"
+PAGES_SWITCH = "vars.PAGES_ENABLED == 'true'"
+
+
+def test_the_pages_site_publishes_only_from_a_push_or_a_manual_run_once_the_switch_is_on():
+    pages = jobs(text(PAGES_FILE))
+    assert list(pages) == ["build", "deploy"]
+    head = pages["deploy"].split("    steps:")[0]
+    assert f"if: github.event_name != 'pull_request' && {PAGES_SWITCH}" in head, "a pull request never deploys"
+    assert "needs: build" in head
+    assert re.search(r"(?m)^      pages: write\b", head) and re.search(r"(?m)^      id-token: write\b", head)
+    assert "name: github-pages" in head
+    assert "write" not in pages["build"].split("    steps:")[0], "the build job keeps the read-only default"
+    assert "actions/deploy-pages@" in pages["deploy"] and "actions/deploy-pages@" not in pages["build"]
+
+
+def test_the_pages_build_runs_on_pull_requests_and_checks_the_links():
+    body = text(PAGES_FILE)
+    assert re.search(r"(?m)^  pull_request:\n    paths:", body), "a broken link must be caught before merge"
+    assert "scripts/build-pages.py" in jobs(body)["build"]
+    assert "uv sync --locked --only-group docs" in body, "the build installs only the locked docs group"
+    for step in steps(jobs(body)["build"]):
+        if "configure-pages@" in step or "upload-pages-artifact@" in step:
+            assert f"if: github.event_name != 'pull_request' && {PAGES_SWITCH}" in step
+
+
+def test_the_docs_group_is_the_only_new_dependency_and_is_not_a_default_group():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert config["dependency-groups"]["docs"] == ["markdown-it-py==4.2.0"]
+    assert "default-groups" not in config.get("tool", {}).get("uv", {})

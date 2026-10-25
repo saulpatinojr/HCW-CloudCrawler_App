@@ -211,6 +211,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+docs = [
+    { name = "markdown-it-py" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -230,6 +233,7 @@ dev = [
     { name = "pytest-cov", specifier = "==7.1.0" },
     { name = "ruff", specifier = "==0.17.1" },
 ]
+docs = [{ name = "markdown-it-py", specifier = "==4.2.0" }]
 
 [[package]]
 name = "cloud-crawler-core"
