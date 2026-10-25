@@ -160,6 +160,13 @@ def test_attestations_use_actions_attest_and_not_its_deprecated_wrapper():
     assert all("release-files/dist/*" in s for s in attest)
 
 
+def test_every_release_job_has_a_time_limit():
+    for job in JOB_ORDER:
+        assert re.search(r"(?m)^    timeout-minutes: \d+$", job_head(job)), (
+            f"{job} could hang for the default six hours"
+        )
+
+
 def test_the_release_is_serialised_per_ref_and_never_cancelled():
     head = text(RELEASE_FILE).split("\njobs:\n")[0]
     assert re.search(
