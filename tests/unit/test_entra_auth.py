@@ -186,7 +186,9 @@ def test_entra_settings_with_sign_in_off_are_refused_not_ignored():
 
 
 def test_bind_host_must_be_an_ip_address():
-    assert Settings.from_env({"CC_BIND_HOST": "0.0.0.0"}).bind_host == "0.0.0.0"  # noqa: S104
+    # off on a non-loopback address needs the explicit opt-out (tests/unit/test_auth_hardening.py covers the refusal)
+    open_env = {"CC_BIND_HOST": "0.0.0.0", "CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK": "true"}
+    assert Settings.from_env(open_env).bind_host == "0.0.0.0"  # noqa: S104
     with pytest.raises(ValueError, match="CC_BIND_HOST"):
         Settings.from_env({"CC_BIND_HOST": "example.test"})
 

@@ -88,7 +88,25 @@ jobs:
             echo "::error::pip is present in the image"; exit 1
           fi
           test "$(docker run --rm hcw-cloud-crawler-appliance:dev id -u)" = "10001"
-          cid="$(docker run -d -p 18080:8080 hcw-cloud-crawler-appliance:dev)"
-          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/api/health && break || sleep 1; done
+          wait_for_health() {
+            for _ in $(seq 1 20); do curl -fsS "http://127.0.0.1:$1/api/health" >/dev/null && return 0; sleep 1; done
+            return 1
+          }
+          # The image listens on every interface, so with no sign-in and no opt-out it must refuse to start (ADR 0004).
+          if docker run --rm hcw-cloud-crawler-appliance:dev; then
+            echo "::error::started unauthenticated on 0.0.0.0 without the opt-out"; exit 1
+          fi
+          # The lab path: the explicit opt-out is the only way to start the image without sign-in.
+          lab=(-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true)
+          cid="$(docker run -d -p 18080:8080 "${lab[@]}" hcw-cloud-crawler-appliance:dev)"
+          wait_for_health 18080
           curl -fsS http://127.0.0.1:18080/api/health | grep -q '"edition":"appliance"'
+          docker rm -f "$cid"
+          # Sign-in on needs no opt-out; with placeholder ids (no network is used) a request without a token is refused.
+          entra=(-e CC_AUTH_MODE=entra -e CC_ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000002)
+          entra+=(-e CC_ENTRA_AUDIENCE=api://00000000-0000-0000-0000-000000000003)
+          cid="$(docker run -d -p 18081:8080 "${entra[@]}" hcw-cloud-crawler-appliance:dev)"
+          wait_for_health 18081
+          curl -fsS http://127.0.0.1:18081/api/health | grep -q '"auth":"entra"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/api/nope)" = "401"
           docker rm -f "$cid"

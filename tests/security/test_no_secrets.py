@@ -13,6 +13,7 @@ GUID = re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4
 PLACEHOLDER = re.compile(r"^00000000-0000-0000-0000-0000000000[0-9a-fA-F]{2}$")
 ALLOWED_GUIDS = {
     "797f4846-ba00-4fd7-ba43-dac1f8f63013",  # Azure Resource Manager first-party application id
+    "04b07795-8ddb-461a-bbee-02f9e1bf7b46",  # Microsoft Azure CLI public application id (the README sandbox runbook)
     "ba7816bf-8f01-cfea-4141-40de5dae2223",  # never produced; keeps the set non-empty for the test below
 }
 SECRET_SHAPED = re.compile(r"(AccountKey=[A-Za-z0-9+/=]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)")

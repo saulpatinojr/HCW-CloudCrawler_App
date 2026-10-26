@@ -1,5 +1,6 @@
 """`python -m cloud_crawler_appliance`: uvicorn on $CC_BIND_HOST:$PORT (loopback unless the deployment says otherwise;
-the container image sets 0.0.0.0), no access log, no proxy headers, SIGTERM graceful."""
+the container image sets 0.0.0.0, which starts only with sign-in on or the explicit opt-out), no access log, no proxy
+headers, SIGTERM graceful."""
 
 from __future__ import annotations
 
@@ -30,11 +31,12 @@ def main() -> int:
     from cloud_crawler_appliance.security import logging as logs
 
     if settings.auth_mode == "off" and not ipaddress.ip_address(settings.bind_host).is_loopback:
-        # Not a refusal (the lab image runs this way); said once so an exposed, unauthenticated server is not silent.
+        # Settings refuses this start unless CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true (ADR 0004, amendment of
+        # 2026-10-26), so reaching here means the operator opted out on purpose; said once so it is not silent.
         logs.log_event("warning", auth=False, exposed=True)
     uvicorn.run(
         app,
-        host=settings.bind_host,  # nosec B104 - 0.0.0.0 only when CC_BIND_HOST says so (the image); else loopback
+        host=settings.bind_host,  # nosec B104 - 0.0.0.0 only when CC_BIND_HOST says so (the image) and sign-in is on
         port=settings.port,
         access_log=False,
         proxy_headers=False,

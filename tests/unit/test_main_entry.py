@@ -56,6 +56,7 @@ def test_main_binds_all_interfaces_only_when_cc_bind_host_says_so(clean_env, mon
 
     clean_env.setenv("CC_LOG_SILENT", "0")
     clean_env.setenv("CC_BIND_HOST", "0.0.0.0")  # noqa: S104 - what the container image sets
+    clean_env.setenv("CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK", "true")  # without it the start is refused (ADR 0004)
     seen: dict = {}
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: seen.update(app=app, **kwargs))
     assert entry.main() == 0
