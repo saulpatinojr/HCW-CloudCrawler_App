@@ -34,7 +34,7 @@ from cloud_crawler_core.models import (
     Verdict,
 )
 from core_fixtures import NOW, SAMPLES, make_decision
-from terraform_fixtures import SUB, arm_id, change_entry, plan_of, state_of, state_record
+from terraform_fixtures import SUB, arm_id, attr_path, change_entry, plan_of, state_of, state_record
 
 SCOPE = Subject(scope=ScopeKind.SUBSCRIPTION, subscriptionId=SUB)
 UPLOAD = SourceProvenance(sourceType=SourceType.UPLOAD, artifactName="document.json")
@@ -233,3 +233,63 @@ def test_a_plan_cannot_bring_a_resource_into_scope_that_an_observed_row_put_out(
     result = evaluate_decision(decision, [export_evidence(NOW), plan], now=LATER)
     assert not any(f.resourceId == dev.lower() for f in result.findings)
     assert any(f.resourceId and f.resourceId.endswith("hcwsamplestprod01") for f in result.findings)
+
+
+@pytest.mark.parametrize("plan_first", [False, True], ids=["plan after the state", "plan before the state"])
+def test_an_observed_row_that_cannot_be_placed_in_the_scope_is_not_replaced_by_a_plan_row(plan_first):
+    # CodeRabbit review of pull request 60. The decision's scope names a tag. The state marks its tags sensitive, so its
+    # row is neither in nor out of the scope. A plan row of the same resource whose tags are known must not stand in
+    # for it: the answer is unknown, and it cites the state.
+    sensitive_tags = state_of(
+        state_record("azurerm_mssql_database", "sql_01", database(False), sensitive=[attr_path("tags")])
+    )
+    state = take(EvidenceKind.TF_STATE, sensitive_tags, LATER if plan_first else NOW)
+    plan = plan_evidence(True, NOW if plan_first else LATER)
+    decision = make_decision(
+        scope=DecisionScope(subscriptionIds=[SUB], tagSelectors={"env": "prod"}),
+        selector=Selector(resourceTypes=["microsoft.sql/servers/databases"]),
+    )
+    records = [plan, state] if plan_first else [state, plan]
+    result = evaluate_decision(decision, records, now=LATER)
+    mine = [f for f in result.findings if f.resourceId and f.resourceId.endswith("/hcw-sample-sql-01")]
+    assert mine and all(f.verdict is Verdict.UNKNOWN for f in mine)
+    assert all(f.evidenceIds == [state.evidenceId] for f in mine)
+
+
+def test_a_plan_row_alone_in_such_a_scope_is_still_judged():
+    # nothing observed stands in the way: the plan row is in scope and evaluates, and it cites the plan
+    plan = plan_evidence(False, NOW)
+    decision = make_decision(
+        scope=DecisionScope(subscriptionIds=[SUB], tagSelectors={"env": "prod"}),
+        selector=Selector(resourceTypes=["microsoft.sql/servers/databases"]),
+    )
+    mine = [f for f in evaluate_decision(decision, [plan], now=NOW).findings if f.resourceId]
+    assert [f.verdict for f in mine] == [Verdict.CONTRADICTED] and mine[0].evidenceIds == [plan.evidenceId]
+
+
+def test_a_supported_finding_that_cites_evidence_the_ledger_does_not_hold_does_not_close_a_contradiction():
+    # CodeRabbit review of pull request 60. The ledger cannot show that such a verdict rests on observed evidence and
+    # not on a plan, so it leaves the contradiction open. A citation it does hold, of an observed record, still closes.
+    ledger = InMemoryLedger()
+    export = export_evidence(NOW)
+    ledger.add_evidence(export)
+    base = evaluate_decision(DECISION, [export], now=NOW)
+    ledger.record(base)
+    key = finding_for(base)
+
+    def open_for_database() -> list:
+        return [c for c in ledger.contradictions.values() if c.resourceId == DATABASE.lower() and c.resolvedAt is None]
+
+    assert len(open_for_database()) == 1
+    orphan = key.model_copy(
+        update={
+            "findingId": "finding_orphan",
+            "verdict": Verdict.SUPPORTED,
+            "evidenceIds": ["evidence_that_the_ledger_does_not_hold"],
+        }
+    )
+    ledger.record(DriftResult(decisionId=key.decisionId, evaluatedAt=LATER, findings=[orphan]))
+    assert len(open_for_database()) == 1
+    held = orphan.model_copy(update={"findingId": "finding_held", "evidenceIds": [export.evidenceId]})
+    ledger.record(DriftResult(decisionId=key.decisionId, evaluatedAt=LATER, findings=[held]))
+    assert open_for_database() == []

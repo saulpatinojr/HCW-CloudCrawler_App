@@ -106,7 +106,10 @@ def evaluate_decision(
                 current = target.get(row.id)
                 if current is None or rank >= current[0]:  # a later record of the same resource wins, of equal rank
                     target[row.id] = (rank, row, record.evidenceId)
-        for rid in out_of_scope:  # an observed row put it out of scope: a plan cannot bring it back in
+        # An observed row that puts a resource out of the scope, or that cannot be placed in it, outranks a plan row
+        # of the same resource: the plan cannot bring it back in, and cannot answer for it.
+        observed_elsewhere = out_of_scope | {rid for rid, entry in undecided.items() if entry[0] > 0}
+        for rid in observed_elsewhere:
             if rid in resources and resources[rid][0] == 0:
                 del resources[rid]
         unsure = {rid: entry for rid, entry in undecided.items() if rid not in resources and rid not in out_of_scope}

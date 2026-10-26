@@ -68,9 +68,10 @@ evidence ([ADR 0005](adr/0005-terraform-evidence-is-read-through-a-provider-type
   resource, and whether its connection is approved is not in the document. A zone that is a blank string is treated
   the same way: not carried, so the zone claims answer `unknown`.
 - **A plan is not what exists.** Verdicts from a plan are about what Terraform would build. A plan row never replaces
-  a row from a Resource Graph export, an Azure MCP result or a state of the same resource, whichever came last, and a
-  verdict that rests on plans alone never closes an open contradiction as fixed (the plan still evaluates, and it can
-  open one). A value that is only known after apply (a new resource's id, tags built from another resource) is not
+  a row from a Resource Graph export, an Azure MCP result or a state of the same resource, whichever came last (and
+  when that observed row cannot be placed in a tag scope because its tags are not known, the answer is `unknown`, not the
+  plan's), and a verdict that rests on plans alone never closes an open contradiction as fixed (the plan still evaluates,
+  and it can open one). A value that is only known after apply (a new resource's id, tags built from another resource) is not
   read, and the row says so: a claim about those tags is `unknown`, and a resource with no Azure id yet is named by its
   Terraform address. When a plan has no `resource_changes` and is read from `planned_values`, which marks nothing as
   unknown, its tags, identity and zones are always `unknown`.

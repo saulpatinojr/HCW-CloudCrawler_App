@@ -83,13 +83,13 @@ class InMemoryLedger:
     def record(self, result: DriftResult) -> DriftResult:
         """Keep every finding; merge contradictions by (claim, resource) so firstSeenAt survives re-evaluation; close
         an open contradiction as `fixed` when the same claim and resource now evaluate `supported`, unless the
-        verdict rests on Terraform plans alone."""
+        verdict rests on Terraform plans alone or cites a record the ledger does not hold."""
         for finding in result.findings:
             self.findings[finding.findingId] = finding
         existing = {(c.claimId, c.resourceId): c for c in self.contradictions.values() if c.resolvedAt is None}
         for finding in result.findings:
             key = (finding.claimId, finding.resourceId)
-            if finding.verdict is Verdict.SUPPORTED and key in existing and not self._rests_on_plans(finding):
+            if finding.verdict is Verdict.SUPPORTED and key in existing and not self._cannot_show_observed(finding):
                 previous = existing.pop(key)
                 self.contradictions[previous.contradictionId] = previous.model_copy(
                     update={"resolvedAt": result.evaluatedAt, "resolution": ContradictionResolution.FIXED}
@@ -115,10 +115,13 @@ class InMemoryLedger:
             self.proposals[proposal.proposalId] = proposal
         return result.model_copy(update={"contradictions": merged})
 
-    def _rests_on_plans(self, finding: DriftFinding) -> bool:
-        """True when every record the finding cites is a Terraform plan. A plan says what Terraform would build, not
-        what exists, so it can open a contradiction but never close one as fixed."""
+    def _cannot_show_observed(self, finding: DriftFinding) -> bool:
+        """True when the ledger cannot show that the verdict rests on something observed: every record the finding
+        cites is a Terraform plan (it says what Terraform would build, not what exists), or it cites a record the ledger
+        does not hold. Such a finding can open a contradiction but never close one as fixed."""
         kinds = [self.evidence[i].kind for i in finding.evidenceIds if i in self.evidence]
+        if len(kinds) != len(finding.evidenceIds):
+            return True
         return bool(kinds) and all(kind is EvidenceKind.TF_PLAN for kind in kinds)
 
     def findings_for(self, decision_id: str) -> list[DriftFinding]:

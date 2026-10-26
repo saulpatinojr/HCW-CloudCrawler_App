@@ -81,8 +81,10 @@ The product's own principle for a plan is that a verdict from it is a verdict on
    know it. Without a declared subscription it is outside a subscription-scoped decision.
 7. **A plan never wins and never closes.** A verdict from a plan is a verdict on what Terraform would build, so in the
    drift engine a plan row never replaces a row of any other kind for the same resource, whichever record is later (a
-   later plan replaces an earlier plan), and each finding cites the one record its row came from. In the ledger, a
-   supported verdict whose cited records are all plans never closes an open contradiction as `fixed`. A plan row still
+   later plan replaces an earlier plan; an observed row that cannot be placed in a decision's tag scope is not stood
+   in for by a plan row either, and the answer is `unknown`), and each finding cites the one record its row came from.
+   In the ledger, a supported verdict whose cited records are all plans, or that cites a record the ledger does not
+   hold, never closes an open contradiction as `fixed`. A plan row still
    evaluates and can open a contradiction. A state is not a plan and behaves as before (a later record wins), but it
    describes what Terraform last applied, not what Azure holds: a resource changed by hand since is not in it.
 8. **The attribute names were read from the provider documentation**, azurerm 3.117.1, 4.81.0 and 5.11.0

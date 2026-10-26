@@ -87,7 +87,9 @@ once, merge one before rebasing the next.
   - **A plan never wins and never closes** (behaviour change in the drift engine and the ledger, for every kind). A
     Terraform plan describes what Terraform would build, not what exists. A plan row no longer replaces a row of the same
     resource from a Resource Graph export, an Azure MCP result or a state, whichever record is later; a verdict that rests
-    on plans alone no longer closes an open contradiction as `fixed`; a plan still evaluates and can open a contradiction.
+    on plans alone, or one that cites a record the ledger does not hold, no longer closes an open contradiction as
+    `fixed`; a plan still evaluates and can open a contradiction. An observed row that cannot be placed in a decision's tag
+    scope (its tags are not carried) is not stood in for by a plan row of the same resource: the answer is `unknown`.
     Before, an export that showed a database not zone redundant followed by a plan that would make it so flipped the
     verdict to supported and closed the contradiction. A finding about a resource now cites the one record its row came
     from (it used to cite every record with a row in scope). A state still behaves as before, and
@@ -109,7 +111,7 @@ once, merge one before rebasing the next.
     ignored by `.gitignore` (`*.tfplan.json`, `*.tfstate.json`).
   - **A resource a plan creates** has no Azure id yet: its row is keyed `terraform:<address>`, correlated as a
     `terraform-address`, and takes the subscription the caller declares in the evidence subject.
-  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, 363 new tests, and the
+  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, 367 new tests, and the
     known limits in `docs/known-limitations.md` (private endpoints, data sources, other providers, not yet run against a
     state written by the azurerm provider itself). The tool description of `evidence_ingest` now names the two kinds.
     Engine change: it reaches the AddOn at the next engine release (ADR 0002), where its `docs/whats-new-upstream.md`
