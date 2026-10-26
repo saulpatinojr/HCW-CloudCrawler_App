@@ -19,23 +19,56 @@ REDACTED = "<redacted>"
 _GUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 _SUBSCRIPTION_PATH = re.compile(r"/subscriptions/[^\s\"']*", re.IGNORECASE)
 # Every alternative must take time linear in the text, because `redact_payload` runs this over every string of
-# everything that is ingested and `scrub` over every exception message. The JSON web token alternative used to be
-# quadratic on a long run of `eyJ` with no dot: each `eyJ` in the run started a scan to the end of the run. It now
-# starts only where a run of token characters begins (the look-behind) and takes the first segment possessively (no
-# giving characters back), so a run is scanned once. The one behaviour change: a token whose first segment is glued
-# directly to a preceding letter, digit, `_` or `-` is not matched at that segment (a space, a quote, `=`, `:`, `/`,
-# `.` or the start of the text all still are). Its claims segment also starts with `eyJ`, after a dot, so the claims
-# and the signature are still redacted and only the header stays.
+# everything that is ingested and `scrub` over every exception message.
+#
+# The JSON web token (`eyJ<10 or more token characters>.<10 or more token characters>`; a token character is a letter,
+# a digit, `_` or `-`) used to be quadratic on a long run of `eyJ` with no dot: each `eyJ` in the run started a scan to
+# the end of the run. It is now written as `_TOKEN_IN_RUN`. From the start of a run of token characters it skips,
+# possessively (no giving characters back), the part of the run in front of the run's FIRST `eyJ`, then matches what the
+# old pattern matched from that `eyJ`. Whether the old pattern matched anywhere in a run depended only on the run's
+# first `eyJ` (every later one has fewer characters after it), so the same runs match. The only difference is that the
+# characters of the run in front of that `eyJ` (the `20` of `Bearer%20eyJ...`) are redacted as well. What makes it
+# linear is the look-behind (a run is entered once, at its start) together with the prefix skip (the run is read once
+# from there). The possessive quantifiers are defence in depth: with the look-behind in place the greedy form is linear
+# too. Possessive quantifiers need Python 3.11 or later; the engine requires 3.14.
+#
+# The look-behind reads the original text, including characters an earlier match has already consumed. The
+# `AccountKey=`, `SharedAccessKey=` and `sig=` values and the private key header can stop in the middle of a run (their
+# value classes leave out `_` and `-`, and the header ends in hyphens), so a token glued right behind one of them would
+# never be entered at a run start. Those four alternatives therefore end with `_GLUED_TOKEN`, the same pattern made
+# optional: a token that follows in the rest of the run is redacted together with them. Each of them reads the rest of
+# its own run at most once and runs do not overlap, so this stays linear. `ghp_` needs no tail: the token alternative is
+# tried before it at the start of its run.
+#
+# Not covered. (1) and (2) are unchanged from before ticket #53: (1) a match stops at the end of the SECOND segment, so
+# the signature of a three-part token stays visible. (2) The `AccountKey=`, `SharedAccessKey=` and `sig=` values take
+# letters and digits, so a value that runs straight into a token swallows its first segment and the rest of the token
+# stays visible. (3) When two secrets meet with no separator the boundaries can differ from the old pattern. A token
+# whose second segment runs straight into a keyword (`<token>.<segment>AccountKey=<value>`, the same with
+# `SharedAccessKey=`, `sig=` and the private key header) takes the segment up to the `=` (for the header, up to its
+# space), so the value stays visible. The old pattern did the same unless an earlier `ghp_` match pre-empted the token,
+# and anyone who controls the text in front of a secret can build the case on purpose. The checks in
+# test_redaction_secret_shaped.py are samples (enumerated layouts and a seeded fuzz), not a proof. They count these
+# cases and set a ceiling on them.
+#
 # The other alternatives start with a fixed literal and end with an open quantifier, so they were already linear.
 # tests/test_redaction_linear_time.py runs every pattern in this module against a hostile set and compares two text
 # sizes, so a pattern added later is checked without being listed.
+_TOKEN_IN_RUN = r"(?:(?!eyJ)[A-Za-z0-9_-])*+eyJ[A-Za-z0-9_-]{10,}+\.[A-Za-z0-9_-]{10,}"
+_GLUED_TOKEN = "(?:" + _TOKEN_IN_RUN + ")?"
 _SECRET_SHAPED = re.compile(
-    r"(AccountKey=[A-Za-z0-9+/=]{20,}"
-    r"|SharedAccessKey=[A-Za-z0-9+/=]{20,}"
-    r"|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}+\.[A-Za-z0-9_-]{10,}"
-    r"|sig=[A-Za-z0-9%+/=]{20,}"
-    r"|ghp_[A-Za-z0-9]{20,}"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
+    "("
+    + "|".join(
+        (
+            r"AccountKey=[A-Za-z0-9+/=]{20,}" + _GLUED_TOKEN,
+            r"SharedAccessKey=[A-Za-z0-9+/=]{20,}" + _GLUED_TOKEN,
+            r"(?<![A-Za-z0-9_-])" + _TOKEN_IN_RUN,
+            r"sig=[A-Za-z0-9%+/=]{20,}" + _GLUED_TOKEN,
+            r"ghp_[A-Za-z0-9]{20,}",
+            r"-----BEGIN [A-Z ]*PRIVATE KEY-----" + _GLUED_TOKEN,
+        )
+    )
+    + ")"
 )
 # Key names whose values are never evidence. `keyVaultKeyUri` and `keySource` are evidence (customer-managed keys),
 # which is why the match is on the whole normalised key, not on the substring "key".

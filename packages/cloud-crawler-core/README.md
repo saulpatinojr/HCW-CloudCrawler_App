@@ -13,7 +13,7 @@ It is seeded and versioned here, in `HCW-CloudCrawler_App`, and adopted by
 | --- | --- |
 | `models` | Evidence, SourceProvenance, CollectionRun, DecisionRecord, Alternative, Claim, CostEstimate, DriftFinding, Contradiction, ReviewProposal, Approval, NormalizedResource |
 | `hashing` | canonical JSON and `sha256:` digests |
-| `redaction` | payload redaction (secret-shaped values, denied keys; every pattern is tested to take linear time) and the content-free log guard |
+| `redaction` | payload redaction (secret-shaped values, denied keys; each pattern is tested for time in proportion to the text against a hostile set of 42 text families at two sizes) and the content-free log guard |
 | `normalize` | one normaliser per evidence kind; `resource_graph` for Azure Resource Graph exports, `terraform` and `terraform_types` for Terraform state (version 4) and plan (`terraform show -json`, format 1.x) through a provider-type table |
 | `detectors` | the detector registry: `zone-redundancy`, `public-access-disabled`, `private-endpoint-present`, `managed-identity` (boolean questions) and `tag-required`, `sku-allowed`, `region-allowed` (valued: the claim's expectation compares the reading with `eq`, `neq`, `in`, `exists`, `absent`, `gte`, `lte`); and the evidence-reading `advisor-findings`, `retirement-exposure`, `policy-assignment-present` over normalised Azure MCP results |
 | `drift` | `evaluate_decision`: claims × evidence → findings, contradictions, proposals, score and coverage |
