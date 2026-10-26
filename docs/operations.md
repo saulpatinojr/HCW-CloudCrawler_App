@@ -74,11 +74,17 @@ PowerShell 7 and Git Bash. If you run from source, the program's window is the l
 
     You should see `Already up to date.` or a list of changed files, then a build that ends without an error.
 
-3. **Stop the old container and start the new one.** Run `docker stop hcw-cloud-crawler`, then repeat
-   [Deployment](deployment.md) step 4. You should see the health document with the new `version`.
+3. **Set your settings again in this window.** A new window does not remember them, and a container started without them
+   exits at once with `startup_refused`, because sign-in would be off. Repeat [Deployment](deployment.md) step 3 and, if you
+   use the role check, [Configuration](configuration.md), "Turn on sign-in", step 6. You should be asked for the same values
+   as before.
 
-4. **To roll back,** run `docker stop hcw-cloud-crawler`, then the same `docker run` command from Deployment step 4 with
-   `hcw-cloud-crawler-appliance:previous` at the end. You should see the older `version` in the health document.
+4. **Stop the old container and start the new one.** Run `docker stop hcw-cloud-crawler`, then repeat Deployment step 4. You
+   should see the health document with the new `version`.
+
+5. **To roll back,** repeat step 3, run `docker stop hcw-cloud-crawler`, then run the same `docker run` command from
+   Deployment step 4 with `hcw-cloud-crawler-appliance:previous` at the end. You should see the older `version` in the
+   health document.
 
 ## What the project checks for you
 

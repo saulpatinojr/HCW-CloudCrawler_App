@@ -163,8 +163,8 @@ With sign-in on, every route except `GET /api/health` needs a Microsoft Entra ac
     curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8080/mcp
     ```
 
-    You should see `401`. Programs that call the tools must request tokens for the scope `api://<client id>/access_as_user`,
-    using your client id.
+    You should see `401`. Programs that call the tools must request tokens for your Application ID URI followed by
+    `/access_as_user`; with the suggested URI that is `api://<client id>/access_as_user`, using your client id.
 
 Sign-in has never been tried against a real directory. The README has a short sandbox runbook for that,
 [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant); it has not been run yet

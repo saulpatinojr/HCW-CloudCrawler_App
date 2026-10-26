@@ -100,7 +100,7 @@ Another program is already using the port (8080 unless you changed it).
 | `421` `Invalid Host header` | The host name in the request is not in `CC_ALLOWED_HOSTS` (only loopback names are accepted by default). | Set `CC_ALLOWED_HOSTS` to the name callers use and restart ([Configuration](configuration.md)). |
 | `403` `Invalid Origin header` | A web page on another site called `/mcp`. | Call it from a program or a server, not from a browser page. |
 | `403` `this identity is not allowed to use the service` | Sign-in is on, `CC_AUTH_REQUIRED_ROLES` is set, and the valid token carries none of those app roles. | Assign the role in Entra, then get a new token. |
-| `401` | Sign-in is on and the token is missing, expired, for another audience or directory, or not signed by your directory. | Get a new token for `api://<client id>/access_as_user`. The log line gives one reason word, never the token. |
+| `401` | Sign-in is on and the token is missing, expired, for another audience or directory, or not signed by your directory. | Get a new token for your Application ID URI followed by `/access_as_user`; with the suggested URI that is `api://<client id>/access_as_user`. The log line gives one reason word, never the token. |
 | `503` | Sign-in is on and the directory's signing keys could not be fetched. | Check the server can reach the internet; retry. Requests are never let through meanwhile. |
 | `forbidden: this tool needs a signed-in person` | The token belongs to a service, not a person. | Use a token a person signed in to get. |
 | `forbidden: actorId does not match` | The `actorId` you sent differs from the token's. | Leave `actorId` out. |
