@@ -9,7 +9,8 @@ The commands work in PowerShell 7 and Git Bash except where two are shown.
 
 The program checks its settings before it starts and prints the reason on one line. Exit code `3` means it refused.
 
-1. **Read the reason after `"reason":`.** You should see either a variable name starting `AZURE_` or a name starting `CC_`.
+1. **Read the reason after `"reason":`.** You should see a variable name starting `AZURE_`, or a name starting `CC_`, or the
+   words `CC_AUTH_MODE=off on the non-loopback address`.
 
 2. **If it names an `AZURE_` variable,** remove it. This is a safety check: the program never runs with a stored Azure
    secret. Use `az login` or a managed identity instead.
@@ -30,7 +31,14 @@ The program checks its settings before it starts and prints the reason on one li
 
 3. **If it names a `CC_` setting,** correct that value using the table in [Configuration](configuration.md). The usual
    causes are `CC_AUTH_MODE=entra` without `CC_ENTRA_TENANT_ID` or `CC_ENTRA_AUDIENCE`, and a `CC_ENTRA_*` setting left in the
-   window while sign-in is `off`. You should see the `startup` line on the next start.
+   window while sign-in is `off` (this includes `CC_AUTH_REQUIRED_ROLES`). You should see the `startup` line on the next start.
+
+4. **If it says `CC_AUTH_MODE=off on the non-loopback address`,** the program was told to listen beyond this computer with
+   sign-in off, which it refuses. This is what a bare `docker run` does, because the image listens on every address. Pick
+   one fix. Turn sign-in on ([Configuration](configuration.md), "Turn on sign-in"). Or, from source, remove `CC_BIND_HOST`
+   so it listens on this computer only. Or, in a lab only, add `-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` to the
+   `docker run` command ([Installation](installation.md), Route 2, step 6). You should see the `startup` line on the next
+   start.
 
 ## The program says `error while attempting to bind on address`
 
@@ -91,6 +99,7 @@ Another program is already using the port (8080 unless you changed it).
 | `400` from `/mcp` | The request is not a valid MCP request. | Send a proper MCP request from an MCP client. |
 | `421` `Invalid Host header` | The host name in the request is not in `CC_ALLOWED_HOSTS` (only loopback names are accepted by default). | Set `CC_ALLOWED_HOSTS` to the name callers use and restart ([Configuration](configuration.md)). |
 | `403` `Invalid Origin header` | A web page on another site called `/mcp`. | Call it from a program or a server, not from a browser page. |
+| `403` `this identity is not allowed to use the service` | Sign-in is on, `CC_AUTH_REQUIRED_ROLES` is set, and the valid token carries none of those app roles. | Assign the role in Entra, then get a new token. |
 | `401` | Sign-in is on and the token is missing, expired, for another audience or directory, or not signed by your directory. | Get a new token for `api://<client id>/access_as_user`. The log line gives one reason word, never the token. |
 | `503` | Sign-in is on and the directory's signing keys could not be fetched. | Check the server can reach the internet; retry. Requests are never let through meanwhile. |
 | `forbidden: this tool needs a signed-in person` | The token belongs to a service, not a person. | Use a token a person signed in to get. |

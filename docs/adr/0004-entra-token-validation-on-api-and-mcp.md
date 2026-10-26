@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-24
+- **Amended:** 2026-10-26 (refuse an unauthenticated non-loopback start; optional app-role check; see the last section
+  before "Rollback or revisit trigger")
 - **Owners:** Hybrid Cloud Works owner (saulpatinojr)
 - **Issue:** [#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8)
 
@@ -59,7 +61,8 @@ and take `actorId` from the token.
    caller's identity known.
 7. **Logs.** A refusal logs `request_error`, the status and a fixed reason word (`expired`, `audience`, ...) through
    the content-free writer. No token, claim, object id or tenant id is logged.
-8. **Exposure.** The default stays `off`, so the README's lab-only warning stays as an interim note. The server now
+8. **Exposure** (partly superseded by the amendment of 2026-10-26: the image no longer starts unauthenticated without
+   an explicit opt-out). The default stays `off`, so the README's lab-only warning stays as an interim note. The server now
    binds `127.0.0.1` unless `CC_BIND_HOST` says otherwise; the container image sets `CC_BIND_HOST=0.0.0.0`, so the
    image behaves as before. Starting unauthenticated on a non-loopback address logs one `warning` line. Nothing is
    more exposed than before.
@@ -126,9 +129,57 @@ names what would reopen it.
 | 3 | Where should the server listen by default? | On `127.0.0.1` (this machine only). `0.0.0.0` is used only inside the container image, which sets `CC_BIND_HOST=0.0.0.0`, and wherever an operator sets `CC_BIND_HOST` on purpose. | `config.py` (`bind_host`), `infrastructure/docker/Dockerfile`; Decision item 8 | The image is deployed somewhere without a network boundary in front of it |
 | 4 | Who may call the model tools (read, ingest, propose, evaluate)? | Any valid token for the configured tenant and audience. There is no client-application allow-list and no role check yet, which the owner called "fine for now". Who can obtain a token is controlled in Entra ("Assignment required" on the enterprise application). The person-only tools still need a person's delegated token (Decision item 5); that part is unchanged. | `security/entra.py`, `mcp_server.py`; Consequences above | A second client application, a service account with narrower rights, or per-role authorisation is wanted (see the revisit triggers below) |
 
-Nothing in the code changed because of these answers: they confirm what pull request 34 already merged. Ticket
+Nothing in the code changed because of these answers: they confirm what pull request 34 already merged. Part of
+rows 2, 3 and 4 was then superseded on 2026-10-26 (see the amendment at the end of this record). Ticket
 [#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) stays open, because the real-tenant check
 (`VALIDATION.md`) is still to do.
+
+## Amendment of 2026-10-26: refuse an unauthenticated non-loopback start, and an optional role check
+
+On 2026-10-26 the owner (saulpatinojr) asked for the two hardening steps that the owner decisions above had deferred
+("only when a deployment outside a lab exists"): a sandbox Entra tenant is now available and the owner asked whether
+the appliance can be deployed, so both are built now, in
+[ticket #8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8). This amendment supersedes the "does not
+refuse to start" part of owner decision 2, the "the image behaves as before" part of Decision item 8, and the "no role
+check yet" part of owner decision 4. Everything else in this ADR stands. The default `CC_AUTH_MODE=off` and the
+loopback default for `CC_BIND_HOST` do not change.
+
+1. **No unauthenticated start on a non-loopback address.** With `CC_AUTH_MODE=off`, `Settings` raises (so the process
+   exits 3 with the setting named, before anything listens) when `CC_BIND_HOST` is not a loopback address
+   (`127.0.0.0/8`, `::1`), unless `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK` is `true`. Only a clear yes counts (`1`,
+   `true`, `yes`, `on`); an empty or unrecognised value is not an opt-out. The opt-out is refused when
+   `CC_AUTH_MODE=entra`, like the `CC_ENTRA_*` settings with sign-in off, so it cannot sit in a deployment's settings
+   and become live after a later switch. Using it logs the existing one-line `warning` (`auth: false, exposed: true`).
+2. **The image does not carry the opt-out.** The safest design that keeps lab use possible is: the image keeps
+   `CC_BIND_HOST=0.0.0.0` (a container must listen on every interface to be reached through a published port) and sets
+   neither `CC_AUTH_MODE` nor the opt-out. `docker run` with no settings therefore exits 3 with a message naming both
+   ways out (turn sign-in on, or, lab only, add `-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true`). A deployment cannot
+   end up open by leaving settings out. The `ci.yml` image job proves the refusal, then starts the image with the
+   opt-out (health answers) and with placeholder Entra settings (`/api/health` says `entra`, a request without a token
+   gets `401`); `tests/unit/test_auth_hardening.py` asserts the Dockerfile never sets the opt-out and that CI is the
+   only workflow that uses it.
+3. **Optional app-role check.** `CC_AUTH_REQUIRED_ROLES` is a comma or space separated list of app role values
+   (default empty: no check, today's behaviour; refused with sign-in off). The role values are the `roles` claim that
+   Entra puts in the token of a user who was assigned the role, or of an application that was granted it. After the
+   token is valid, a request whose `roles` claim holds none of the listed values is answered `403` with
+   `{"error": {"code": "forbidden", "message": "this identity is not allowed to use the service"}}`, no
+   `WWW-Authenticate` header and no mention of which roles would have been enough; the log line is the status and the
+   fixed word `role`. A `roles` claim that is not a list of text counts as no roles. The check covers every route
+   except `GET /api/health`, runs after (never instead of) the token checks, so an invalid token is still `401`.
+4. **Delegated tokens keep working exactly as item 5 above says.** The role check and the person check are separate
+   gates. A person's delegated token (`scp` holds `access_as_user`, not app-only) that also carries a required role may
+   call the person-only tools; an app-only token that carries the role may call the model tools but still gets
+   `forbidden` from the person-only tools. A person who was not assigned the role gets `403` before any tool runs, so
+   with roles required the app role must be assigned to the people (or a group) as well as "Assignment required".
+5. **The role value must differ from the scope value.** Entra refuses an app registration whose app role and
+   delegated scope share one value (the Cloud Assessor real-tenant run hit this). The README's app role and sandbox
+   runbook use `CloudCrawler.Access` and `access_as_user`, and `tests/unit/test_runbook.py` fails if they ever match.
+
+Consequences: a deployment that today relies on the image starting with no settings stops starting, on purpose; the
+fix is one of the two settings above. The engine package, its models and its detector ids do not change, so the AddOn
+is not affected by the code. The role check is one gate for the whole service, not a permission per tool; a client
+application allow-list is still not built. Not run against a real tenant: the README's "Checking sign-in against a
+real tenant" runbook is how the owner observes that the `roles` claim looks as assumed (`VALIDATION.md`).
 
 ## Rollback or revisit trigger
 

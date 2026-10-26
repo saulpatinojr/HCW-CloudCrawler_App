@@ -11,17 +11,38 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Security
+
+- **The appliance refuses to start without sign-in on a non-loopback address** (ticket #8, owner decision of 2026-10-26,
+  [ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md) amendment). With `CC_AUTH_MODE=off` and
+  `CC_BIND_HOST` anything but a loopback address, the process now exits 3 and names the way out, unless
+  `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` is set on purpose (lab only; it is refused with sign-in on, and it still
+  writes the one `warning` line). The default is unchanged: sign-in off on `127.0.0.1` starts as before. **Behaviour
+  change:** the container image binds `0.0.0.0` and does not set the opt-out, so `docker run` with no settings now exits
+  3. Run it with sign-in on (`CC_AUTH_MODE=entra`, `CC_ENTRA_TENANT_ID`, `CC_ENTRA_AUDIENCE`) or, in a lab only, add
+  `-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true`. The `ci.yml` image job now proves the refusal, the opt-out start and
+  the sign-in start.
+- **Optional app-role check** (`CC_AUTH_REQUIRED_ROLES`, comma or space separated app role values, empty by default so
+  nothing changes). With sign-in on and roles listed, a valid token whose `roles` claim holds none of them gets `403`
+  with a generic body that names no role. Person-only tools still need a delegated token with the scope
+  `access_as_user`, exactly as before; the role is a separate gate. Refused when sign-in is off.
+
 ### Added
 
+- A short sandbox runbook in the README, "Checking sign-in against a real tenant": Azure CLI and PowerShell steps that
+  create the Entra app registration with an app role (`CloudCrawler.Access`) and a delegated scope (`access_as_user`,
+  deliberately a different value), start the appliance with sign-in on, make seven calls with the expected status codes,
+  and clean up. A test fails if the role and the scope values ever match. Not yet run against a real tenant
+  (`VALIDATION.md`). The engine package is unchanged, so the AddOn needs no entry in its `docs/whats-new-upstream.md`.
 - **The remaining guide pages on the documentation site** (ticket #11): Quick start, Installation, Configuration,
   Deployment, Operations, Testing and Troubleshooting, so the site now has the whole standard page list. Each is a
   numbered procedure for a junior administrator: one action per step, what you should see after it, PowerShell 7 and Git
   Bash commands where they differ, and a link to the official documentation for every outside tool. The commands were run
   before they were written down (`VALIDATION.md` lists which). Deployment and Operations say plainly what is not supported
-  yet, including that refusing to start without sign-in on a network address and an optional role check are planned and
-  tracked in issue #8, not done. `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide
-  page alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are
-  unchanged, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
+  yet, and describe the sign-in hardening from the entry above as it now behaves (the start-up refusal, its lab opt-out and
+  the optional role check). `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide page
+  alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are unchanged
+  by this entry, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
 
 ## [0.1.0] - 2026-10-25
 

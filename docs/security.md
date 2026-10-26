@@ -27,9 +27,12 @@ answer is `503`, never a pass. The token and its claims are never logged. The de
 
 Three things make the default less exposed:
 
-- The server listens on `127.0.0.1` (this machine only) unless `CC_BIND_HOST` says otherwise. The container image sets
-  `CC_BIND_HOST=0.0.0.0`, so the image listens on every interface, and it writes one `warning` line if it starts that
-  way without sign-in.
+- The server listens on `127.0.0.1` (this machine only) unless `CC_BIND_HOST` says otherwise. With sign-in off it
+  refuses to start on any other address unless `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` is set on purpose (lab
+  only), and it then writes one `warning` line. The container image sets `CC_BIND_HOST=0.0.0.0` and never sets that
+  opt-out, so the image starts only with `CC_AUTH_MODE=entra` (or with the opt-out added by the person running it).
+- With `CC_AUTH_REQUIRED_ROLES` set (sign-in on), a valid token must also carry at least one of those app roles in its
+  `roles` claim; otherwise the answer is `403` with a body that does not say which roles would have been enough.
 - A request with the wrong `Host` header gets `421`, and a cross-origin request to `/mcp` gets `403`. These are useful
   protections but they are not sign-in.
 - `GET /api/health` reports `"auth": "off"` or `"auth": "entra"`, so you can see which one is running.

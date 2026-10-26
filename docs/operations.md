@@ -16,7 +16,7 @@ PowerShell 7 and Git Bash. If you run from source, the program's window is the l
     | Field | Healthy value |
     | --- | --- |
     | `production` | `false`, always |
-    | `auth` | `entra` on a server; `off` is for your own machine only |
+    | `auth` | `entra` on a server; `off` is for a lab or your own machine only |
     | `azureConnectivity` | `not-configured` on a server (`recorded` and `stdio-developer-credential` are for development) |
     | `ledger` | counts of decisions, evidence, open contradictions and open proposals |
 
@@ -35,8 +35,9 @@ PowerShell 7 and Git Bash. If you run from source, the program's window is the l
 
     | Event | What it means | What to do |
     | --- | --- | --- |
-    | `startup_refused` | The program would not start. | [Troubleshooting](troubleshooting.md) |
-    | `warning` with `"exposed":true` | It started without sign-in on a network address. | Turn sign-in on ([Configuration](configuration.md)). |
+    | `startup_refused` | The program would not start, for example because sign-in is off on a network address. | [Troubleshooting](troubleshooting.md) |
+    | `warning` with `"exposed":true` | It started without sign-in on a network address because `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` is set (lab only). | Turn sign-in on and remove that setting ([Configuration](configuration.md)). |
+    | `request_error` with `"status":403` | A valid token lacks the app role in `CC_AUTH_REQUIRED_ROLES`; `reason` is `role`. | Assign the role to that person or service in Entra. |
     | `request_error` with `"status":401` | A caller's token was refused; `reason` is one word such as `missing`, `expired` or `signature`. | `signature` means the token was not signed by your directory; many of them mean someone is trying tokens that are not yours. |
     | `request_error` with `"status":503` | The directory's signing keys could not be fetched. | Check the server can reach the internet. |
 
@@ -91,6 +92,9 @@ scan and `pip-audit`. Nothing watches your running server.
 - **Backups.** Nothing is saved to disk, so there is nothing to back up and a restart loses the ledger.
 - **Metrics and alerts.** There is no metrics endpoint and no built-in alerting; watch the log and the health document
   yourself.
-- **Hardened sign-in.** Refusing to start without sign-in on a network address, and an optional role check, are planned
-  and tracked in [issue #8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8). They are not done.
+- **Sign-in proven against a real directory.** Every test token is made locally; the README's sandbox runbook,
+  [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant), has not been run yet.
+  [Issue #8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) stays open until it is.
+- **Fine-grained access.** The role check is one gate for the whole service, and there is no list of allowed client
+  applications ([Known limitations](known-limitations.md)).
 - **More than one copy.** Each copy would hold its own, different ledger.

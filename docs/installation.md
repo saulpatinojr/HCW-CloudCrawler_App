@@ -3,8 +3,8 @@
 Install Cloud Crawler either from the source code or as a container image (a packaged copy of the program that runs
 the same everywhere) that you build yourself.
 
-> **Trusted lab network only.** Sign-in is off by default. Run the program on your own machine, or turn sign-in on first
-> ([Configuration](configuration.md)). It reports `"production": false`.
+> **Trusted lab network only.** Sign-in is off by default. On your own machine that is fine. The container image refuses
+> to start without sign-in unless you add a lab-only setting (step 6 below). The program reports `"production": false`.
 
 ## Choose a route
 
@@ -66,19 +66,31 @@ The steps are the same in PowerShell 7 and Git Bash, except the last command of 
     echo $?
     ```
 
-5. **Run the image.** `-d` runs it in the background and `127.0.0.1:` publishes the port to your computer only (see the
-   [docker run reference](https://docs.docker.com/reference/cli/docker/container/run/)).
+5. **Check the sign-in refusal.** The image listens on every address inside the container. With sign-in off, the program
+   refuses to run like that.
 
     ```text
-    docker run -d --rm --name hcw-cloud-crawler -p 127.0.0.1:8080:8080 hcw-cloud-crawler-appliance:dev
+    docker run --rm hcw-cloud-crawler-appliance:dev
+    ```
+
+    You should see one `startup_refused` line that ends `or (lab only) set CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true`, and
+    exit code `3` again.
+
+6. **Run the image for a lab.** The `-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` setting says you accept running without
+   sign-in; use it on your own machine only. `-d` runs the container in the background and `127.0.0.1:` publishes the
+   port to your computer only (see the [docker run reference](https://docs.docker.com/reference/cli/docker/container/run/)).
+   For a server other people use, turn sign-in on instead ([Deployment](deployment.md)).
+
+    ```text
+    docker run -d --rm --name hcw-cloud-crawler -p 127.0.0.1:8080:8080 -e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true hcw-cloud-crawler-appliance:dev
     ```
 
     You should see one long container id.
 
-6. **Check it.** Run the health command from [Quick start](quick-start.md) step 5. You should see `"ok": true`,
-   `"azureConnectivity": "not-configured"` and `"production": false`.
+7. **Check it.** Run the health command from [Quick start](quick-start.md) step 5. You should see `"ok": true`,
+   `"auth": "off"`, `"azureConnectivity": "not-configured"` and `"production": false`.
 
-7. **Read its log, then stop it.**
+8. **Read its log, then stop it.**
 
     ```text
     docker logs hcw-cloud-crawler
@@ -88,8 +100,8 @@ The steps are the same in PowerShell 7 and Git Bash, except the last command of 
     docker stop hcw-cloud-crawler
     ```
 
-    You should see a `warning` line with `"exposed":true` (expected: inside the container the program listens on every
-    address, and step 5 kept the port private) and a `startup` line. The second command prints the container name.
+    You should see a `warning` line with `"exposed":true` (expected: you used the lab-only setting) and a `startup` line.
+    The second command prints the container name.
 
 ## Not installed yet
 

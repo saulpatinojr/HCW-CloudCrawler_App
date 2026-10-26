@@ -69,7 +69,11 @@ ENTRA_KEYS = (
     "CC_ENTRA_HUMAN_SCOPE",
     "CC_ENTRA_CLOCK_SKEW_SECONDS",
     "CC_ENTRA_JWKS_CACHE_SECONDS",
+    "CC_AUTH_REQUIRED_ROLES",
 )
+# The loud opt-out that lets sign-in stay off on a non-loopback address (ADR 0004, amendment 2026-10-26).
+ALLOW_UNAUTHENTICATED_KEY = "CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK"
+MAX_ROLES = 32
 
 
 def _auth_mode(env: Mapping[str, str], key: str) -> str:
@@ -87,6 +91,19 @@ def _audiences(env: Mapping[str, str], key: str) -> tuple[str, ...]:
             raise ValueError(f"{key} entries must be printable text without spaces, at most 256 characters")
         values.append(item)
     return tuple(dict.fromkeys(values))
+
+
+def _roles(env: Mapping[str, str], key: str) -> tuple[str, ...]:
+    """App role values a token must carry one of, comma or space separated (an Entra role value has no spaces)."""
+    values = []
+    for item in env.get(key, "").replace(",", " ").split():
+        if len(item) > 128 or any(ord(c) < 33 or ord(c) > 126 for c in item):
+            raise ValueError(f"{key} entries must be printable text without spaces, at most 128 characters")
+        values.append(item)
+    roles = tuple(dict.fromkeys(values))
+    if len(roles) > MAX_ROLES:
+        raise ValueError(f"{key} may list at most {MAX_ROLES} roles")
+    return roles
 
 
 def _bind_host(env: Mapping[str, str], key: str) -> str:
@@ -124,10 +141,24 @@ class Settings:
     entra_jwks_cache_seconds: int = DEFAULT_JWKS_CACHE_SECONDS
     # The interface uvicorn binds. Loopback unless the deployment says otherwise (the container image sets 0.0.0.0).
     bind_host: str = LOOPBACK_BIND_HOST
+    # Entra only. App role values (the token's `roles` claim) of which a caller needs at least one, or the request is
+    # answered 403. Empty (the default) means no role check, the behaviour before this setting existed.
+    auth_required_roles: tuple[str, ...] = ()
+    # Off only. The appliance refuses to start with sign-in off on a non-loopback address unless this is true.
+    allow_unauthenticated_non_loopback: bool = False
 
     def __post_init__(self) -> None:
         if self.auth_mode not in AUTH_MODES:
             raise ValueError(f"CC_AUTH_MODE must be one of {', '.join(AUTH_MODES)}")
+        if self.auth_mode == "off":
+            if self.auth_required_roles:
+                raise ValueError("CC_AUTH_REQUIRED_ROLES needs CC_AUTH_MODE=entra (a role check needs a token)")
+            if not self.allow_unauthenticated_non_loopback and not ipaddress.ip_address(self.bind_host).is_loopback:
+                raise ValueError(
+                    f"CC_AUTH_MODE=off on the non-loopback address {self.bind_host} would answer anyone who can reach "
+                    f"the port: set CC_AUTH_MODE=entra, bind {LOOPBACK_BIND_HOST}, or (lab only) set "
+                    f"{ALLOW_UNAUTHENTICATED_KEY}=true"
+                )
         if self.auth_mode == "entra":
             if not _GUID.match(self.entra_tenant_id):
                 raise ValueError("CC_AUTH_MODE=entra needs CC_ENTRA_TENANT_ID set to the tenant (directory) id")
@@ -141,6 +172,8 @@ class Settings:
                 raise ValueError(
                     f"CC_ENTRA_JWKS_CACHE_SECONDS must be between {MIN_JWKS_CACHE_SECONDS} and {MAX_JWKS_CACHE_SECONDS}"
                 )
+            if self.allow_unauthenticated_non_loopback:
+                raise ValueError(f"{ALLOW_UNAUTHENTICATED_KEY} is only for CC_AUTH_MODE=off; remove it")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> Settings:
@@ -150,6 +183,7 @@ class Settings:
         if stray:
             # Entra settings with authentication off would leave the operator believing the routes are protected.
             raise ValueError("Entra settings are present but CC_AUTH_MODE is off: " + ", ".join(stray))
+        allow = _flag(env, ALLOW_UNAUTHENTICATED_KEY)
         return cls(
             port=_int(env, "PORT", 8080, minimum=1),
             log_silent=_flag(env, "CC_LOG_SILENT"),
@@ -168,4 +202,6 @@ class Settings:
                 env, "CC_ENTRA_JWKS_CACHE_SECONDS", DEFAULT_JWKS_CACHE_SECONDS, minimum=MIN_JWKS_CACHE_SECONDS
             ),
             bind_host=_bind_host(env, "CC_BIND_HOST"),
+            auth_required_roles=_roles(env, "CC_AUTH_REQUIRED_ROLES"),
+            allow_unauthenticated_non_loopback=allow,
         )

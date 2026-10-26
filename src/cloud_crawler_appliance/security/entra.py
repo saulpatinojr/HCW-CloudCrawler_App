@@ -6,9 +6,10 @@ and `nbf` hold within a small declared clock skew, and whose `tid` is the config
 HMAC algorithms, other RSA variants, an unknown or missing `kid`, and a missing `exp`, `nbf`, `iss`, `aud`, `tid`
 or `oid` are all refused.
 
-What it keeps: a `Principal` (object id, tenant id, scopes, whether the token is app-only) on the request scope. The
-token itself is never stored, forwarded or logged, and no claim value is logged: a failure is logged as a status and
-an `AuthFailure` code, which is a fixed word.
+What it keeps: a `Principal` (object id, tenant id, scopes, app roles, whether the token is app-only) on the request
+scope. The token itself is never stored, forwarded or logged, and no claim value is logged: a failure is logged as a
+status and an `AuthFailure` code, which is a fixed word. With `CC_AUTH_REQUIRED_ROLES` set, a valid token that carries
+none of those app roles is refused with 403 (`AuthFailure.ROLE`) after every other check has passed.
 
 The key fetcher is injectable so tests run with a locally generated key and no network. The default fetcher uses the
 standard library over HTTPS only, with a timeout, a size cap and no redirects.
@@ -65,6 +66,7 @@ class AuthFailure(StrEnum):
     ISSUER = "issuer"
     TENANT = "tenant"
     CLAIMS = "claims"
+    ROLE = "role"
     UNAVAILABLE = "unavailable"
 
 
@@ -82,6 +84,7 @@ class Principal:
     tenant_id: str
     scopes: frozenset[str]
     app_only: bool
+    roles: frozenset[str] = frozenset()  # the token's `roles` claim (app roles); empty when absent or malformed
 
     def is_person(self, required_scope: str) -> bool:
         """A signed-in person: a delegated token (it has `scp`) that carries the required scope and is not app-only."""
@@ -192,6 +195,7 @@ class TokenVerifier:
         self._issuers = [f"{ENTRA_AUTHORITY}/{tenant}/v2.0", f"{V1_ISSUER_HOST}/{tenant}/"]
         self._skew = settings.entra_clock_skew_seconds
         self.human_scope = settings.entra_human_scope
+        self.required_roles = frozenset(settings.auth_required_roles)
         self._cache = JwksCache(
             f"{ENTRA_AUTHORITY}/{tenant}/discovery/v2.0/keys",
             fetcher or fetch_jwks_over_https,
@@ -242,12 +246,22 @@ class TokenVerifier:
             raise AuthError(AuthFailure.TENANT)
         if not isinstance(oid, str) or not oid.strip() or len(oid) > 64 or not isinstance(scp, str):
             raise AuthError(AuthFailure.CLAIMS)
+        raw_roles = claims.get("roles")
+        # A `roles` claim that is not a list of text counts as no roles: it never grants anything, so a deployment that
+        # requires a role answers 403, and one that does not require a role never looks at the claim.
+        valid = isinstance(raw_roles, list) and all(isinstance(r, str) for r in raw_roles)
         return Principal(
             object_id=oid.strip().lower(),
             tenant_id=self._tenant,
             scopes=frozenset(scp.split()),
             app_only=claims.get("idtyp") == "app" or not scp.strip(),
+            roles=frozenset(raw_roles) if valid else frozenset(),
         )
+
+    def authorize(self, principal: Principal) -> None:
+        """Raises AuthError(ROLE) when roles are required and the token carries none of them (ADR 0004 amendment)."""
+        if self.required_roles and not (principal.roles & self.required_roles):
+            raise AuthError(AuthFailure.ROLE)
 
 
 def _bearer_token(scope: Scope) -> str:
@@ -272,6 +286,10 @@ def _refusal(failure: AuthFailure) -> JSONResponse:
         return JSONResponse(
             body, status_code=503, headers={**common, "Retry-After": str(SERVICE_UNAVAILABLE_RETRY_SECONDS)}
         )
+    if failure is AuthFailure.ROLE:
+        # Generic on purpose: the body does not say which roles would have been enough.
+        body = {"error": {"code": "forbidden", "message": "this identity is not allowed to use the service"}}
+        return JSONResponse(body, status_code=403, headers=common)
     if failure is AuthFailure.MISSING:
         body = {"error": {"code": "unauthenticated", "message": "a bearer access token is required"}}
         return JSONResponse(body, status_code=401, headers={**common, "WWW-Authenticate": "Bearer"})
@@ -297,10 +315,10 @@ class EntraAuthMiddleware:
         try:
             token = _bearer_token(scope)
             principal = await anyio.to_thread.run_sync(self.verifier.verify, token)
+            self.verifier.authorize(principal)
         except AuthError as exc:
-            logs.log_event(
-                "request_error", status=503 if exc.failure is AuthFailure.UNAVAILABLE else 401, reason=exc.failure
-            )
+            status = {AuthFailure.UNAVAILABLE: 503, AuthFailure.ROLE: 403}.get(exc.failure, 401)
+            logs.log_event("request_error", status=status, reason=exc.failure)
             await _refusal(exc.failure)(scope, receive, send)
             return
         scope[PRINCIPAL_SCOPE_KEY] = principal

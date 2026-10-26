@@ -24,8 +24,9 @@ check that was run and every check that was not.
 
 - **Microsoft Entra sign-in has never run against a real tenant.** The checks follow Microsoft Learn, but every token
   in the tests is made locally. Not yet observed on a live token: the exact `iss` forms, which `aud` form an app
-  registration issues, what `scp` and `idtyp` look like for the website's tokens, and the signing-key address. The first
-  real deployment with sign-in on is the test.
+  registration issues, what `scp`, `roles` and `idtyp` look like for the website's tokens, and the signing-key address.
+  The README has a short sandbox runbook ("Checking sign-in against a real tenant") that observes all of these; it has
+  not been run yet.
 - **The stdio host has not run against a live Azure MCP Server with a signed-in account.** The contract test starts the
   real 3.0.0 server and checks its tool list, but it makes no Azure call.
 - **The recorded results are hand-written.** They were written from the 3.0.0 source with fictional values and have not
@@ -39,17 +40,17 @@ Sign-in is **off by default**, and that is a decision, not an oversight ([ADR 00
 With it on, these gaps remain:
 
 - No list of allowed client applications. Who can obtain a token is controlled in Entra with "Assignment required".
-- No per-role checks on the model tools: any valid token for the tenant and audience can read, ingest, propose and
-  evaluate.
+- Role checks are optional and coarse. With `CC_AUTH_REQUIRED_ROLES` empty (the default) any valid token for the tenant
+  and audience can read, ingest, propose and evaluate. With roles listed, a token needs at least one of them in its
+  `roles` claim, but that is one gate for the whole service, not a different permission per tool.
 - Only the public Microsoft cloud is supported; sovereign clouds are not.
 - No revocation: a stolen token works until it expires, as with any access token. No token binding, and no rate limit on
   failed sign-ins.
 - A person's token proves consent, not attention: a service holding a person's token acts as that person.
-- The appliance does not refuse to start without sign-in, and the container image listens on every interface. Starting
-  unauthenticated on such an address writes one warning line.
-
-The owner has decided to build the stricter hardening (refusing to start without sign-in on a non-loopback address, an
-optional app-role check) only when a deployment outside a lab exists.
+- With sign-in off, the appliance refuses to start on any address except this machine's own, unless
+  `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` is set on purpose. The container image listens on every interface and
+  never sets that value, so `docker run` needs sign-in on or the explicit opt-out. Using the opt-out writes one warning
+  line. The owner decided to build this on 2026-10-26 (ADR 0004, amendment).
 
 ## What the detectors can see
 
