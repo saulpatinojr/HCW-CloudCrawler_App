@@ -293,3 +293,33 @@ def test_a_supported_finding_that_cites_evidence_the_ledger_does_not_hold_does_n
     held = orphan.model_copy(update={"findingId": "finding_held", "evidenceIds": [export.evidenceId]})
     ledger.record(DriftResult(decisionId=key.decisionId, evaluatedAt=LATER, findings=[held]))
     assert open_for_database() == []
+
+
+def test_another_observed_row_in_scope_decides_the_resource_when_one_cannot_be_placed():
+    # The statement in ADR 0005 and the known limitations: unknown applies unless another observed row of the same
+    # resource is in scope and decides it. The export row (tags env=prod) does, whatever the state and the plan say.
+    export = export_evidence(NOW)
+    unplaceable = state_of(
+        state_record("azurerm_mssql_database", "sql_01", database(True), sensitive=[attr_path("tags")])
+    )
+    state = take(EvidenceKind.TF_STATE, unplaceable, LATER)
+    plan = plan_evidence(True, LATER)
+    decision = make_decision(
+        scope=DecisionScope(subscriptionIds=[SUB], tagSelectors={"env": "prod"}),
+        selector=Selector(resourceTypes=["microsoft.sql/servers/databases"]),
+    )
+    result = evaluate_decision(decision, [export, state, plan], now=LATER)
+    finding = finding_for(result)
+    assert finding.verdict is Verdict.CONTRADICTED and finding.evidenceIds == [export.evidenceId]
+
+
+def test_a_supported_finding_that_cites_nothing_closes_a_contradiction_as_it_always_did():
+    ledger = InMemoryLedger()
+    export = export_evidence(NOW)
+    ledger.add_evidence(export)
+    base = evaluate_decision(DECISION, [export], now=NOW)
+    ledger.record(base)
+    key = finding_for(base)
+    uncited = key.model_copy(update={"findingId": "finding_uncited", "verdict": Verdict.SUPPORTED, "evidenceIds": []})
+    ledger.record(DriftResult(decisionId=key.decisionId, evaluatedAt=LATER, findings=[uncited]))
+    assert not [c for c in ledger.contradictions.values() if c.resourceId == DATABASE.lower() and c.resolvedAt is None]
