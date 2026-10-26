@@ -506,8 +506,9 @@ def build_mcp_server(
         "evidence_ingest",
         "Ingest evidence",
         "Validate, hash, redact, normalise and store an artifact or an Azure MCP result with provenance. "
-        "kind arg-export takes a Resource Graph JSON export (an array, or an object with a data array) as "
-        "imported evidence.",
+        "kind arg-export takes a Resource Graph JSON export (an array, or an object with a data array), tf-state a "
+        "Terraform state file (version 4) and tf-plan the JSON of a Terraform plan (`terraform show -json`, "
+        "format_version 1.x), each as imported evidence. Terraform values marked sensitive are never stored.",
         caller="model",
         read_only=False,
         idempotent=False,

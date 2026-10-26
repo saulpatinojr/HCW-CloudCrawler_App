@@ -64,6 +64,8 @@ First implementation slice. What exists today:
 - the engine's evidence, provenance, collection-run, decision, claim, drift,
   contradiction and review models, canonical hashing and redaction;
 - the Azure Resource Graph export normaliser (JSON array export);
+- the Terraform normalisers: a state file (version 4) or a plan (`terraform show -json`) becomes the same resource rows through
+  a table of azurerm types, and whatever Terraform cannot say stays `unknown` ([ADR 0005](docs/adr/0005-terraform-evidence-is-read-through-a-provider-type-table.md));
 - the Azure MCP host (`src/cloud_crawler_appliance/mcp_host`): Azure MCP
   Server 3.0.0 as a child process over stdio (the development model, the
   developer's own credential chain, nothing held by the appliance) or a

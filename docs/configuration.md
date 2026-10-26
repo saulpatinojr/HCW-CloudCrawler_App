@@ -43,7 +43,7 @@ You should see nothing. The next start listens on port 8090. To undo it, run `Re
 | `CC_AUTH_REQUIRED_ROLES` | empty | Optional, with `entra`. App role values, separated by spaces or commas. A token must carry at least one, or the answer is `403`. |
 | `CC_ENTRA_HUMAN_SCOPE` | `access_as_user` | The scope a person's token needs for the human-only tools. |
 | `CC_ENTRA_CLOCK_SKEW_SECONDS`, `CC_ENTRA_JWKS_CACHE_SECONDS` | `60`, `900` | Token time tolerance (0 to 300) and signing-key cache time (60 to 86400). |
-| `CC_MAX_UPLOAD_BYTES`, `CC_MAX_ROWS` | `5242880`, `5000` | Largest request body and largest Resource Graph export accepted. |
+| `CC_MAX_UPLOAD_BYTES`, `CC_MAX_ROWS` | `5242880`, `5000` | Largest request body, and the most resources one Resource Graph export or one Terraform state or plan may give. |
 | `CC_EVIDENCE_TTL_HOURS` | `24` | How long evidence counts as fresh. |
 
 Entra settings (including `CC_AUTH_REQUIRED_ROLES`) with `CC_AUTH_MODE` left `off`, or `entra` without a tenant id or audience, stop the program at start-up. So does sign-in `off` on a non-loopback address without the lab-only setting.

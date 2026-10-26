@@ -2,8 +2,8 @@
 from any resource and the claim's expectation compares it (`exists`, `in`, `eq`, `neq`, ...; `base.compare`).
 
 - `tag-required` takes the parameter `tag` (the tag name, matched case-insensitively as Azure does) and reads its
-  value, `None` when the tag is missing. `exists` claims the tag is present; `in [...]` claims its value is one of
-  the allowed ones.
+  value, `None` when the tag is missing (a row that lists `tags` in `notCarried` answers unknown). `exists` claims
+  the tag is present; `in [...]` claims its value is one of the allowed ones.
 - `sku-allowed` reads `sku.name` (or `sku.tier` with the parameter `field: tier`); a resource without a SKU answers
   unknown, because the export cannot say which SKU a SKU-less type runs.
 - `region-allowed` reads `location`; `in [...]` claims the region is allowed. `global` resources carry `global`.
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from cloud_crawler_core.detectors.base import ANY_TYPE, Detector, Reading, tag_of
+from cloud_crawler_core.detectors.base import ANY_TYPE, Detector, Reading, not_carried, tag_of
 from cloud_crawler_core.models import NormalizedResource
 
 
@@ -21,6 +21,9 @@ def tag_value(resource: NormalizedResource, parameters: dict[str, Any]) -> Readi
     name = parameters.get("tag")
     if not isinstance(name, str) or not name:
         return Reading(None, None, "the claim parameter tag (the tag name) is required")
+    unsaid = not_carried(resource, "tags")
+    if unsaid is not None:
+        return unsaid
     return Reading(True, tag_of(resource, name))
 
 

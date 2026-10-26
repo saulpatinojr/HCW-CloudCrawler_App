@@ -49,6 +49,15 @@ VALUED_OPERATORS = frozenset(
 Reader = Callable[[NormalizedResource, dict[str, Any]], Reading]
 
 
+def not_carried(resource: NormalizedResource, field: str) -> Reading | None:
+    """An `unknown` reading when the evidence behind this row cannot say what `field` (identity, tags or zones) holds,
+    for example a Terraform plan whose tags are only known after apply; None when the row can answer. A field that is
+    merely empty is an answer (no tags, no identity, no zones) and is not listed in `notCarried`."""
+    if field in resource.notCarried:
+        return Reading(None, None, f"the evidence behind this resource does not carry its {field}")
+    return None
+
+
 def tag_of(resource: NormalizedResource, name: str) -> str | None:
     """The value of a tag by name, matched case-insensitively because Azure tag names are (values are not)."""
     wanted = name.lower()

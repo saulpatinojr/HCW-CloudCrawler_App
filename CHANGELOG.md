@@ -43,6 +43,37 @@ once, merge one before rebasing the next.
   the optional role check). `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide page
   alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are unchanged
   by this entry, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
+- **The engine reads Terraform state and plan evidence** (ticket
+  [#54](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/54),
+  [ADR 0005](docs/adr/0005-terraform-evidence-is-read-through-a-provider-type-table.md)). The evidence kinds `tf-state`
+  (a Terraform state file, version 4) and `tf-plan` (the JSON of `terraform show -json`, format 1.x) were accepted since
+  0.1.0 but only stored unread, so every claim about a Terraform resource was `unknown`. They are now normalised into the
+  same `NormalizedResource` rows the Resource Graph export gives, through a table of 31 azurerm resource types that covers
+  every Azure type a wave-one detector reads (`normalize/terraform.py`, `normalize/terraform_types.py`). Plain words: a
+  Terraform state or plan of the sample estate now gives the same verdicts as the Resource Graph export of that estate for
+  every claim whose properties Terraform carries: of the 39 judgements in the wave-one acceptance test, 35 are identical
+  and the four private endpoint claims, which Terraform keeps in a separate resource, are `unknown` and name the missing
+  property. A plan can be judged before anything is built.
+  - **Nothing is guessed.** A property the document does not carry, carries as null, or marks sensitive is left out, so
+    the detector answers `unknown` and names it. For the three fields that mean "none" when a Resource Graph export omits
+    them (`identity`, `tags`, `zones`), a row now lists what its evidence cannot say in the new optional field
+    `NormalizedResource.notCarried`, and the `managed-identity`, `tag-required` and `zone-redundancy` readers answer
+    `unknown` for them. A Resource Graph export is read exactly as before (`notCarried` is an empty list).
+  - **Secrets stay out.** Values Terraform marks sensitive (`sensitive_attributes`, `after_sensitive`) are withheld before
+    any value is read, only the values the table names are copied, and the stored payload is the rows plus a content-free
+    summary (`{"resources": [...], "terraform": {...}}`), not the document. **Behaviour change:** `evidence_get` for these
+    two kinds used to return the redacted document; it returns the rows. A document that is not a version 4 state or a
+    1.x plan used to be stored unread; it is now refused with `invalid_request`.
+  - **Bounded.** A document is refused above 100 levels of nesting or 1,000,000 values (checked before hashing and
+    redaction, which recurse) with `too_large`, and above `max_rows` rows with `too_many_rows`. The normaliser uses no
+    regular expression.
+  - **A resource a plan creates** has no Azure id yet: its row is keyed `terraform:<address>`, correlated as a
+    `terraform-address`, and takes the subscription the caller declares in the evidence subject.
+  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, about 265 tests, and the
+    known limits in `docs/known-limitations.md` (private endpoints, data sources, other providers, not yet run against a
+    state written by the azurerm provider itself). The tool description of `evidence_ingest` now names the two kinds.
+    Engine change: it reaches the AddOn at the next engine release (ADR 0002), where its `docs/whats-new-upstream.md`
+    gets its entry; no version is changed here.
 
 ### Changed
 
