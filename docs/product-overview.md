@@ -8,8 +8,8 @@ Azure reports and says whether the claim still holds.
 
 ## The idea in four steps
 
-1. **Collect evidence.** Azure facts come in as evidence records: from an Azure Resource Graph export you hand in, or
-   from Azure MCP Server 3.0.0 through the standard collection sequence. Each record keeps where it came from, a hash of
+1. **Collect evidence.** Azure facts come in as evidence records: from an Azure Resource Graph export, a Terraform state or a Terraform
+   plan you hand in, or from Azure MCP Server 3.0.0 through the standard collection sequence. Each record keeps where it came from, a hash of
    the original, and an expiry time. Secrets and personal values are redacted as the record arrives.
 2. **Write decisions with claims.** A decision record (an ADR, a short written design decision) lists its claims. A claim
    names a detector (a fixed, rule-based check), the kind of resources it covers, and the expectation, such as "equals
@@ -57,7 +57,7 @@ declares whether it only reads, and whether it needs a person.
 | Tools | Who may call | What they do |
 | --- | --- | --- |
 | `adr_create`, `adr_get`, `adr_list` | model | Create a draft or proposed decision with its claims, read it, list decisions. |
-| `evidence_ingest`, `evidence_list`, `evidence_get` | model | Hand in an Azure Resource Graph export, list and read evidence. |
+| `evidence_ingest`, `evidence_list`, `evidence_get` | model | Hand in an Azure Resource Graph export, a Terraform state or a Terraform plan, list and read evidence. |
 | `drift_evaluate`, `drift_list`, `contradiction_list` | model | Run the detectors, read verdicts and open contradictions. |
 | `review_propose`, `review_list`, `review_get` | model | Open and read review proposals. |
 | `adr_accept`, `review_decide` | **human** | Accept a decision, decide a review. These record only a hash of the person's object id. |

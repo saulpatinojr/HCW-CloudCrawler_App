@@ -154,6 +154,14 @@ class NormalizedResource(StrictModel):
     identity: dict[str, Any] = Field(default_factory=dict)
     tags: dict[str, str] = Field(default_factory=dict)
     properties: dict[str, Any] = Field(default_factory=dict)
+    notCarried: list[str] = Field(
+        default_factory=list,
+        description=(
+            "which of identity, tags and zones this evidence cannot answer. A Resource Graph export that leaves one "
+            "out means there is none; a Terraform plan whose tags are only known after apply cannot say. A detector "
+            "that reads a listed field answers unknown, never an absence."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------

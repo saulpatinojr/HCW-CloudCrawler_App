@@ -57,6 +57,54 @@ With it on, these gaps remain:
   never sets that value, so `docker run` needs sign-in on or the explicit opt-out. Using the opt-out writes one warning
   line. The owner decided to build this on 2026-10-26 (ADR 0004, amendment).
 
+## Terraform state and plan
+
+The engine reads a Terraform state file (version 4) and the JSON of a plan (`terraform show -json`, format 1.x) as
+evidence ([ADR 0005](adr/0005-terraform-evidence-is-read-through-a-provider-type-table.md)). What it does not do:
+
+- **It says only what Terraform says.** A property that Terraform's document does not carry, or carries as null or as
+  something this version does not read, makes the detector answer `unknown` with the property named. The four private
+  endpoint claims of the sample estate are `unknown` for this reason: a private endpoint is a separate Terraform
+  resource, and whether its connection is approved is not in the document. A zone that is a blank string is treated
+  the same way: not carried, so the zone claims answer `unknown`.
+- **A plan is not what exists.** Verdicts from a plan are about what Terraform would build. A plan row never replaces
+  a row from a Resource Graph export, an Azure MCP result or a state of the same resource, whichever came last (and
+  when that observed row cannot be placed in a tag scope because its tags are not known, the answer is `unknown`, not the
+  plan's, unless another observed row of the resource is in scope and decides it), and a verdict that rests on plans alone never closes an open contradiction as fixed (the plan still evaluates,
+  and it can open one). A value that is only known after apply (a new resource's id, tags built from another resource) is not
+  read, and the row says so: a claim about those tags is `unknown`, and a resource with no Azure id yet is named by its
+  Terraform address. When a plan has no `resource_changes` and is read from `planned_values`, which marks nothing as
+  unknown, its tags, identity and zones are always `unknown`.
+- **A state is not what Azure holds.** It describes what Terraform last applied or refreshed. A resource changed by hand
+  since, or created outside Terraform, is not in it, and a state row still replaces an earlier observed row of the same
+  resource, as a later export would.
+- **A resource the plan creates belongs to the subscription the caller declares.** The plan does not know it. Without
+  a declared subscription (the evidence subject's `subscriptionId`), such a resource is outside any decision scoped by
+  subscription. A tag selector (a claim's, or a decision scope's) cannot be applied to a row whose tags are not known:
+  the claim answers `unknown` for the row.
+- **Only the resources Terraform manages in that one document.** Another state file, or a resource created by hand, is
+  not there. A cluster's node pools that live in another state file are not counted, and a node pool that cannot be
+  placed on a cluster (its cluster is not known until apply) makes every cluster in the document answer `unknown` for
+  zones.
+- **Thirty-one azurerm resource types** become rows (the ones the wave-one detectors read; `azurerm_storage_account`,
+  `azurerm_key_vault`, `azurerm_kubernetes_cluster` and so on), and a 32nd, `azurerm_kubernetes_cluster_node_pool`,
+  joins its cluster. Another type, a data source, an object that is being destroyed and a provider other than
+  hashicorp/azurerm (for example azapi) make no row; the evidence record's summary counts them by Terraform type name.
+- **Sensitive values** are read from the markers Terraform writes. A state or plan from a Terraform that writes none
+  cannot say what is sensitive; only the values the table names are ever copied, and the summary's `markersAbsent` says
+  how many instances had no markers.
+- **Not run against a real azurerm state.** The attribute names come from the azurerm documentation (3.117.1, 4.81.0 and
+  5.11.0), and the structure of the two documents was checked with real Terraform 1.16.6 output of the built-in
+  `terraform_data` resource, but nothing was produced by the azurerm provider itself: there is no Azure access in the
+  authoring session. The fixtures are fictional.
+- **The `terraform show -json` form of a state** (a `values` tree instead of `resources`) is refused with a message
+  that points to `tf-plan` or to the state file.
+- **Size.** A document is refused above 100 levels of nesting or 1,000,000 values, and above `CC_MAX_ROWS` rows and
+  folded node pools together (the same setting as for a Resource Graph export). A number that is not finite, an integer
+  of more than 4,300 digits or text with a lone surrogate is refused with `invalid_request`. These limits apply to the
+  Terraform kinds. For the other kinds the HTTP door's JSON parser stops a document nested more than about 200 levels
+  (`recursion limit exceeded`), but a caller of the engine that builds its own objects does not pass through it.
+
 ## What the detectors can see
 
 - The detectors read what an Azure Resource Graph export carries. A property an export leaves out answers `unknown` with

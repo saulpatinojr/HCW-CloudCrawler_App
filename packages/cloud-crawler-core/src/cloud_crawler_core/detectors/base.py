@@ -49,23 +49,41 @@ VALUED_OPERATORS = frozenset(
 Reader = Callable[[NormalizedResource, dict[str, Any]], Reading]
 
 
+def not_carried(resource: NormalizedResource, field: str) -> Reading | None:
+    """An `unknown` reading when the evidence behind this row cannot say what `field` (identity, tags or zones) holds,
+    for example a Terraform plan whose tags are only known after apply; None when the row can answer. A field that is
+    merely empty is an answer (no tags, no identity, no zones) and is not listed in `notCarried`."""
+    if field in resource.notCarried:
+        return Reading(None, None, f"the evidence behind this resource does not carry its {field}")
+    return None
+
+
 def tag_of(resource: NormalizedResource, name: str) -> str | None:
     """The value of a tag by name, matched case-insensitively because Azure tag names are (values are not)."""
     wanted = name.lower()
     return next((value for key, value in resource.tags.items() if key.lower() == wanted), None)
 
 
-def selector_matches(selector: Selector, resource: NormalizedResource) -> bool:
+def selector_applies(selector: Selector, resource: NormalizedResource) -> bool | None:
+    """True when the selector matches the resource, False when it does not, and None when it cannot be told: the
+    selector names tags, the row's tags are not carried by its evidence, and nothing else already rules the row out."""
     if selector.resourceTypes and resource.type not in {t.lower() for t in selector.resourceTypes}:
         return False
     if selector.subscriptionIds and (resource.subscriptionId or "") not in {
         s.lower() for s in selector.subscriptionIds
     }:
         return False
-    for key, expected in selector.tagSelectors.items():
-        if tag_of(resource, key) != expected:
-            return False
-    return not selector.nameGlobs or any(fnmatch.fnmatchcase(resource.name, glob) for glob in selector.nameGlobs)
+    if selector.nameGlobs and not any(fnmatch.fnmatchcase(resource.name, glob) for glob in selector.nameGlobs):
+        return False
+    if selector.tagSelectors:
+        if "tags" in resource.notCarried:
+            return None
+        return all(tag_of(resource, key) == expected for key, expected in selector.tagSelectors.items())
+    return True
+
+
+def selector_matches(selector: Selector, resource: NormalizedResource) -> bool:
+    return selector_applies(selector, resource) is True
 
 
 @dataclass(frozen=True)
@@ -109,8 +127,17 @@ class Detector:
         findings: list[DriftFinding] = []
         for resource in resources:
             reader = self.reader_for(resource.type)
-            if reader is None or not selector_matches(claim.selector, resource):
+            applies = selector_applies(claim.selector, resource) if reader is not None else False
+            if applies is False:
                 findings.append(self._finding(claim, resource, Verdict.NOT_APPLICABLE, {}, evidence_ids, now))
+                continue
+            if applies is None:
+                finding = self._finding(claim, resource, Verdict.UNKNOWN, {}, evidence_ids, now)
+                finding.unknownReason = (
+                    "the evidence behind this resource does not carry its tags, so the claim's tag selector "
+                    "cannot be applied"
+                )
+                findings.append(finding)
                 continue
             reading = reader(resource, claim.parameters)
             # the answer under the claimed property, plus the raw reading it came from (a SKU name, a list of zones)
@@ -128,6 +155,17 @@ class Detector:
             verdict = Verdict.SUPPORTED if holds else Verdict.CONTRADICTED
             findings.append(self._finding(claim, resource, verdict, observed, evidence_ids, now))
         return findings
+
+    def undecided(
+        self, claim: Claim, resource: NormalizedResource, reason: str, *, evidence_ids: list[str], now: datetime
+    ) -> DriftFinding | None:
+        """An `unknown` finding for a row the decision's scope could not be applied to, or None when this detector
+        would not look at the row anyway (it has no reader for the type, or the claim's own selector rules it out)."""
+        if self.reader_for(resource.type) is None or selector_applies(claim.selector, resource) is False:
+            return None
+        finding = self._finding(claim, resource, Verdict.UNKNOWN, {}, evidence_ids, now)
+        finding.unknownReason = reason
+        return finding
 
     def _finding(
         self,
