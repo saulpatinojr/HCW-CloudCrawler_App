@@ -122,6 +122,22 @@ HOSTILE: dict[str, Callable[[int], str]] = {
     "private-key-header-then-capitals": lambda n: BEGIN + "A " * (n // 2),
     "private-key-header-then-the-word-repeated": lambda n: BEGIN + "PRIVATE " * (n // 8),
     "private-key-headers-each-with-capitals": _repeat(BEGIN + "A" * 20 + " "),
+    # A key value or a private key header can end in the middle of a run of token characters, and then the same token
+    # pattern reads the rest of that run: chains of them, followed by long runs of `eyJ` with and without dots.
+    "key-value-then-a-hyphen-then-eyj-repeats": lambda n: "sig=" + "A" * 20 + "-" + "eyJ" * (n // 3),
+    "key-value-then-an-underscore-then-a-long-token-run": lambda n: "AccountKey=" + "A" * 20 + "_eyJ" + "A" * n + "!",
+    "key-values-each-followed-by-a-token-start": _repeat("SharedAccessKey=" + "A" * 20 + "-eyJ" + "a" * 12 + " "),
+    "key-values-each-followed-by-a-complete-token": _repeat(
+        "sig=" + "A" * 20 + "-eyJ" + "a" * 12 + "." + "b" * 12 + " "
+    ),
+    "key-values-glued-in-a-chain": _repeat("sig=" + "A" * 20 + "-"),
+    "account-keys-glued-in-a-chain-with-eyj": _repeat("AccountKey=" + "A" * 20 + "_eyJ"),
+    "private-key-header-then-eyj-repeats": lambda n: armor("PRIVATE KEY") + "eyJ" * (n // 3),
+    "private-key-headers-glued-in-a-chain": _repeat(armor("PRIVATE KEY")),
+    "private-key-headers-each-followed-by-token-starts": _repeat(armor("PRIVATE KEY") + "eyJ" * 4 + " "),
+    "token-run-ending-just-before-a-key": lambda n: "eyJ" + "A" * n + "AccountKey=",
+    "github-token-values-glued-in-a-chain": _repeat("ghp_" + "A" * 20 + "-"),
+    "token-starts-each-followed-by-a-key-value": _repeat("eyJ" + "sig=" + "A" * 20 + "-"),
     "subscription-path-repeats": _repeat("/subscriptions/"),
     "subscription-path-one-per-line": _repeat("/subscriptions/x\n"),
     "guid-prefix-repeats": _repeat("aaaaaaaa-aaaa-aaaa-aaaa-"),
@@ -251,20 +267,20 @@ def test_the_match_covers_the_header_and_payload_of_the_token():
     assert match.group(0) == f"{header}.{payload}"
 
 
-def test_a_token_glued_to_a_preceding_word_character_keeps_its_header_but_not_its_claims():
-    # The one behaviour change of the fix (ticket #53, "the one behaviour change to decide"): the pattern starts only
-    # where a run of token characters begins, which is what keeps it linear. A first segment glued to a preceding
-    # letter, digit, `_` or `-` is therefore not matched. The claims segment of a real token also starts with `eyJ`
-    # (base64url of `{"`) and follows a dot, so it is matched together with the signature: the claims never survive,
-    # only the header does. Revisit this test together with the look-behind in `_SECRET_SHAPED`, and re-run the
-    # linear-time checks above, if that decision changes.
+def test_a_token_glued_to_a_preceding_word_character_is_redacted_whole():
+    # The pull request that made the pattern linear (59) let a token start only where a run of token characters begins,
+    # and so left a token readable when its first segment was glued to a preceding letter, digit, `_` or `-`: the
+    # header stayed, and a truncated, opaque or unsigned token stayed whole. The pattern now starts at the start of the
+    # run, so the characters of the run in front of the token are redacted with it. The signature of a three-part token
+    # stays readable, as it always did (a match stops at the end of the second segment). The table of shapes and
+    # preceding strings is in test_redaction_secret_shaped.py.
     header, payload, signature = fictional_jwt().split(".")
     for glue in ("a", "Z", "7", "_", "-"):
         redacted = redaction._SECRET_SHAPED.sub(REDACTED, glue + ".".join((header, payload, signature)))
-        assert redacted == f"{glue}{header}.{REDACTED}"
-        assert payload not in redacted and signature not in redacted
-    # a token of two segments has no second `eyJ` to fall back on, so a glued one is not matched at all
-    assert redaction._SECRET_SHAPED.search("a" + header + "." + payload) is None
+        assert redacted == f"{REDACTED}.{signature}"
+        assert header not in redacted and payload not in redacted
+        # a token of two segments has no second `eyJ` to fall back on, and is redacted whole all the same
+        assert redaction._SECRET_SHAPED.sub(REDACTED, glue + header + "." + payload) == REDACTED
     assert redaction._SECRET_SHAPED.search("." + header + "." + payload) is not None  # a dot is not a token character
 
 

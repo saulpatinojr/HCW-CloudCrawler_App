@@ -67,3 +67,21 @@ With it on, these gaps remain:
 - The Azure observation detectors ignore tag selectors, because Advisor and policy records carry no tags.
 - The caller class in each tool's metadata (`meta.caller`) is declared here and enforced by the website's orchestrator.
   This server only checks that a call for a person names an actor.
+
+## What redaction does not promise
+
+When a payload arrives, and when an error message is written to the log, the appliance replaces text that has a secret's
+shape with `<redacted>`. The shapes it knows are a storage account key or shared access key (`AccountKey=`,
+`SharedAccessKey=`), a shared access signature (`sig=`), a GitHub token (`ghp_`), a JSON web token (the `eyJ...` text
+that sign-in tokens are made of), a private key header, and any value stored under a key name such as `password` or
+`token`. It is not a general secret finder: a secret in a shape it does not know is stored as it arrived.
+
+- **The third part of a JSON web token stays readable.** A token has three parts joined by dots. Redaction covers the
+  first two and stops there, so the signature at the end of a normal token is not redacted. This has always been so, and
+  the fix for [ticket #53](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/53) did not change it.
+- **Two secrets with nothing between them can be cut at a different place than before.** The case that has been seen
+  is a token whose second part runs straight into a keyword, written like `<token>.<part>AccountKey=<value>`: the token
+  now takes everything up to the `=`, so the key's value stays readable. Before, the same text behaved the same way
+  unless a `ghp_` match happened to come first. The tests build random texts of this kind on purpose, count how many
+  lose something, and fail if the count grows or if anything else is lost. It needs a token and a keyword to touch with
+  no separator, which is unusual.
