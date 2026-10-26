@@ -61,6 +61,7 @@ def change_entry(
     *,
     actions: tuple[str, ...] = ("no-op",),
     sensitive: Any = None,
+    unknown: Any = None,
     address: str | None = None,
     provider_name: Any = PROVIDER_NAME,
     mode: str = "managed",
@@ -76,7 +77,7 @@ def change_entry(
             "actions": list(actions),
             "before": None,
             "after": after,
-            "after_unknown": {},
+            "after_unknown": {} if unknown is None else unknown,
             "before_sensitive": False,
             "after_sensitive": {} if sensitive is None else sensitive,
         },
@@ -102,8 +103,10 @@ def row_of_state(terraform_type: str, attributes: dict[str, Any], **kwargs: Any)
 
 def row_of_plan(terraform_type: str, after: dict[str, Any], **kwargs: Any) -> NormalizedResource:
     sensitive = kwargs.pop("sensitive", None)
+    unknown = kwargs.pop("unknown", None)
     actions = kwargs.pop("actions", ("no-op",))
     [row] = parse_terraform_plan(
-        plan_of(change_entry(terraform_type, "main", after, sensitive=sensitive, actions=actions)), **kwargs
+        plan_of(change_entry(terraform_type, "main", after, sensitive=sensitive, unknown=unknown, actions=actions)),
+        **kwargs,
     ).resources
     return row

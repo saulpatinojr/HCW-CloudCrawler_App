@@ -146,9 +146,9 @@ def test_a_deeply_nested_document_is_refused_before_hashing_or_redaction_can_ove
 
 def test_the_row_limit_of_the_caller_applies():
     with pytest.raises(IngestionError) as exc:
-        take(EvidenceKind.TF_STATE, STATE, max_rows=12)
+        take(EvidenceKind.TF_STATE, STATE, max_rows=13)  # thirteen rows and the node pool that joins its cluster
     assert exc.value.code == "too_many_rows"
-    assert len(take(EvidenceKind.TF_STATE, STATE, max_rows=13).payload["resources"]) == 13
+    assert len(take(EvidenceKind.TF_STATE, STATE, max_rows=14).payload["resources"]) == 13
 
 
 def test_an_unreadable_document_leaves_the_ledger_with_nothing_half_made():

@@ -86,6 +86,7 @@ def test_the_sample_state_gives_one_row_per_resource_the_detectors_read():
         "withoutAzureId": 0,
         "dataSources": 1,
         "unreadable": 0,
+        "markersAbsent": 0,
         "destroyed": 0,
         "unmapped": {"azurerm_resource_group": 2, "azurerm_private_endpoint": 1, "azurerm_virtual_network": 1},
         "unmappedTypes": 3,
@@ -124,7 +125,16 @@ def test_the_sample_plan_gives_the_same_rows_as_its_planned_values():
     from_changes = parse_terraform_plan(plan, default_subscription=SUB)
     without_changes = {k: v for k, v in plan.items() if k != "resource_changes"}
     from_planned = parse_terraform_plan(without_changes, default_subscription=SUB)
-    assert sorted(from_changes.resources, key=_id) == sorted(from_planned.resources, key=_id)
+
+    # planned_values has no after_unknown, so it cannot tell a complete map or list from one that lost an entry: its
+    # rows are the same except that they say they cannot answer for tags, identity and zones
+    def bare(rows):
+        return sorted((r.model_copy(update={"notCarried": []}) for r in rows), key=_id)
+
+    assert bare(from_changes.resources) == bare(from_planned.resources)
+    assert all({"tags", "identity"} <= set(r.notCarried) for r in from_planned.resources)
+    changes_by_id = {r.id: r for r in from_changes.resources}
+    assert all(set(changes_by_id[r.id].notCarried) <= set(r.notCarried) for r in from_planned.resources)
     assert len(from_changes.resources) == 15
     assert from_changes.summary["destroyed"] == 1 and "planActions" not in from_planned.summary
     assert from_changes.summary["planActions"] == {"create": 2, "delete": 1, "no-op": 17, "update": 1}

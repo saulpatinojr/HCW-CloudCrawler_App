@@ -10,7 +10,8 @@ carries:
   `unknown` with the property named. Nothing is defaulted.
 * Three fields mean "none" when a Resource Graph export omits them (`identity`, `tags`, `zones`). A Terraform document
   that cannot say what they hold lists them in the row's `notCarried`, so the detectors that read them answer
-  `unknown` and not "none".
+  `unknown` and not "none". That includes a plan that says the value is unknown until apply (`after_unknown`), and the
+  `planned_values` route, which cannot say.
 * Only values are copied that the table names; whole blocks are never copied, so an attribute nobody listed cannot
   reach the stored row, secret or not.
 
@@ -156,12 +157,34 @@ def scrub(node: Any, mask: Any) -> Any:
 
 class Attrs:
     """The attributes of one resource instance, read through the sensitive mask. `get` returns MISSING when the
-    attribute is absent, unknown until apply, or sensitive."""
+    attribute is absent, unknown until apply, or sensitive.
 
-    def __init__(self, values: dict[str, Any], mask: Any) -> None:
+    `unknown` is a plan's `after_unknown`, the mirror of the values with True where one is unknown until apply, which
+    `after` leaves out (a map loses the entry, a list keeps its place with null). `partial` is set when the document
+    has no such marker at all (`planned_values`), so that nothing can be told to be complete."""
+
+    def __init__(self, values: dict[str, Any], mask: Any, unknown: Any = None, partial: bool = False) -> None:
         self._values = values
         self._mask = mask
+        self._unknown = unknown
+        self._partial = partial
         self._cache: dict[str, Any] = {}
+
+    def unknown_at(self, name: str) -> bool:
+        """True when the plan says something at or under this attribute is unknown until apply, or cannot say."""
+        return self._partial or count_marks(_child_mask(self._unknown, name)) > 0
+
+    def identity_unknown(self) -> bool:
+        """True when the identity block, an element of it, or its type is unknown. A new resource's `principal_id` and
+        `tenant_id` are always unknown until apply and do not matter: the detector reads the type."""
+        if self._partial:
+            return True
+        marks = _child_mask(self._unknown, "identity")
+        if marks is None or marks is False:
+            return False
+        if not isinstance(marks, list):
+            return count_marks(marks) > 0
+        return any(item is True or (isinstance(item, dict) and count_marks(item.get("type")) > 0) for item in marks)
 
     def get(self, name: str) -> Any:
         if name not in self._cache:
@@ -284,9 +307,9 @@ def _sku_name(attrs: Attrs, built: Built, attribute: str) -> None:
 
 def _zones_from(attrs: Attrs, built: Built, attribute: str) -> None:
     zones = zone_list(attrs.get(attribute)) if attrs.get(attribute) is not MISSING else None
-    if zones is None:
+    if zones is None or attrs.unknown_at(attribute):
         built.not_carried.append("zones")
-    else:
+    if zones is not None:
         built.zones = zones
 
 
@@ -401,6 +424,8 @@ def _virtual_machine(attrs: Attrs, built: Built) -> None:
         built.zones = [str(zone)]
     else:
         built.not_carried.append("zones")
+    if attrs.unknown_at("zone") and "zones" not in built.not_carried:
+        built.not_carried.append("zones")
 
 
 def _scale_set(attrs: Attrs, built: Built) -> None:
@@ -510,6 +535,8 @@ def common_fields(attrs: Attrs, built: Built) -> dict[str, Any]:
                 built.not_carried.append("identity")
     else:
         built.not_carried.append("identity")  # no identity attribute, or one that is unknown until apply
+    if attrs.identity_unknown() and "identity" not in built.not_carried:
+        built.not_carried.append("identity")
     tags = attrs.get("tags")
     if tags is None:
         fields["tags"] = {}
@@ -526,6 +553,8 @@ def common_fields(attrs: Attrs, built: Built) -> dict[str, Any]:
             built.not_carried.append("tags")
     else:
         built.not_carried.append("tags")
+    if attrs.unknown_at("tags") and "tags" not in built.not_carried:
+        built.not_carried.append("tags")  # a map that is missing an entry that is only known after apply
     return fields
 
 

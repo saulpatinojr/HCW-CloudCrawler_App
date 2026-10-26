@@ -105,7 +105,18 @@ def ingest(
     if kind in TERRAFORM_KINDS:
         # Before anything that recurses (hashing, redaction) or copies the document.
         check_json_bounds(payload)
-    payload_hash = sha256_of(payload)
+    try:
+        payload_hash = sha256_of(payload)
+    except ValueError, TypeError:
+        if kind not in TERRAFORM_KINDS:
+            raise
+        # A number that is not finite, an integer of more than 4,300 digits, text that is not valid Unicode (a lone
+        # surrogate) or a type JSON does not have. The message names no value.
+        raise IngestionError(
+            "invalid_request",
+            "the document holds a value that JSON cannot carry (a number that is not finite or has over 4,300 digits, "
+            "text that is not valid Unicode, or a type JSON does not have)",
+        ) from None
     redacted, removed = redact_payload(payload)
     correlations: list[Correlation] = []
     stored: Any = redacted

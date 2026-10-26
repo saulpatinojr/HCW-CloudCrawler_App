@@ -63,8 +63,8 @@ once, merge one before rebasing the next.
   [ADR 0005](docs/adr/0005-terraform-evidence-is-read-through-a-provider-type-table.md)). The evidence kinds `tf-state`
   (a Terraform state file, version 4) and `tf-plan` (the JSON of `terraform show -json`, format 1.x) were accepted since
   0.1.0 but only stored unread, so every claim about a Terraform resource was `unknown`. They are now normalised into the
-  same `NormalizedResource` rows the Resource Graph export gives, through a table of 31 azurerm resource types that covers
-  every Azure type a wave-one detector reads (`normalize/terraform.py`, `normalize/terraform_types.py`). Plain words: a
+  same `NormalizedResource` rows the Resource Graph export gives, through a table of 31 azurerm resource types (and a 32nd,
+  the node pool, which joins its cluster) that covers every Azure type a wave-one detector reads (`normalize/terraform.py`, `normalize/terraform_types.py`). Plain words: a
   Terraform state or plan of the sample estate now gives the same verdicts as the Resource Graph export of that estate for
   every claim whose properties Terraform carries: of the 39 judgements in the wave-one acceptance test, 35 are identical
   and the four private endpoint claims, which Terraform keeps in a separate resource, are `unknown` and name the missing
@@ -73,18 +73,38 @@ once, merge one before rebasing the next.
     the detector answers `unknown` and names it. For the three fields that mean "none" when a Resource Graph export omits
     them (`identity`, `tags`, `zones`), a row now lists what its evidence cannot say in the new optional field
     `NormalizedResource.notCarried`, and the `managed-identity`, `tag-required` and `zone-redundancy` readers answer
-    `unknown` for them. A Resource Graph export is read exactly as before (`notCarried` is an empty list).
+    `unknown` for them. A Resource Graph export is read exactly as before (`notCarried` is an empty list). A plan
+    also says what it does not know: real Terraform leaves a map entry that is only known after apply out of `after` and
+    records it in `after_unknown` only, so a map of tags can look complete when it is not. Anything unknown at or under
+    `tags` or a zone attribute now makes that field not carried (for `identity`, the block, an element or its type; a new
+    resource's `principal_id` and `tenant_id` are always unknown and do not matter), so the tag claims `exists`, `neq` and
+    `absent` answer `unknown` instead of a false answer. When a plan has no `resource_changes` and is read from
+    `planned_values`, which marks nothing as unknown, tags, identity and zones are always not carried. A claim's tag
+    selector and a decision scope's tag selector cannot be applied to a row whose tags are not carried; the claim answers
+    `unknown` for it (it used to be not applicable, or silently out of scope).
+  - **A plan never wins and never closes** (behaviour change in the drift engine and the ledger, for every kind). A
+    Terraform plan describes what Terraform would build, not what exists. A plan row no longer replaces a row of the same
+    resource from a Resource Graph export, an Azure MCP result or a state, whichever record is later; a verdict that rests
+    on plans alone no longer closes an open contradiction as `fixed`; a plan still evaluates and can open a contradiction.
+    Before, an export that showed a database not zone redundant followed by a plan that would make it so flipped the
+    verdict to supported and closed the contradiction. A finding about a resource now cites the one record its row came
+    from (it used to cite every record with a row in scope). A state still behaves as before, and
+    `docs/known-limitations.md` says that a state is what Terraform last applied, not what Azure holds.
   - **Secrets stay out.** Values Terraform marks sensitive (`sensitive_attributes`, `after_sensitive`) are withheld before
     any value is read, only the values the table names are copied, and the stored payload is the rows plus a content-free
     summary (`{"resources": [...], "terraform": {...}}`), not the document. **Behaviour change:** `evidence_get` for these
     two kinds used to return the redacted document; it returns the rows. A document that is not a version 4 state or a
     1.x plan used to be stored unread; it is now refused with `invalid_request`.
   - **Bounded.** A document is refused above 100 levels of nesting or 1,000,000 values (checked before hashing and
-    redaction, which recurse) with `too_large`, and above `max_rows` rows with `too_many_rows`. The normaliser uses no
-    regular expression.
+    redaction, which recurse) with `too_large`, and above `max_rows` rows and folded node pools together with
+    `too_many_rows` (a node pool is not a row; before, 160,000 of them with 5,000 clusters took 10 seconds of processor
+    time). A number that is not finite, an integer of more than 4,300 digits or text with a lone surrogate is refused with
+    `invalid_request` instead of a plain error. The normaliser uses no regular expression. The summary also counts the
+    instances that carry no sensitivity markers at all (`markersAbsent`), and a saved `terraform show -json` is now
+    ignored by `.gitignore` (`*.tfplan.json`, `*.tfstate.json`).
   - **A resource a plan creates** has no Azure id yet: its row is keyed `terraform:<address>`, correlated as a
     `terraform-address`, and takes the subscription the caller declares in the evidence subject.
-  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, about 265 tests, and the
+  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, 343 new tests, and the
     known limits in `docs/known-limitations.md` (private endpoints, data sources, other providers, not yet run against a
     state written by the azurerm provider itself). The tool description of `evidence_ingest` now names the two kinds.
     Engine change: it reaches the AddOn at the next engine release (ADR 0002), where its `docs/whats-new-upstream.md`

@@ -7,9 +7,11 @@ Two documents are read, each a JSON object a person or a pipeline already has:
   with `instances[]`, each with `attributes` and the paths Terraform marked sensitive in `sensitive_attributes`.
 * `tf-plan`: the JSON of a plan (`terraform show -json plan.out`), `format_version` 1.x. A row is made for each entry of
   `resource_changes[]` that still exists after the change, from `change.after`, with `change.after_sensitive` marking
-  what is withheld; a value that is unknown until apply is absent from `after`, so it stays unknown. When a plan has no
-  `resource_changes`, the same is read from `planned_values`. A plan describes what Terraform would build, not what
-  exists, and the row says nothing more than that.
+  what is withheld and `change.after_unknown` marking what is unknown until apply. An unknown value is absent from
+  `after` (a map loses the entry, a list keeps its place as null), so it stays unknown; `after_unknown` is what tells a
+  complete map of tags from one that lost an entry. When a plan has no `resource_changes`, the same is read from
+  `planned_values`, which has no such marker, so tags, identity and zones are then always not carried. A plan describes
+  what Terraform would build, not what exists, and the row says nothing more than that.
 
 Rules, all of them about not saying more than the document says:
 
@@ -18,7 +20,8 @@ Rules, all of them about not saying more than the document says:
 * A Terraform type the table does not know, a data source, a provider other than hashicorp/azurerm and an object that
   is being destroyed make no row; they are counted by Terraform type name in the summary, never listed by content.
 * A property the document cannot answer is absent, so the detector that reads it answers `unknown` and names it.
-* The document is bounded before anything walks it (depth and number of values), and the rows by `max_rows`.
+* The document is bounded before anything walks it (depth and number of values), and the rows and the node pools
+  folded into their clusters by `max_rows`.
 """
 
 from __future__ import annotations
@@ -49,6 +52,7 @@ MAX_VALUES = 1_000_000  # values in the whole document; a 5 MB upload cannot hol
 MAX_ADDRESS = 512
 MAX_LISTED_TYPES = 50  # unmapped Terraform types named in the summary
 MAX_NAME = 64
+MAX_ACTIONS = 4  # actions of one plan entry that are named in the summary; Terraform writes one or two
 
 ARM_ID_PREFIX = "/subscriptions/"
 ADDRESS_ID_PREFIX = "terraform:"
@@ -104,6 +108,9 @@ class _Instance:
     azurerm: bool
     attributes: dict[str, Any]
     mask: Any
+    unknown: Any = None  # a plan's after_unknown
+    partial: bool = False  # planned_values: unknown values are left out with no marker
+    markers: bool = True  # False when the document carries no sensitivity markers at all
 
 
 @dataclass
@@ -132,17 +139,19 @@ class _Collector:
     def add(self, instance: _Instance) -> None:
         self.count("instances")
         self.marked += count_marks(instance.mask)
+        if not instance.markers:
+            self.count("markersAbsent")
         if not instance.azurerm:
             self.note_unmapped(instance.terraform_type)
             return
+        attrs = Attrs(instance.attributes, instance.mask, instance.unknown, instance.partial)
         if instance.terraform_type == NODE_POOL_TYPE:
-            self._add_node_pool(Attrs(instance.attributes, instance.mask))
+            self._add_node_pool(attrs)
             return
         mapping = TYPE_TABLE.get(instance.terraform_type)
         if mapping is None:
             self.note_unmapped(instance.terraform_type)
             return
-        attrs = Attrs(instance.attributes, instance.mask)
         built = Built()
         fields = common_fields(attrs, built)
         if mapping.extra is not None:
@@ -175,14 +184,21 @@ class _Collector:
         if mapping.arm_type == "microsoft.containerservice/managedclusters":
             self.pool_rows.append(len(self.rows) - 1)
             self.default_pools[len(self.rows) - 1] = built.pools
-        if len(self.rows) > self.max_rows:
-            raise IngestionError("too_many_rows", f"the document yields more than {self.max_rows} resources")
+        self._check_limit()
+
+    def _check_limit(self) -> None:
+        """Rows and the node pools folded into their clusters are limited together: a node pool is not a row, but each
+        costs time and memory, and a document made of nothing else would otherwise be unbounded."""
+        if len(self.rows) + self.counts.get("foldedIn", 0) > self.max_rows:
+            limit = self.max_rows
+            raise IngestionError("too_many_rows", f"the document yields more than {limit} resources and node pools")
 
     def _add_node_pool(self, attrs: Attrs) -> None:
         cluster = as_str(attrs.get("kubernetes_cluster_id"))
         profile = pool_profile(attrs.get("name"), attrs.get("zones"), attrs.get("node_count"))
         self.node_pools.append((cluster.lower() if cluster else None, profile))
         self.count("foldedIn")
+        self._check_limit()
 
     def finish(self, header: dict[str, Any]) -> TerraformEvidence:
         self._join_node_pools()
@@ -197,6 +213,7 @@ class _Collector:
             "withoutAzureId": self.counts.get("withoutAzureId", 0),
             "dataSources": self.counts.get("dataSources", 0),
             "unreadable": self.counts.get("unreadable", 0),
+            "markersAbsent": self.counts.get("markersAbsent", 0),
             "destroyed": self.counts.get("destroyed", 0),
             "unmapped": listed,
             "unmappedTypes": len(self.unmapped),
@@ -214,10 +231,11 @@ class _Collector:
         by_id = {self.rows[position].id: position for position in self.pool_rows}
         extra: dict[int, list[dict[str, Any]]] = {}
         poisoned: set[int] = set()
+        poison_all = False
         for cluster, profile in self.node_pools:
             position = by_id.get(cluster) if cluster else None
             if cluster is None:
-                poisoned.update(self.pool_rows)  # it could belong to any cluster in the document
+                poison_all = True  # it could belong to any cluster in the document
             elif position is None:
                 continue  # a cluster Terraform manages elsewhere
             elif profile is None:
@@ -226,7 +244,7 @@ class _Collector:
                 extra.setdefault(position, []).append(profile)
         for position in self.pool_rows:
             default = self.default_pools.get(position)
-            if default is None or position in poisoned:
+            if default is None or poison_all or position in poisoned:
                 continue
             self.rows[position].properties["agentPoolProfiles"] = default + extra.get(position, [])
 
@@ -264,6 +282,11 @@ def _version_text(value: Any) -> str | None:
     if isinstance(value, str) and 0 < len(value) <= 32 and all(c.isalnum() or c in ".-+" for c in value):
         return value
     return None
+
+
+def _fallback_address(terraform_type: Any, name: Any) -> str:
+    """An address for a plan entry that has none, from pieces capped like the state path's."""
+    return f"{_text(terraform_type, MAX_NAME) or '?'}.{_text(name, MAX_NAME) or '?'}"
 
 
 def _subscription_text(value: str | None) -> str | None:
@@ -328,8 +351,9 @@ def parse_terraform_state(
             if not isinstance(attributes, dict):
                 collector.count("unreadable")
                 continue
+            markers = instance.get("sensitive_attributes")
             try:
-                mask = sensitive_mask_from_state(instance.get("sensitive_attributes"))
+                mask = sensitive_mask_from_state(markers)
             except Unreadable:
                 collector.count("unreadable")
                 continue
@@ -341,6 +365,7 @@ def parse_terraform_state(
                     azurerm=azurerm,
                     attributes=attributes,
                     mask=mask,
+                    markers=isinstance(markers, list),
                 )
             )
     header = {"formatVersion": STATE_VERSION, "terraformVersion": _version_text(payload.get("terraform_version"))}
@@ -401,7 +426,8 @@ def _read_resource_change(collector: _Collector, index: int, change: Any) -> Non
         return
     actions = body.get("actions")
     if isinstance(actions, list):
-        label = "+".join(a for a in actions if isinstance(a, str) and a in PLAN_ACTIONS) or "other"
+        words = [a for a in actions if isinstance(a, str) and a in PLAN_ACTIONS]
+        label = "+".join(words) if 0 < len(words) <= MAX_ACTIONS else "other"
         collector.actions[label] = collector.actions.get(label, 0) + 1
     if change.get("deposed"):
         collector.count("destroyed")
@@ -416,12 +442,14 @@ def _read_resource_change(collector: _Collector, index: int, change: Any) -> Non
     terraform_type = change.get("type")
     collector.add(
         _Instance(
-            address=_text(change.get("address"), MAX_ADDRESS) or f"{terraform_type}.{change.get('name')}",
+            address=_text(change.get("address"), MAX_ADDRESS) or _fallback_address(terraform_type, change.get("name")),
             terraform_type=terraform_type if isinstance(terraform_type, str) else "",
             terraform_name=_text(change.get("name"), MAX_NAME) or "",
             azurerm=_azurerm_plan(change.get("provider_name")),
             attributes=after,
             mask=body.get("after_sensitive"),
+            unknown=body.get("after_unknown"),
+            markers=body.get("after_sensitive") is not None,
         )
     )
 
@@ -448,12 +476,15 @@ def _read_planned_values(collector: _Collector, planned: dict[str, Any]) -> None
             terraform_type = resource.get("type")
             collector.add(
                 _Instance(
-                    address=_text(resource.get("address"), MAX_ADDRESS) or f"{terraform_type}.{resource.get('name')}",
+                    address=_text(resource.get("address"), MAX_ADDRESS)
+                    or _fallback_address(terraform_type, resource.get("name")),
                     terraform_type=terraform_type if isinstance(terraform_type, str) else "",
                     terraform_name=_text(resource.get("name"), MAX_NAME) or "",
                     azurerm=_azurerm_plan(resource.get("provider_name")),
                     attributes=values,
                     mask=resource.get("sensitive_values"),
+                    partial=True,
+                    markers=resource.get("sensitive_values") is not None,
                 )
             )
         children = module.get("child_modules")
