@@ -23,7 +23,7 @@ from cloud_crawler_core.models import (
     Verdict,
 )
 from cloud_crawler_core.normalize import IngestionError
-from cloud_crawler_core.redaction import REDACTED
+from cloud_crawler_core.redaction import REDACTED, redact_payload
 from core_fixtures import NOW, SAMPLES, make_decision
 from terraform_fixtures import SUB, arm_id, change_entry, plan_of, state_of, state_record
 
@@ -213,3 +213,34 @@ def test_a_row_round_trips_through_the_stored_payload():
     record = take(EvidenceKind.TF_STATE, STATE)
     again = [NormalizedResource.model_validate(row) for row in record.payload["resources"]]
     assert again == resources_of(record)
+
+
+# --- a record stored before Terraform was normalised (CodeRabbit review of pull request 60) -------------------------
+
+
+def legacy(kind: EvidenceKind, document: dict[str, Any]):
+    """What an engine that stored these two kinds unread kept: the redacted document itself as the payload. Only an
+    in-memory ledger that survived an engine upgrade could hold one; the model does not stop it being built."""
+    return take(kind, document).model_copy(update={"payload": redact_payload(document)[0]})
+
+
+@pytest.mark.parametrize(
+    ("kind", "document"), [(EvidenceKind.TF_STATE, STATE), (EvidenceKind.TF_PLAN, PLAN)], ids=["state", "plan"]
+)
+def test_a_record_that_holds_the_unread_document_gives_no_rows_instead_of_a_validation_error(kind, document):
+    record = legacy(kind, document)
+    assert "terraform" not in record.payload
+    assert resources_of(record) == []
+
+
+def test_a_decision_over_a_ledger_holding_such_a_record_is_judged_on_the_other_records():
+    old = legacy(EvidenceKind.TF_STATE, STATE)
+    current = take(EvidenceKind.TF_STATE, STATE)
+    decision = make_decision(scope=DecisionScope(subscriptionIds=[SUB]))
+    alone = evaluate_decision(decision, [current], now=NOW)
+    with_old = evaluate_decision(decision, [old, current], now=NOW)  # raised a validation error before
+    assert [(f.claimId, f.resourceId, f.verdict) for f in with_old.findings] == [
+        (f.claimId, f.resourceId, f.verdict) for f in alone.findings
+    ]
+    only_old = evaluate_decision(decision, [old], now=NOW)  # nothing readable: no rows, nothing invented
+    assert not any(f.resourceId for f in only_old.findings)

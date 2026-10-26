@@ -228,18 +228,29 @@ def first_block(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def zone_name(value: Any) -> str | None:
+    """One availability zone as text; None when the value names none: a boolean, a blank string (empty or only
+    whitespace) or anything but text or a whole number. A blank string is neither "no zone" nor a zone called "",
+    so the caller treats the zone as not carried."""
+    if isinstance(value, bool) or not isinstance(value, str | int):
+        return None
+    text = str(value)
+    return text if text.strip() else None
+
+
 def zone_list(value: Any) -> list[str] | None:
     """Availability zones as sorted strings; null and [] are no zones; None when the value is not a list of
-    strings or numbers (for example partly unknown or sensitive)."""
+    zones (for example partly unknown, sensitive, or holding a blank name)."""
     if value is None:
         return []
     if not isinstance(value, list):
         return None
     zones: list[str] = []
     for item in value:
-        if isinstance(item, bool) or not isinstance(item, str | int):
+        name = zone_name(item)
+        if name is None:
             return None
-        zones.append(str(item))
+        zones.append(name)
     return sorted(zones)
 
 
@@ -420,10 +431,10 @@ def _virtual_machine(attrs: Attrs, built: Built) -> None:
         built.not_carried.append("zones")
     elif zone is None:
         built.zones = []
-    elif isinstance(zone, str | int) and not isinstance(zone, bool):
-        built.zones = [str(zone)]
+    elif (name := zone_name(zone)) is not None:
+        built.zones = [name]
     else:
-        built.not_carried.append("zones")
+        built.not_carried.append("zones")  # a boolean, a blank string, or a value of another type
     if attrs.unknown_at("zone") and "zones" not in built.not_carried:
         built.not_carried.append("zones")
 

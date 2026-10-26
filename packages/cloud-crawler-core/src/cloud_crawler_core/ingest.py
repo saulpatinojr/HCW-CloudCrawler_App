@@ -171,6 +171,8 @@ def resources_of(evidence: Evidence) -> list[NormalizedResource]:
     """The normalised resources an evidence record carries, or none for kinds this version does not normalise."""
     if evidence.kind not in RESOURCE_KINDS or not isinstance(evidence.payload, dict):
         return []
+    if evidence.kind in TERRAFORM_KINDS and "terraform" not in evidence.payload:
+        return []  # the unread document an engine stored before these kinds were normalised: it holds no rows
     return [NormalizedResource.model_validate(row) for row in evidence.payload.get("resources", [])]
 
 

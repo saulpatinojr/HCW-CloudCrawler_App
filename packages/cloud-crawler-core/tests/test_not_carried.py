@@ -13,6 +13,7 @@ from cloud_crawler_core.detectors.identity import MANAGED_IDENTITY
 from cloud_crawler_core.detectors.zone_redundancy import ZONE_REDUNDANCY
 from cloud_crawler_core.models import Claim, Expectation, NormalizedResource, Operator, Verdict
 from core_fixtures import NOW
+from terraform_fixtures import row_of_plan, row_of_state
 
 
 def row(rtype: str, **kwargs) -> NormalizedResource:
@@ -98,3 +99,33 @@ def test_every_detector_module_that_reads_identity_tags_or_zones_honours_notcarr
         ]
         for field in reads:
             assert f'not_carried(resource, "{field}")' in text, f"{source.name} reads {field} without not_carried"
+
+
+# --- a zone that names nothing (CodeRabbit review of pull request 60) -------------------------------------------------
+
+
+@pytest.mark.parametrize("blank", ["", " ", "\t", " \n "], ids=["empty", "space", "tab", "mixed whitespace"])
+@pytest.mark.parametrize(
+    ("terraform_type", "attribute", "wrap"),
+    [
+        ("azurerm_linux_virtual_machine", "zone", lambda blank: blank),
+        ("azurerm_windows_virtual_machine", "zone", lambda blank: blank),
+        ("azurerm_public_ip", "zones", lambda blank: [blank]),
+        ("azurerm_linux_virtual_machine_scale_set", "zones", lambda blank: ["1", blank]),
+    ],
+    ids=["linux vm", "windows vm", "public ip zones", "scale set zones"],
+)
+def test_a_zone_that_is_blank_is_not_carried_and_is_not_a_zone_named_blank(blank, terraform_type, attribute, wrap):
+    # Neither "no zone" (a guess: the provider may write an empty string for unset or for unreadable) nor a zone with
+    # a blank name: the safe answer is that the document does not say, so the zone-redundancy reader answers unknown.
+    for build in (row_of_state, row_of_plan):
+        built = build(terraform_type, {attribute: wrap(blank)})
+        assert built.zones == [] and "zones" in built.notCarried
+
+
+def test_real_zone_values_are_still_read_as_zones():
+    assert row_of_state("azurerm_linux_virtual_machine", {"zone": "2"}).zones == ["2"]
+    assert row_of_state("azurerm_linux_virtual_machine", {"zone": 2}).zones == ["2"]
+    assert row_of_state("azurerm_linux_virtual_machine", {"zone": None}).zones == []
+    assert "zones" not in row_of_state("azurerm_linux_virtual_machine", {"zone": None}).notCarried
+    assert row_of_state("azurerm_public_ip", {"zones": ["3", "1"]}).zones == ["1", "3"]

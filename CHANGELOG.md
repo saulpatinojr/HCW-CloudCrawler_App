@@ -81,7 +81,9 @@ once, merge one before rebasing the next.
     `absent` answer `unknown` instead of a false answer. When a plan has no `resource_changes` and is read from
     `planned_values`, which marks nothing as unknown, tags, identity and zones are always not carried. A claim's tag
     selector and a decision scope's tag selector cannot be applied to a row whose tags are not carried; the claim answers
-    `unknown` for it (it used to be not applicable, or silently out of scope).
+    `unknown` for it (it used to be not applicable, or silently out of scope). A zone that is a blank string (empty or
+    only whitespace), on a virtual machine's `zone` or in a `zones` list, is neither "no zone" nor a zone with a blank
+    name: it is not carried, so the zone claims answer `unknown`.
   - **A plan never wins and never closes** (behaviour change in the drift engine and the ledger, for every kind). A
     Terraform plan describes what Terraform would build, not what exists. A plan row no longer replaces a row of the same
     resource from a Resource Graph export, an Azure MCP result or a state, whichever record is later; a verdict that rests
@@ -94,17 +96,20 @@ once, merge one before rebasing the next.
     any value is read, only the values the table names are copied, and the stored payload is the rows plus a content-free
     summary (`{"resources": [...], "terraform": {...}}`), not the document. **Behaviour change:** `evidence_get` for these
     two kinds used to return the redacted document; it returns the rows. A document that is not a version 4 state or a
-    1.x plan used to be stored unread; it is now refused with `invalid_request`.
+    1.x plan used to be stored unread; it is now refused with `invalid_request`. A record that an older engine stored
+    that way (possible only in a ledger that outlived an upgrade) is read as holding no rows, where it would otherwise
+    have ended a drift evaluation with a validation error.
   - **Bounded.** A document is refused above 100 levels of nesting or 1,000,000 values (checked before hashing and
     redaction, which recurse) with `too_large`, and above `max_rows` rows and folded node pools together with
     `too_many_rows` (a node pool is not a row; before, 160,000 of them with 5,000 clusters took 10 seconds of processor
-    time). A number that is not finite, an integer of more than 4,300 digits or text with a lone surrogate is refused with
+    time). `CC_MAX_ROWS` counts mapped resource rows and folded node pools together, not every resource in the document
+    (`docs/configuration.md` says so). A number that is not finite, an integer of more than 4,300 digits or text with a lone surrogate is refused with
     `invalid_request` instead of a plain error. The normaliser uses no regular expression. The summary also counts the
     instances that carry no sensitivity markers at all (`markersAbsent`), and a saved `terraform show -json` is now
     ignored by `.gitignore` (`*.tfplan.json`, `*.tfstate.json`).
   - **A resource a plan creates** has no Azure id yet: its row is keyed `terraform:<address>`, correlated as a
     `terraform-address`, and takes the subscription the caller declares in the evidence subject.
-  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, 343 new tests, and the
+  - New fictional fixtures (`samples/terraform/`), three goldens and a table snapshot, 363 new tests, and the
     known limits in `docs/known-limitations.md` (private endpoints, data sources, other providers, not yet run against a
     state written by the azurerm provider itself). The tool description of `evidence_ingest` now names the two kinds.
     Engine change: it reaches the AddOn at the next engine release (ADR 0002), where its `docs/whats-new-upstream.md`

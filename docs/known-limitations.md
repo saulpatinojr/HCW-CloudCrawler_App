@@ -65,7 +65,8 @@ evidence ([ADR 0005](adr/0005-terraform-evidence-is-read-through-a-provider-type
 - **It says only what Terraform says.** A property that Terraform's document does not carry, or carries as null or as
   something this version does not read, makes the detector answer `unknown` with the property named. The four private
   endpoint claims of the sample estate are `unknown` for this reason: a private endpoint is a separate Terraform
-  resource, and whether its connection is approved is not in the document.
+  resource, and whether its connection is approved is not in the document. A zone that is a blank string is treated
+  the same way: not carried, so the zone claims answer `unknown`.
 - **A plan is not what exists.** Verdicts from a plan are about what Terraform would build. A plan row never replaces
   a row from a Resource Graph export, an Azure MCP result or a state of the same resource, whichever came last, and a
   verdict that rests on plans alone never closes an open contradiction as fixed (the plan still evaluates, and it can

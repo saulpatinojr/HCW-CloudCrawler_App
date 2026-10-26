@@ -39,7 +39,8 @@ The product's own principle for a plan is that a verdict from it is a verdict on
    Graph lists every pool on the cluster, and a database takes its server's location.
 3. **What Terraform cannot say stays unknown.** A value is mapped only when its attribute is present and of the expected
    type. Absent (not in the provider's schema, or unknown until apply), null where null would be a guess, of the wrong
-   type, or sensitive: the property is left out and the detector that reads it answers `unknown` and names it. Three
+   type (a blank zone name is not a zone), or sensitive: the property is left out and the detector that reads it
+   answers `unknown` and names it. Three
    fields mean "none" in an export when omitted (`identity`, `tags`, `zones`), so a row lists the ones the document
    cannot answer in a new `NormalizedResource.notCarried`, and the three detector readers that treat absence as "none"
    answer `unknown` for them (`detectors.base.not_carried`, and a test that fails if a detector module reads one of the
@@ -110,7 +111,8 @@ other than hashicorp/azurerm (for example azapi); and Azure types no wave-one de
   `docs/whats-new-upstream.md` is updated in its adoption pull request.
 - **Behaviour change for the two kinds:** the stored payload is now `{"resources": [...], "terraform": {...}}` and no
   longer the redacted document, so `evidence_get` returns rows. A document that is not a version 4 state or a 1.x plan,
-  which was stored unread before, is now refused with `invalid_request`.
+  which was stored unread before, is now refused with `invalid_request`. A record that an older engine stored unread
+  (only an in-memory ledger that outlived an upgrade could hold one) is read as holding no rows.
 - **Behaviour change in the drift engine and the ledger, for every kind:** a finding about a resource now cites the one
   record whose row it was judged on (it used to cite every record with a row in scope), and a plan never replaces or
   closes. Nothing changes for a decision judged on Resource Graph exports and Azure MCP results alone, except that
