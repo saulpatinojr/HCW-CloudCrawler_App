@@ -34,6 +34,15 @@ once, merge one before rebasing the next.
   deliberately a different value), start the appliance with sign-in on, make seven calls with the expected status codes,
   and clean up. A test fails if the role and the scope values ever match. Not yet run against a real tenant
   (`VALIDATION.md`). The engine package is unchanged, so the AddOn needs no entry in its `docs/whats-new-upstream.md`.
+- **The remaining guide pages on the documentation site** (ticket #11): Quick start, Installation, Configuration,
+  Deployment, Operations, Testing and Troubleshooting, so the site now has the whole standard page list. Each is a
+  numbered procedure for a junior administrator: one action per step, what you should see after it, PowerShell 7 and Git
+  Bash commands where they differ, and a link to the official documentation for every outside tool. The commands were run
+  before they were written down (`VALIDATION.md` lists which). Deployment and Operations say plainly what is not supported
+  yet, and describe the sign-in hardening from the entry above as it now behaves (the start-up refusal, its lab opt-out and
+  the optional role check). `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide page
+  alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are unchanged
+  by this entry, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
 
 ## [0.1.0] - 2026-10-25
 
