@@ -1,20 +1,24 @@
 """`managed-identity`: does the resource run under a managed identity? Read from the top-level `identity.type`
 Resource Graph returns (`SystemAssigned`, `UserAssigned`, `SystemAssigned, UserAssigned`, `SystemAssigned,UserAssigned`
 or `None`; retrieved 2026-10-21). A resource of a type that supports identities and carries no `identity` block has
-none assigned, which is a definite `False`, not an unknown. The optional claim parameter `identityType`
+none assigned, which is a definite `False`, not an unknown, unless the row lists `identity` in `notCarried` (a
+Terraform document that cannot say), which is an unknown. The optional claim parameter `identityType`
 (`SystemAssigned` or `UserAssigned`) requires that kind in particular."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from cloud_crawler_core.detectors.base import Detector, Reading
+from cloud_crawler_core.detectors.base import Detector, Reading, not_carried
 from cloud_crawler_core.models import NormalizedResource
 
 KINDS = ("systemassigned", "userassigned")
 
 
 def identity_type(resource: NormalizedResource, parameters: dict[str, Any]) -> Reading:
+    unsaid = not_carried(resource, "identity")
+    if unsaid is not None:
+        return unsaid
     raw = resource.identity.get("type")
     if raw is not None and not isinstance(raw, str):
         return Reading(None, raw, "identity.type is not a string")

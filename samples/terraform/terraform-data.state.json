@@ -1,0 +1,256 @@
+{
+  "version": 4,
+  "terraform_version": "1.16.6",
+  "serial": 8,
+  "lineage": "00000000-0000-0000-0000-000000000040",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "counted",
+      "provider": "provider[\"terraform.io/builtin/terraform\"]",
+      "instances": [
+        {
+          "index_key": 0,
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000041",
+            "input": {
+              "value": "item-0",
+              "type": "string"
+            },
+            "output": {
+              "value": "item-0",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        },
+        {
+          "index_key": 1,
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000042",
+            "input": {
+              "value": "item-1",
+              "type": "string"
+            },
+            "output": {
+              "value": "item-1",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "keyed",
+      "provider": "provider[\"terraform.io/builtin/terraform\"]",
+      "instances": [
+        {
+          "index_key": "a",
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000043",
+            "input": {
+              "value": "a",
+              "type": "string"
+            },
+            "output": {
+              "value": "a",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        },
+        {
+          "index_key": "b",
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000044",
+            "input": {
+              "value": "b",
+              "type": "string"
+            },
+            "output": {
+              "value": "b",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "plain",
+      "provider": "provider[\"terraform.io/builtin/terraform\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000045",
+            "input": {
+              "value": {
+                "list": [
+                  "x",
+                  "y"
+                ],
+                "name": "fictional-a",
+                "nested": {
+                  "deep": {
+                    "deeper": "z"
+                  }
+                }
+              },
+              "type": [
+                "object",
+                {
+                  "list": [
+                    "tuple",
+                    [
+                      "string",
+                      "string"
+                    ]
+                  ],
+                  "name": "string",
+                  "nested": [
+                    "object",
+                    {
+                      "deep": [
+                        "object",
+                        {
+                          "deeper": "string"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "output": {
+              "value": {
+                "list": [
+                  "x",
+                  "y"
+                ],
+                "name": "fictional-a",
+                "nested": {
+                  "deep": {
+                    "deeper": "z"
+                  }
+                }
+              },
+              "type": [
+                "object",
+                {
+                  "list": [
+                    "tuple",
+                    [
+                      "string",
+                      "string"
+                    ]
+                  ],
+                  "name": "string",
+                  "nested": [
+                    "object",
+                    {
+                      "deep": [
+                        "object",
+                        {
+                          "deeper": "string"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "sens",
+      "provider": "provider[\"terraform.io/builtin/terraform\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000046",
+            "input": {
+              "value": "not-a-real-secret-value",
+              "type": "string"
+            },
+            "output": {
+              "value": "not-a-real-secret-value",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [
+            [
+              {
+                "type": "get_attr",
+                "value": "input"
+              }
+            ]
+          ],
+          "identity_schema_version": 0
+        }
+      ]
+    },
+    {
+      "module": "module.child",
+      "mode": "managed",
+      "type": "terraform_data",
+      "name": "inner",
+      "provider": "provider[\"terraform.io/builtin/terraform\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "00000000-0000-0000-0000-000000000047",
+            "input": {
+              "value": "inner-value",
+              "type": "string"
+            },
+            "output": {
+              "value": "inner-value",
+              "type": "string"
+            },
+            "store": null,
+            "triggers_replace": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}

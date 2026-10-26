@@ -1,12 +1,13 @@
 """`zone-redundancy`: is this resource zone redundant? One reader per resource type, each over the Resource Graph
 properties that carry the answer. Where the export cannot carry it, the reader says so (`None` with a reason) rather
-than guessing. The property names are the ones Resource Graph returns for each type (retrieved 2026-10-21)."""
+than guessing. The property names are the ones Resource Graph returns for each type (retrieved 2026-10-21). A row
+that lists `zones` in `notCarried` answers unknown where the reader would count zones."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from cloud_crawler_core.detectors.base import Detector, Reading
+from cloud_crawler_core.detectors.base import Detector, Reading, not_carried
 from cloud_crawler_core.models import NormalizedResource
 
 ZRS_SUFFIXES = ("_ZRS", "_GZRS", "_RAGZRS")
@@ -74,6 +75,9 @@ def aks_cluster(resource: NormalizedResource, parameters: dict[str, Any]) -> Rea
 def zones_on_resource(resource: NormalizedResource, parameters: dict[str, Any]) -> Reading:
     """Zone-spanning resources (public IP addresses, virtual machine scale sets) are zone redundant only when they
     list at least `minimumZones` (default 2)."""
+    unsaid = not_carried(resource, "zones")
+    if unsaid is not None:
+        return unsaid
     minimum = int(parameters.get("minimumZones", 2))
     return Reading(len(resource.zones) >= minimum, resource.zones)
 

@@ -14,5 +14,6 @@ accepted, record it here and link the issue.
 | [0002](0002-engine-moves-downstream-unchanged.md) | The engine is seeded here and moves downstream to the AddOn unchanged | Accepted |
 | [0003](0003-the-addon-never-calls-azure.md) | Only the App edition and the website call Azure MCP; the AddOn never calls Azure | Accepted |
 | [0004](0004-entra-token-validation-on-api-and-mcp.md) | Validate Microsoft Entra access tokens on /api and /mcp, and take the actor from the token | Accepted |
+| [0005](0005-terraform-evidence-is-read-through-a-provider-type-table.md) | Terraform state and plan are read through a provider-type table, and what Terraform cannot say stays unknown | Proposed |
 
-Next number: 0005.
+Next number: 0006.

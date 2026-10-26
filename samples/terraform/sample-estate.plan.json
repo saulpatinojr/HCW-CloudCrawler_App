@@ -1,0 +1,1668 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.9.8",
+  "planned_values": {
+    "root_module": {
+      "resources": [
+        {
+          "address": "azurerm_resource_group.prod",
+          "mode": "managed",
+          "type": "azurerm_resource_group",
+          "name": "prod",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod",
+            "name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "tags": {}
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_resource_group.dev",
+          "mode": "managed",
+          "type": "azurerm_resource_group",
+          "name": "dev",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev",
+            "name": "rg-hcw-sample-dev",
+            "location": "centralus",
+            "tags": {}
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_mssql_server.main",
+          "mode": "managed",
+          "type": "azurerm_mssql_server",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+            "name": "hcw-sample-sqlsrv-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "version": "12.0",
+            "administrator_login": "hcwsampleadmin",
+            "administrator_login_password": "fictional-placeholder-not-a-password",
+            "minimum_tls_version": "1.2",
+            "public_network_access_enabled": true,
+            "outbound_network_restriction_enabled": false,
+            "identity": [
+              {
+                "type": "SystemAssigned",
+                "identity_ids": [],
+                "principal_id": "00000000-0000-0000-0000-000000000021",
+                "tenant_id": "00000000-0000-0000-0000-000000000022"
+              }
+            ],
+            "fully_qualified_domain_name": "hcw-sample-sqlsrv-01.database.windows.net",
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {
+            "administrator_login_password": true
+          }
+        },
+        {
+          "address": "azurerm_mssql_database.sql_01",
+          "mode": "managed",
+          "type": "azurerm_mssql_database",
+          "name": "sql_01",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-01",
+            "name": "hcw-sample-sql-01",
+            "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+            "sku_name": "GP_Gen5_4",
+            "zone_redundant": false,
+            "max_size_gb": 32,
+            "collation": "SQL_Latin1_General_CP1_CI_AS",
+            "identity": [],
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_mssql_database.sql_02",
+          "mode": "managed",
+          "type": "azurerm_mssql_database",
+          "name": "sql_02",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-02",
+            "name": "hcw-sample-sql-02",
+            "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+            "sku_name": "BC_Gen5_4",
+            "zone_redundant": true,
+            "max_size_gb": 32,
+            "collation": "SQL_Latin1_General_CP1_CI_AS",
+            "identity": [],
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_storage_account.prod",
+          "mode": "managed",
+          "type": "azurerm_storage_account",
+          "name": "prod",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+            "name": "hcwsamplestprod01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "account_kind": "StorageV2",
+            "account_tier": "Standard",
+            "account_replication_type": "ZRS",
+            "public_network_access_enabled": false,
+            "min_tls_version": "TLS1_2",
+            "identity": [],
+            "primary_access_key": "fictional-placeholder-not-a-key",
+            "primary_connection_string": "fictional-placeholder-not-a-connection-string",
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {
+            "primary_access_key": true,
+            "primary_connection_string": true
+          }
+        },
+        {
+          "address": "azurerm_storage_account.dev",
+          "mode": "managed",
+          "type": "azurerm_storage_account",
+          "name": "dev",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev/providers/Microsoft.Storage/storageAccounts/hcwsamplestdev01",
+            "name": "hcwsamplestdev01",
+            "resource_group_name": "rg-hcw-sample-dev",
+            "location": "centralus",
+            "account_kind": "StorageV2",
+            "account_tier": "Standard",
+            "account_replication_type": "LRS",
+            "public_network_access_enabled": true,
+            "min_tls_version": "TLS1_2",
+            "identity": [],
+            "primary_access_key": "fictional-placeholder-not-a-key",
+            "tags": {
+              "env": "dev",
+              "owner": "data-platform",
+              "costCenter": "cc-1002"
+            }
+          },
+          "sensitive_values": {
+            "primary_access_key": true
+          }
+        },
+        {
+          "address": "azurerm_service_plan.main",
+          "mode": "managed",
+          "type": "azurerm_service_plan",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+            "name": "hcw-sample-asp-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "os_type": "Linux",
+            "sku_name": "P1v3",
+            "worker_count": 3,
+            "zone_balancing_enabled": true,
+            "tags": {
+              "env": "prod",
+              "owner": "web-team",
+              "costCenter": "cc-1003"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_postgresql_flexible_server.main",
+          "mode": "managed",
+          "type": "azurerm_postgresql_flexible_server",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DBforPostgreSQL/flexibleServers/hcw-sample-pg-prod-01",
+            "name": "hcw-sample-pg-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "version": "16",
+            "sku_name": "GP_Standard_D4ds_v5",
+            "delegated_subnet_id": null,
+            "public_network_access_enabled": true,
+            "administrator_login": "hcwsampleadmin",
+            "administrator_password": "fictional-placeholder-not-a-password",
+            "high_availability": [
+              {
+                "mode": "ZoneRedundant",
+                "standby_availability_zone": "2"
+              }
+            ],
+            "identity": [],
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {
+            "administrator_password": true
+          }
+        },
+        {
+          "address": "azurerm_cosmosdb_account.main",
+          "mode": "managed",
+          "type": "azurerm_cosmosdb_account",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DocumentDB/databaseAccounts/hcw-sample-cosmos-prod-01",
+            "name": "hcw-sample-cosmos-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "offer_type": "Standard",
+            "kind": "GlobalDocumentDB",
+            "public_network_access_enabled": false,
+            "identity": [],
+            "geo_location": [
+              {
+                "id": "hcw-sample-cosmos-prod-01-centralus",
+                "location": "centralus",
+                "failover_priority": 0,
+                "zone_redundant": true
+              },
+              {
+                "id": "hcw-sample-cosmos-prod-01-eastus2",
+                "location": "eastus2",
+                "failover_priority": 1,
+                "zone_redundant": false
+              }
+            ],
+            "primary_key": "fictional-placeholder-not-a-key",
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {
+            "primary_key": true
+          }
+        },
+        {
+          "address": "azurerm_kubernetes_cluster.main",
+          "mode": "managed",
+          "type": "azurerm_kubernetes_cluster",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+            "name": "hcw-sample-aks-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "dns_prefix": "hcw-sample-aks",
+            "private_cluster_enabled": false,
+            "sku_tier": "Standard",
+            "default_node_pool": [
+              {
+                "name": "system",
+                "zones": [
+                  "1",
+                  "2",
+                  "3"
+                ],
+                "node_count": 3,
+                "vm_size": "Standard_D4s_v5"
+              }
+            ],
+            "identity": [
+              {
+                "type": "SystemAssigned",
+                "identity_ids": [],
+                "principal_id": "00000000-0000-0000-0000-000000000021",
+                "tenant_id": "00000000-0000-0000-0000-000000000022"
+              }
+            ],
+            "kube_config_raw": "fictional-placeholder-not-a-kubeconfig",
+            "tags": {
+              "env": "prod",
+              "owner": "platform-team",
+              "costCenter": "cc-1004"
+            }
+          },
+          "sensitive_values": {
+            "kube_config_raw": true
+          }
+        },
+        {
+          "address": "azurerm_kubernetes_cluster_node_pool.user",
+          "mode": "managed",
+          "type": "azurerm_kubernetes_cluster_node_pool",
+          "name": "user",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01/agentPools/user",
+            "name": "user",
+            "kubernetes_cluster_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+            "zones": [
+              "1",
+              "2",
+              "3"
+            ],
+            "node_count": 3,
+            "vm_size": "Standard_D4s_v5",
+            "mode": "User",
+            "tags": {}
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_linux_virtual_machine.main",
+          "mode": "managed",
+          "type": "azurerm_linux_virtual_machine",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Compute/virtualMachines/hcw-sample-vm-prod-01",
+            "name": "hcw-sample-vm-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "size": "Standard_D4s_v5",
+            "zone": null,
+            "admin_username": "hcwsampleadmin",
+            "admin_password": null,
+            "identity": [
+              {
+                "type": "UserAssigned",
+                "identity_ids": [
+                  "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hcw-sample-uai-01"
+                ],
+                "principal_id": "",
+                "tenant_id": ""
+              }
+            ],
+            "tags": {
+              "env": "prod",
+              "owner": "platform-team",
+              "costCenter": "cc-1004"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_public_ip.main",
+          "mode": "managed",
+          "type": "azurerm_public_ip",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/publicIPAddresses/hcw-sample-pip-prod-01",
+            "name": "hcw-sample-pip-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "allocation_method": "Static",
+            "sku": "Standard",
+            "sku_tier": "Regional",
+            "zones": [
+              "1",
+              "2",
+              "3"
+            ],
+            "tags": {
+              "env": "prod",
+              "owner": "platform-team",
+              "costCenter": "cc-1004"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_key_vault.main",
+          "mode": "managed",
+          "type": "azurerm_key_vault",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.KeyVault/vaults/hcw-sample-kv-prod-01",
+            "name": "hcw-sample-kv-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "sku_name": "standard",
+            "tenant_id": "00000000-0000-0000-0000-000000000022",
+            "purge_protection_enabled": true,
+            "public_network_access_enabled": false,
+            "vault_uri": "https://hcw-sample-kv-prod-01.vault.azure.net/",
+            "tags": {
+              "env": "prod",
+              "owner": "platform-team",
+              "costCenter": "cc-1004"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_linux_web_app.main",
+          "mode": "managed",
+          "type": "azurerm_linux_web_app",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/sites/hcw-sample-app-prod-01",
+            "name": "hcw-sample-app-prod-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "eastus2",
+            "service_plan_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+            "https_only": true,
+            "public_network_access_enabled": true,
+            "identity": [],
+            "tags": {
+              "env": "prod",
+              "costCenter": "cc-1003"
+            },
+            "site_credential": [
+              {
+                "name": "fictional-publisher",
+                "password": "fictional-placeholder-not-a-password"
+              }
+            ]
+          },
+          "sensitive_values": {
+            "site_credential": true
+          }
+        },
+        {
+          "address": "azurerm_private_endpoint.st_prod",
+          "mode": "managed",
+          "type": "azurerm_private_endpoint",
+          "name": "st_prod",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/privateEndpoints/hcw-sample-pe-st-01",
+            "name": "hcw-sample-pe-st-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "subnet_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01/subnets/snet-pe",
+            "private_service_connection": [
+              {
+                "name": "st",
+                "is_manual_connection": false,
+                "private_connection_resource_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+                "subresource_names": [
+                  "blob"
+                ]
+              }
+            ],
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {}
+        },
+        {
+          "address": "azurerm_storage_account.logs",
+          "mode": "managed",
+          "type": "azurerm_storage_account",
+          "name": "logs",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "name": "hcwsamplestlogs01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "account_kind": "StorageV2",
+            "account_tier": "Standard",
+            "account_replication_type": "LRS",
+            "public_network_access_enabled": false,
+            "min_tls_version": "TLS1_2",
+            "identity": [],
+            "tags": {
+              "env": "prod",
+              "owner": "data-platform",
+              "costCenter": "cc-1001"
+            }
+          },
+          "sensitive_values": {
+            "primary_access_key": true,
+            "primary_connection_string": true
+          }
+        },
+        {
+          "address": "azurerm_public_ip.new",
+          "mode": "managed",
+          "type": "azurerm_public_ip",
+          "name": "new",
+          "provider_name": "registry.terraform.io/hashicorp/azurerm",
+          "schema_version": 0,
+          "values": {
+            "name": "hcw-sample-pip-new-01",
+            "resource_group_name": "rg-hcw-sample-prod",
+            "location": "centralus",
+            "allocation_method": "Static",
+            "sku": "Standard",
+            "sku_tier": "Regional",
+            "zones": [
+              "1",
+              "2",
+              "3"
+            ]
+          },
+          "sensitive_values": {}
+        }
+      ],
+      "child_modules": [
+        {
+          "address": "module.network",
+          "resources": [
+            {
+              "address": "module.network.azurerm_virtual_network.main",
+              "mode": "managed",
+              "type": "azurerm_virtual_network",
+              "name": "main",
+              "provider_name": "registry.terraform.io/hashicorp/azurerm",
+              "schema_version": 0,
+              "values": {
+                "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01",
+                "name": "hcw-sample-vnet-01",
+                "resource_group_name": "rg-hcw-sample-prod",
+                "location": "centralus",
+                "address_space": [
+                  "10.20.0.0/16"
+                ],
+                "tags": {
+                  "env": "prod",
+                  "owner": "platform-team",
+                  "costCenter": "cc-1004"
+                }
+              },
+              "sensitive_values": {}
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "resource_changes": [
+    {
+      "address": "azurerm_resource_group.prod",
+      "mode": "managed",
+      "type": "azurerm_resource_group",
+      "name": "prod",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod",
+          "name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "tags": {}
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod",
+          "name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "tags": {}
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_resource_group.dev",
+      "mode": "managed",
+      "type": "azurerm_resource_group",
+      "name": "dev",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev",
+          "name": "rg-hcw-sample-dev",
+          "location": "centralus",
+          "tags": {}
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev",
+          "name": "rg-hcw-sample-dev",
+          "location": "centralus",
+          "tags": {}
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_mssql_server.main",
+      "mode": "managed",
+      "type": "azurerm_mssql_server",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "name": "hcw-sample-sqlsrv-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "version": "12.0",
+          "administrator_login": "hcwsampleadmin",
+          "administrator_login_password": "fictional-placeholder-not-a-password",
+          "minimum_tls_version": "1.2",
+          "public_network_access_enabled": true,
+          "outbound_network_restriction_enabled": false,
+          "identity": [
+            {
+              "type": "SystemAssigned",
+              "identity_ids": [],
+              "principal_id": "00000000-0000-0000-0000-000000000021",
+              "tenant_id": "00000000-0000-0000-0000-000000000022"
+            }
+          ],
+          "fully_qualified_domain_name": "hcw-sample-sqlsrv-01.database.windows.net",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "name": "hcw-sample-sqlsrv-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "version": "12.0",
+          "administrator_login": "hcwsampleadmin",
+          "administrator_login_password": "fictional-placeholder-not-a-password",
+          "minimum_tls_version": "1.2",
+          "public_network_access_enabled": true,
+          "outbound_network_restriction_enabled": false,
+          "identity": [
+            {
+              "type": "SystemAssigned",
+              "identity_ids": [],
+              "principal_id": "00000000-0000-0000-0000-000000000021",
+              "tenant_id": "00000000-0000-0000-0000-000000000022"
+            }
+          ],
+          "fully_qualified_domain_name": "hcw-sample-sqlsrv-01.database.windows.net",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "administrator_login_password": true
+        },
+        "after_sensitive": {
+          "administrator_login_password": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_mssql_database.sql_01",
+      "mode": "managed",
+      "type": "azurerm_mssql_database",
+      "name": "sql_01",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-01",
+          "name": "hcw-sample-sql-01",
+          "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "sku_name": "GP_Gen5_4",
+          "zone_redundant": false,
+          "max_size_gb": 32,
+          "collation": "SQL_Latin1_General_CP1_CI_AS",
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-01",
+          "name": "hcw-sample-sql-01",
+          "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "sku_name": "GP_Gen5_4",
+          "zone_redundant": false,
+          "max_size_gb": 32,
+          "collation": "SQL_Latin1_General_CP1_CI_AS",
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_mssql_database.sql_02",
+      "mode": "managed",
+      "type": "azurerm_mssql_database",
+      "name": "sql_02",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-02",
+          "name": "hcw-sample-sql-02",
+          "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "sku_name": "BC_Gen5_4",
+          "zone_redundant": true,
+          "max_size_gb": 32,
+          "collation": "SQL_Latin1_General_CP1_CI_AS",
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01/databases/hcw-sample-sql-02",
+          "name": "hcw-sample-sql-02",
+          "server_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Sql/servers/hcw-sample-sqlsrv-01",
+          "sku_name": "BC_Gen5_4",
+          "zone_redundant": true,
+          "max_size_gb": 32,
+          "collation": "SQL_Latin1_General_CP1_CI_AS",
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_storage_account.prod",
+      "mode": "managed",
+      "type": "azurerm_storage_account",
+      "name": "prod",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+          "name": "hcwsamplestprod01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "account_kind": "StorageV2",
+          "account_tier": "Standard",
+          "account_replication_type": "ZRS",
+          "public_network_access_enabled": false,
+          "min_tls_version": "TLS1_2",
+          "identity": [],
+          "primary_access_key": "fictional-placeholder-not-a-key",
+          "primary_connection_string": "fictional-placeholder-not-a-connection-string",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+          "name": "hcwsamplestprod01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "account_kind": "StorageV2",
+          "account_tier": "Standard",
+          "account_replication_type": "ZRS",
+          "public_network_access_enabled": false,
+          "min_tls_version": "TLS1_2",
+          "identity": [],
+          "primary_access_key": "fictional-placeholder-not-a-key",
+          "primary_connection_string": "fictional-placeholder-not-a-connection-string",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "primary_access_key": true,
+          "primary_connection_string": true
+        },
+        "after_sensitive": {
+          "primary_access_key": true,
+          "primary_connection_string": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_storage_account.dev",
+      "mode": "managed",
+      "type": "azurerm_storage_account",
+      "name": "dev",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev/providers/Microsoft.Storage/storageAccounts/hcwsamplestdev01",
+          "name": "hcwsamplestdev01",
+          "resource_group_name": "rg-hcw-sample-dev",
+          "location": "centralus",
+          "account_kind": "StorageV2",
+          "account_tier": "Standard",
+          "account_replication_type": "LRS",
+          "public_network_access_enabled": true,
+          "min_tls_version": "TLS1_2",
+          "identity": [],
+          "primary_access_key": "fictional-placeholder-not-a-key",
+          "tags": {
+            "env": "dev",
+            "owner": "data-platform",
+            "costCenter": "cc-1002"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-dev/providers/Microsoft.Storage/storageAccounts/hcwsamplestdev01",
+          "name": "hcwsamplestdev01",
+          "resource_group_name": "rg-hcw-sample-dev",
+          "location": "centralus",
+          "account_kind": "StorageV2",
+          "account_tier": "Standard",
+          "account_replication_type": "LRS",
+          "public_network_access_enabled": true,
+          "min_tls_version": "TLS1_2",
+          "identity": [],
+          "primary_access_key": "fictional-placeholder-not-a-key",
+          "tags": {
+            "env": "dev",
+            "owner": "data-platform",
+            "costCenter": "cc-1002"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "primary_access_key": true
+        },
+        "after_sensitive": {
+          "primary_access_key": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_service_plan.main",
+      "mode": "managed",
+      "type": "azurerm_service_plan",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+          "name": "hcw-sample-asp-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "os_type": "Linux",
+          "sku_name": "P1v3",
+          "worker_count": 3,
+          "zone_balancing_enabled": true,
+          "tags": {
+            "env": "prod",
+            "owner": "web-team",
+            "costCenter": "cc-1003"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+          "name": "hcw-sample-asp-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "os_type": "Linux",
+          "sku_name": "P1v3",
+          "worker_count": 3,
+          "zone_balancing_enabled": true,
+          "tags": {
+            "env": "prod",
+            "owner": "web-team",
+            "costCenter": "cc-1003"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_postgresql_flexible_server.main",
+      "mode": "managed",
+      "type": "azurerm_postgresql_flexible_server",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DBforPostgreSQL/flexibleServers/hcw-sample-pg-prod-01",
+          "name": "hcw-sample-pg-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "version": "16",
+          "sku_name": "GP_Standard_D4ds_v5",
+          "delegated_subnet_id": null,
+          "public_network_access_enabled": true,
+          "administrator_login": "hcwsampleadmin",
+          "administrator_password": "fictional-placeholder-not-a-password",
+          "high_availability": [
+            {
+              "mode": "ZoneRedundant",
+              "standby_availability_zone": "2"
+            }
+          ],
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DBforPostgreSQL/flexibleServers/hcw-sample-pg-prod-01",
+          "name": "hcw-sample-pg-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "version": "16",
+          "sku_name": "GP_Standard_D4ds_v5",
+          "delegated_subnet_id": null,
+          "public_network_access_enabled": true,
+          "administrator_login": "hcwsampleadmin",
+          "administrator_password": "fictional-placeholder-not-a-password",
+          "high_availability": [
+            {
+              "mode": "ZoneRedundant",
+              "standby_availability_zone": "2"
+            }
+          ],
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "administrator_password": true
+        },
+        "after_sensitive": {
+          "administrator_password": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_cosmosdb_account.main",
+      "mode": "managed",
+      "type": "azurerm_cosmosdb_account",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DocumentDB/databaseAccounts/hcw-sample-cosmos-prod-01",
+          "name": "hcw-sample-cosmos-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "offer_type": "Standard",
+          "kind": "GlobalDocumentDB",
+          "public_network_access_enabled": false,
+          "identity": [],
+          "geo_location": [
+            {
+              "id": "hcw-sample-cosmos-prod-01-centralus",
+              "location": "centralus",
+              "failover_priority": 0,
+              "zone_redundant": true
+            },
+            {
+              "id": "hcw-sample-cosmos-prod-01-eastus2",
+              "location": "eastus2",
+              "failover_priority": 1,
+              "zone_redundant": false
+            }
+          ],
+          "primary_key": "fictional-placeholder-not-a-key",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.DocumentDB/databaseAccounts/hcw-sample-cosmos-prod-01",
+          "name": "hcw-sample-cosmos-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "offer_type": "Standard",
+          "kind": "GlobalDocumentDB",
+          "public_network_access_enabled": false,
+          "identity": [],
+          "geo_location": [
+            {
+              "id": "hcw-sample-cosmos-prod-01-centralus",
+              "location": "centralus",
+              "failover_priority": 0,
+              "zone_redundant": true
+            },
+            {
+              "id": "hcw-sample-cosmos-prod-01-eastus2",
+              "location": "eastus2",
+              "failover_priority": 1,
+              "zone_redundant": false
+            }
+          ],
+          "primary_key": "fictional-placeholder-not-a-key",
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "primary_key": true
+        },
+        "after_sensitive": {
+          "primary_key": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_kubernetes_cluster.main",
+      "mode": "managed",
+      "type": "azurerm_kubernetes_cluster",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+          "name": "hcw-sample-aks-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "dns_prefix": "hcw-sample-aks",
+          "private_cluster_enabled": false,
+          "sku_tier": "Standard",
+          "default_node_pool": [
+            {
+              "name": "system",
+              "zones": [
+                "1",
+                "2",
+                "3"
+              ],
+              "node_count": 3,
+              "vm_size": "Standard_D4s_v5"
+            }
+          ],
+          "identity": [
+            {
+              "type": "SystemAssigned",
+              "identity_ids": [],
+              "principal_id": "00000000-0000-0000-0000-000000000021",
+              "tenant_id": "00000000-0000-0000-0000-000000000022"
+            }
+          ],
+          "kube_config_raw": "fictional-placeholder-not-a-kubeconfig",
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+          "name": "hcw-sample-aks-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "dns_prefix": "hcw-sample-aks",
+          "private_cluster_enabled": false,
+          "sku_tier": "Standard",
+          "default_node_pool": [
+            {
+              "name": "system",
+              "zones": [
+                "1",
+                "2",
+                "3"
+              ],
+              "node_count": 3,
+              "vm_size": "Standard_D4s_v5"
+            }
+          ],
+          "identity": [
+            {
+              "type": "SystemAssigned",
+              "identity_ids": [],
+              "principal_id": "00000000-0000-0000-0000-000000000021",
+              "tenant_id": "00000000-0000-0000-0000-000000000022"
+            }
+          ],
+          "kube_config_raw": "fictional-placeholder-not-a-kubeconfig",
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "kube_config_raw": true
+        },
+        "after_sensitive": {
+          "kube_config_raw": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_kubernetes_cluster_node_pool.user",
+      "mode": "managed",
+      "type": "azurerm_kubernetes_cluster_node_pool",
+      "name": "user",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01/agentPools/user",
+          "name": "user",
+          "kubernetes_cluster_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+          "zones": [
+            "1",
+            "2",
+            "3"
+          ],
+          "node_count": 3,
+          "vm_size": "Standard_D4s_v5",
+          "mode": "User",
+          "tags": {}
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01/agentPools/user",
+          "name": "user",
+          "kubernetes_cluster_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ContainerService/managedClusters/hcw-sample-aks-prod-01",
+          "zones": [
+            "1",
+            "2",
+            "3"
+          ],
+          "node_count": 3,
+          "vm_size": "Standard_D4s_v5",
+          "mode": "User",
+          "tags": {}
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_linux_virtual_machine.main",
+      "mode": "managed",
+      "type": "azurerm_linux_virtual_machine",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Compute/virtualMachines/hcw-sample-vm-prod-01",
+          "name": "hcw-sample-vm-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "size": "Standard_D4s_v5",
+          "zone": null,
+          "admin_username": "hcwsampleadmin",
+          "admin_password": null,
+          "identity": [
+            {
+              "type": "UserAssigned",
+              "identity_ids": [
+                "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hcw-sample-uai-01"
+              ],
+              "principal_id": "",
+              "tenant_id": ""
+            }
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Compute/virtualMachines/hcw-sample-vm-prod-01",
+          "name": "hcw-sample-vm-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "size": "Standard_D4s_v5",
+          "zone": null,
+          "admin_username": "hcwsampleadmin",
+          "admin_password": null,
+          "identity": [
+            {
+              "type": "UserAssigned",
+              "identity_ids": [
+                "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hcw-sample-uai-01"
+              ],
+              "principal_id": "",
+              "tenant_id": ""
+            }
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_public_ip.main",
+      "mode": "managed",
+      "type": "azurerm_public_ip",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/publicIPAddresses/hcw-sample-pip-prod-01",
+          "name": "hcw-sample-pip-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "allocation_method": "Static",
+          "sku": "Standard",
+          "sku_tier": "Regional",
+          "zones": [
+            "1",
+            "2",
+            "3"
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/publicIPAddresses/hcw-sample-pip-prod-01",
+          "name": "hcw-sample-pip-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "allocation_method": "Static",
+          "sku": "Standard",
+          "sku_tier": "Regional",
+          "zones": [
+            "1",
+            "2",
+            "3"
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_key_vault.main",
+      "mode": "managed",
+      "type": "azurerm_key_vault",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.KeyVault/vaults/hcw-sample-kv-prod-01",
+          "name": "hcw-sample-kv-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "sku_name": "standard",
+          "tenant_id": "00000000-0000-0000-0000-000000000022",
+          "purge_protection_enabled": true,
+          "public_network_access_enabled": false,
+          "vault_uri": "https://hcw-sample-kv-prod-01.vault.azure.net/",
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.KeyVault/vaults/hcw-sample-kv-prod-01",
+          "name": "hcw-sample-kv-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "sku_name": "standard",
+          "tenant_id": "00000000-0000-0000-0000-000000000022",
+          "purge_protection_enabled": true,
+          "public_network_access_enabled": false,
+          "vault_uri": "https://hcw-sample-kv-prod-01.vault.azure.net/",
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_linux_web_app.main",
+      "mode": "managed",
+      "type": "azurerm_linux_web_app",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/sites/hcw-sample-app-prod-01",
+          "name": "hcw-sample-app-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "eastus2",
+          "service_plan_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+          "https_only": false,
+          "public_network_access_enabled": true,
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "costCenter": "cc-1003"
+          },
+          "site_credential": [
+            {
+              "name": "fictional-publisher",
+              "password": "fictional-placeholder-not-a-password"
+            }
+          ]
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/sites/hcw-sample-app-prod-01",
+          "name": "hcw-sample-app-prod-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "eastus2",
+          "service_plan_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Web/serverFarms/hcw-sample-asp-prod-01",
+          "https_only": true,
+          "public_network_access_enabled": true,
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "costCenter": "cc-1003"
+          },
+          "site_credential": [
+            {
+              "name": "fictional-publisher",
+              "password": "fictional-placeholder-not-a-password"
+            }
+          ]
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "site_credential": true
+        },
+        "after_sensitive": {
+          "site_credential": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_private_endpoint.st_prod",
+      "mode": "managed",
+      "type": "azurerm_private_endpoint",
+      "name": "st_prod",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/privateEndpoints/hcw-sample-pe-st-01",
+          "name": "hcw-sample-pe-st-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "subnet_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01/subnets/snet-pe",
+          "private_service_connection": [
+            {
+              "name": "st",
+              "is_manual_connection": false,
+              "private_connection_resource_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+              "subresource_names": [
+                "blob"
+              ]
+            }
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/privateEndpoints/hcw-sample-pe-st-01",
+          "name": "hcw-sample-pe-st-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "subnet_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01/subnets/snet-pe",
+          "private_service_connection": [
+            {
+              "name": "st",
+              "is_manual_connection": false,
+              "private_connection_resource_id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Storage/storageAccounts/hcwsamplestprod01",
+              "subresource_names": [
+                "blob"
+              ]
+            }
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "module.network.azurerm_virtual_network.main",
+      "module_address": "module.network",
+      "mode": "managed",
+      "type": "azurerm_virtual_network",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01",
+          "name": "hcw-sample-vnet-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "address_space": [
+            "10.20.0.0/16"
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.Network/virtualNetworks/hcw-sample-vnet-01",
+          "name": "hcw-sample-vnet-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "address_space": [
+            "10.20.0.0/16"
+          ],
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_storage_account.logs",
+      "mode": "managed",
+      "type": "azurerm_storage_account",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "hcwsamplestlogs01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "account_kind": "StorageV2",
+          "account_tier": "Standard",
+          "account_replication_type": "LRS",
+          "public_network_access_enabled": false,
+          "min_tls_version": "TLS1_2",
+          "identity": [],
+          "tags": {
+            "env": "prod",
+            "owner": "data-platform",
+            "costCenter": "cc-1001"
+          }
+        },
+        "after_unknown": {
+          "id": true,
+          "primary_access_key": true,
+          "primary_connection_string": true
+        },
+        "before_sensitive": false,
+        "after_sensitive": {
+          "primary_access_key": true,
+          "primary_connection_string": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_public_ip.new",
+      "mode": "managed",
+      "type": "azurerm_public_ip",
+      "name": "new",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "before": null,
+        "after": {
+          "name": "hcw-sample-pip-new-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "allocation_method": "Static",
+          "sku": "Standard",
+          "sku_tier": "Regional",
+          "zones": [
+            "1",
+            "2",
+            "3"
+          ]
+        },
+        "after_unknown": {
+          "id": true,
+          "ip_address": true,
+          "tags": true
+        },
+        "before_sensitive": false,
+        "after_sensitive": {}
+      }
+    },
+    {
+      "address": "azurerm_key_vault.legacy",
+      "mode": "managed",
+      "type": "azurerm_key_vault",
+      "name": "legacy",
+      "provider_name": "registry.terraform.io/hashicorp/azurerm",
+      "change": {
+        "actions": [
+          "delete"
+        ],
+        "before": {
+          "id": "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-hcw-sample-prod/providers/Microsoft.KeyVault/vaults/hcw-sample-kv-legacy-01",
+          "name": "hcw-sample-kv-legacy-01",
+          "resource_group_name": "rg-hcw-sample-prod",
+          "location": "centralus",
+          "public_network_access_enabled": true,
+          "tags": {
+            "env": "prod",
+            "owner": "platform-team",
+            "costCenter": "cc-1004"
+          }
+        },
+        "after": null,
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": false
+      }
+    }
+  ],
+  "timestamp": "2026-10-26T12:00:00Z",
+  "applyable": true,
+  "complete": true,
+  "errored": false
+}

@@ -50,7 +50,9 @@ build/
 .terraform/
 *.tfstate
 *.tfstate.*
+*.tfstate.json
 *.tfplan
+*.tfplan.json
 *.tfvars
 !*.tfvars.example
 crash.log

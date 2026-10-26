@@ -25,6 +25,7 @@ from cloud_crawler_core.models import (
     DriftSummary,
     Evidence,
     EvidenceClass,
+    EvidenceKind,
     EvidenceRequirement,
     NormalizedResource,
     ProposalKind,
@@ -52,7 +53,9 @@ def _usable(evidence: Evidence, requirement: EvidenceRequirement, now: datetime)
     return age_hours <= requirement.maxAgeHours
 
 
-def _in_scope(decision: DecisionRecord, resource: NormalizedResource) -> bool:
+def _scope_state(decision: DecisionRecord, resource: NormalizedResource) -> bool | None:
+    """Is the resource in the decision's scope? None when the scope names tags and the row's tags are not carried by its
+    evidence: the row is neither in nor out, and each claim answers `unknown` for it."""
     scope = decision.scope
     if scope.subscriptionIds and (resource.subscriptionId or "") not in {s.lower() for s in scope.subscriptionIds}:
         return False
@@ -60,7 +63,17 @@ def _in_scope(decision: DecisionRecord, resource: NormalizedResource) -> bool:
         g.lower() for g in scope.resourceGroupNames
     }:
         return False
-    return all(tag_of(resource, key) == value for key, value in scope.tagSelectors.items())
+    if scope.tagSelectors:
+        if "tags" in resource.notCarried:
+            return None
+        return all(tag_of(resource, key) == value for key, value in scope.tagSelectors.items())
+    return True
+
+
+def _rank(evidence: Evidence) -> int:
+    """A plan describes what Terraform would build, not what exists: its rows never replace the rows of any other kind
+    for the same resource, whichever record is later. Among records of one rank the later record wins."""
+    return 0 if evidence.kind is EvidenceKind.TF_PLAN else 1
 
 
 def evaluate_decision(
@@ -78,15 +91,29 @@ def evaluate_decision(
         if isinstance(detector, EvidenceDetector):
             findings.extend(detector.evaluate(claim, usable, scope=decision.scope, now=now))
             continue
-        resources: dict[str, NormalizedResource] = {}
-        evidence_ids: list[str] = []
+        resources: dict[str, tuple[int, NormalizedResource, str]] = {}  # id -> (rank, row, the record it came from)
+        undecided: dict[str, tuple[int, NormalizedResource, str]] = {}
+        out_of_scope: set[str] = set()  # ids an observed record put out of scope
         for record in usable:
-            rows = [r for r in resources_of(record) if _in_scope(decision, r)]
-            if rows:
-                evidence_ids.append(record.evidenceId)
-            for row in rows:
-                resources[row.id] = row  # a later record of the same resource wins
-        if not resources:
+            rank = _rank(record)
+            for row in resources_of(record):
+                state = _scope_state(decision, row)
+                if state is False:
+                    if rank > 0:
+                        out_of_scope.add(row.id)
+                    continue
+                target = resources if state else undecided
+                current = target.get(row.id)
+                if current is None or rank >= current[0]:  # a later record of the same resource wins, of equal rank
+                    target[row.id] = (rank, row, record.evidenceId)
+        # An observed row that puts a resource out of the scope, or that cannot be placed in it, outranks a plan row
+        # of the same resource: the plan cannot bring it back in, and cannot answer for it.
+        observed_elsewhere = out_of_scope | {rid for rid, entry in undecided.items() if entry[0] > 0}
+        for rid in observed_elsewhere:
+            if rid in resources and resources[rid][0] == 0:
+                del resources[rid]
+        unsure = {rid: entry for rid, entry in undecided.items() if rid not in resources and rid not in out_of_scope}
+        if not resources and not unsure:
             findings.append(
                 DriftFinding(
                     findingId=new_id("finding"),
@@ -103,7 +130,22 @@ def evaluate_decision(
                 )
             )
             continue
-        findings.extend(detector.evaluate(claim, resources.values(), evidence_ids=evidence_ids, now=now))
+        if resources:
+            evaluated = detector.evaluate(claim, [row for _, row, _ in resources.values()], evidence_ids=[], now=now)
+            for finding in evaluated:
+                if finding.resourceId in resources:
+                    finding.evidenceIds = [resources[finding.resourceId][2]]
+            findings.extend(evaluated)
+        for _, row, evidence_id in unsure.values():
+            finding = detector.undecided(
+                claim,
+                row,
+                "the evidence behind this resource does not carry its tags, so the decision's scope cannot be applied",
+                evidence_ids=[evidence_id],
+                now=now,
+            )
+            if finding is not None:
+                findings.append(finding)
     contradictions = _contradictions(findings, now)
     proposals = _proposals(decision, findings, contradictions, now)
     return DriftResult(
