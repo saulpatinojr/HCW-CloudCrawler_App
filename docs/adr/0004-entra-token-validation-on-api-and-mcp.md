@@ -2,8 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-24
-- **Amended:** 2026-10-26 (refuse an unauthenticated non-loopback start; optional app-role check; see the last section
-  before "Rollback or revisit trigger")
+- **Amended:** 2026-10-26 (refuse an unauthenticated non-loopback start; optional app-role check; see "Amendment of
+  2026-10-26")
+- **Updated:** 2026-10-26 (the real-tenant check was run once; no decision changed; see "Update of 2026-10-26" before
+  "Rollback or revisit trigger")
 - **Owners:** Hybrid Cloud Works owner (saulpatinojr)
 - **Issue:** [#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8)
 
@@ -82,7 +84,8 @@ and take `actorId` from the token.
 - **Security:** with `entra`, an unauthenticated caller can reach only `/api/health`. A valid token for the tenant
   and audience is enough for the model-class tools; the human-class tools additionally need a person's delegated
   token. A typed `actorId` can no longer impersonate anyone.
-- **Not covered by this decision, and recorded in `VALIDATION.md`:** it was not run against a real Entra tenant; there
+- **Not covered by this decision, and recorded in `VALIDATION.md`:** it was not run against a real Entra tenant (it has
+  since been run once, see "Update of 2026-10-26"); there
   is no allow-list of client applications (who may obtain a token is controlled in Entra, by "Assignment required" on
   the enterprise application); there is no per-role authorisation inside the model-class tools; only the public
   cloud authority is supported; revoked tokens stay valid until they expire (the usual access-token behaviour); the
@@ -103,7 +106,8 @@ and take `actorId` from the token.
   `alg: none`, HS256-with-the-public-key, wrong-signer and tampered tokens are refused, that `/api` and `/mcp` both
   answer 401 without a token while `/api/health` stays open and flat, that a typed `actorId` cannot override the
   token, that an app-only token cannot call a human-class tool, and that logs carry no token.
-- Not covered: a run against a real tenant (see `VALIDATION.md`).
+- Not covered when this was written: a run against a real tenant (done since, see "Update of 2026-10-26" and
+  `VALIDATION.md`).
 
 ## What the owner must configure
 
@@ -131,8 +135,8 @@ names what would reopen it.
 
 Nothing in the code changed because of these answers: they confirm what pull request 34 already merged. Part of
 rows 2, 3 and 4 was then superseded on 2026-10-26 (see the amendment at the end of this record). Ticket
-[#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) stays open, because the real-tenant check
-(`VALIDATION.md`) is still to do.
+[#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) was kept open then, because the real-tenant
+check (`VALIDATION.md`) was still to do; it has been done since (see "Update of 2026-10-26").
 
 ## Amendment of 2026-10-26: refuse an unauthenticated non-loopback start, and an optional role check
 
@@ -178,8 +182,25 @@ loopback default for `CC_BIND_HOST` do not change.
 Consequences: a deployment that today relies on the image starting with no settings stops starting, on purpose; the
 fix is one of the two settings above. The engine package, its models and its detector ids do not change, so the AddOn
 is not affected by the code. The role check is one gate for the whole service, not a permission per tool; a client
-application allow-list is still not built. Not run against a real tenant: the README's "Checking sign-in against a
-real tenant" runbook is how the owner observes that the `roles` claim looks as assumed (`VALIDATION.md`).
+application allow-list is still not built. When this amendment was written the runbook had not been run: the README's
+"Checking sign-in against a real tenant" was the way to observe that the `roles` claim looks as assumed (`VALIDATION.md`).
+
+## Update of 2026-10-26: the real-tenant check was run
+
+Later on 2026-10-26 the README runbook "Checking sign-in against a real tenant" was run once, in the owner's demo Entra
+tenant ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598); the full
+record is in `VALIDATION.md`, "Ran for the real-tenant sign-in check"). No decision in this record changed.
+
+- **Observed:** all seven calls answered as written (`401` for a missing, junk and wrong-audience token, `404` and `200` for
+  a valid one, `403` when a required role was not held); the person-only check counted the token as a signed-in person;
+  the start-up refusal exited 3 with nothing listening; and a real version 2.0 token carried `iss`
+  `https://login.microsoftonline.com/<tenant>/v2.0`, `aud` equal to the API's client id, `scp` `access_as_user` and `roles`
+  `CloudCrawler.Access`. The `roles` claim therefore looks as assumed.
+- **Not verified:** HTTPS ingress (Container Apps) behind a public host name with `CC_ALLOWED_HOSTS`; a token from an
+  application permission; a user who is not assigned when "Assignment required?" is on; an expired token; a token from
+  another tenant; signing-key rotation; the `api://<app id>` audience form and the version 1.0 `iss` form; and the `idtyp`
+  claim (the run did not report it). Only the demo tenant was used, so this says nothing about production.
+- Ticket [#8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) was closed as completed on 2026-10-26.
 
 ## Rollback or revisit trigger
 

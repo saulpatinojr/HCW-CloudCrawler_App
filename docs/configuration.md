@@ -166,7 +166,10 @@ With sign-in on, every route except `GET /api/health` needs a Microsoft Entra ac
     You should see `401`. Programs that call the tools must request tokens for your Application ID URI followed by
     `/access_as_user`; with the suggested URI that is `api://<client id>/access_as_user`, using your client id.
 
-Sign-in has never been tried against a real directory. The README has a short sandbox runbook for that,
-[Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant); it has not been run yet
+Sign-in was tried once against a real directory, the owner's demo tenant, on 2026-10-26, by following the README's sandbox
+runbook, [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant): every expected
+answer matched ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)).
+That run did not cover HTTPS in front of the program, a token for a service, a user who is not assigned, an expired token,
+a token from another tenant, signing-key rotation or the `api://` form of the audience
 ([Known limitations](known-limitations.md)). The design is
 [ADR 0004](adr/0004-entra-token-validation-on-api-and-mcp.md).

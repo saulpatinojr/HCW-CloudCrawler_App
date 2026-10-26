@@ -22,11 +22,16 @@ check that was run and every check that was not.
 
 ## Not tested yet
 
-- **Microsoft Entra sign-in has never run against a real tenant.** The checks follow Microsoft Learn, but every token
-  in the tests is made locally. Not yet observed on a live token: the exact `iss` forms, which `aud` form an app
-  registration issues, what `scp`, `roles` and `idtyp` look like for the website's tokens, and the signing-key address.
-  The README has a short sandbox runbook ("Checking sign-in against a real tenant") that observes all of these; it has
-  not been run yet.
+- **Microsoft Entra sign-in has run against one real tenant, once.** On 2026-10-26 the README's sandbox runbook
+  ("Checking sign-in against a real tenant") was run in the owner's demo tenant. All seven calls answered as written, the
+  start-up refusal and the role check worked, and a real version 2.0 token carried the expected `iss`, `aud`, `scp` and
+  `roles` values ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598),
+  and the "Ran" entry in [VALIDATION.md](../VALIDATION.md)). Still not verified: HTTPS in front of the program
+  (Container Apps or another ingress) behind a public host name; a token for a service (an application permission); a
+  user who is not assigned when "Assignment required?" is on; an expired token; a token from another tenant; signing-key
+  rotation; the `api://<app id>` form of the audience and the version 1.0 `iss` form (the valid token was version 2.0
+  and carried the bare client id); and the `idtyp` claim, which the run did not report. Nothing outside the demo tenant
+  was touched, so this says nothing about production.
 - **The stdio host has not run against a live Azure MCP Server with a signed-in account.** The contract test starts the
   real 3.0.0 server and checks its tool list, but it makes no Azure call.
 - **The recorded results are hand-written.** They were written from the 3.0.0 source with fictional values and have not

@@ -98,9 +98,12 @@ scan and `pip-audit`. Nothing watches your running server.
 - **Backups.** Nothing is saved to disk, so there is nothing to back up and a restart loses the ledger.
 - **Metrics and alerts.** There is no metrics endpoint and no built-in alerting; watch the log and the health document
   yourself.
-- **Sign-in proven against a real directory.** Every test token is made locally; the README's sandbox runbook,
-  [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant), has not been run yet.
-  [Issue #8](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8) stays open until it is.
+- **Sign-in proven beyond one demo directory.** The README's sandbox runbook,
+  [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant), was run on 2026-10-26 in
+  the owner's demo tenant and every expected answer matched
+  ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)). Not verified:
+  HTTPS in front of the program, a token for a service (an application permission), a user who is not assigned, an
+  expired token, a token from another tenant and signing-key rotation ([Known limitations](known-limitations.md)).
 - **Fine-grained access.** The role check is one gate for the whole service, and there is no list of allowed client
   applications ([Known limitations](known-limitations.md)).
 - **More than one copy.** Each copy would hold its own, different ledger.

@@ -94,7 +94,9 @@ installed.
 ## What the tests do not prove
 
 - **Real Azure behaviour.** The recorded results are hand-written with made-up values.
-- **A real Entra directory.** Every test token is made on the spot and the signing key is served locally.
+- **A real Entra directory.** Every test token is made on the spot and the signing key is served locally. The one run
+  against a real directory (the README's sandbox runbook, 2026-10-26) was a manual check and is not part of these
+  tests; [VALIDATION.md](../VALIDATION.md) records it.
 - **How GitHub runs the workflows.** The tests read the workflow files as text; only running them shows how they behave.
 
 [Known limitations](known-limitations.md) and the repository's [validation record](../VALIDATION.md) list every check that was
