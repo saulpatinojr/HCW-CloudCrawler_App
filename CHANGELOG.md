@@ -26,6 +26,21 @@ once, merge one before rebasing the next.
   nothing changes). With sign-in on and roles listed, a valid token whose `roles` claim holds none of them gets `403`
   with a generic body that names no role. Person-only tools still need a delegated token with the scope
   `access_as_user`, exactly as before; the role is a separate gate. Refused when sign-in is off.
+- **The engine's secret-shape pattern is no longer quadratic on a repeated `eyJ`** (ticket
+  [#53](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/53)). `redact_payload` runs `_SECRET_SHAPED`
+  (`packages/cloud-crawler-core/src/cloud_crawler_core/redaction.py`) over every string it ingests, and its JSON web
+  token alternative took time proportional to the square of the text on a long run of `eyJ` with no dot: 65,535
+  characters (`"eyJ" * 21845`) held the process for about a second, and about 80 such strings fit in a 5 MB upload. The
+  alternative now starts only where a run of token characters begins and takes its first segment possessively, so each
+  run is scanned once: the same text takes about 2 milliseconds. **Behaviour change (decided in the ticket):** a token
+  whose first segment is glued to a preceding letter, digit, `_` or `-` is not matched at that segment. The claims
+  segment of a real token also starts with `eyJ` and follows a dot, so the claims and the signature are still redacted
+  and only the header stays; a space, quote, `=`, `:`, `/`, `.` or the start of the text before the token matches as
+  before. Every other shape (account and shared access keys, `sig=`, `ghp_` tokens, private key headers) is unchanged.
+  New tests run every pattern in the module against a hostile set at two text sizes (so a pattern added later is
+  covered without being listed), prove that the check would have caught the old pattern, and pin each shape's shortest
+  accepted length. The engine public surface does not change; the fix reaches the AddOn at the next engine release
+  (ADR 0002), after which its `MAX_TOKEN_STARTS` guard in `src/cloud_crawler_lab/inputs.py` can be removed.
 
 ### Added
 
