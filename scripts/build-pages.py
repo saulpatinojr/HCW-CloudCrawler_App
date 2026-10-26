@@ -66,9 +66,39 @@ def adr_pages(root: Path) -> list[Page]:
     return [Page(f"docs/adr/{p.name}", f"architecture/{p.stem}.html", p.stem) for p in records]
 
 
+# The hand-written guide pages in docs/ (not the decision records). The order is the order of the menu. A page that
+# is not listed here fails the build, so no page can exist without a menu entry, and a listed page that does not exist
+# yet is simply left out of the site and the menu.
+DOC_PAGES = (
+    ("product-overview", "product-overview.html", "Product overview"),
+    ("architecture", "architecture.html", "Architecture"),
+    ("quick-start", "quick-start.html", "Quick start"),
+    ("installation", "installation.html", "Installation"),
+    ("configuration", "configuration.html", "Configuration"),
+    ("deployment", "deployment.html", "Deployment"),
+    ("operations", "operations.html", "Operations"),
+    ("testing", "testing.html", "Testing"),
+    ("troubleshooting", "troubleshooting.html", "Troubleshooting"),
+    ("known-limitations", "known-limitations.html", "Known limitations"),
+    ("security", "security-overview.html", "Security overview"),
+)
+
+
+def doc_pages(root: Path) -> list[Page]:
+    return [
+        Page(f"docs/{stem}.md", out, label) for stem, out, label in DOC_PAGES if (root / "docs" / f"{stem}.md").exists()
+    ]
+
+
+def unlisted_doc_pages(root: Path) -> list[str]:
+    listed = {f"{stem}.md" for stem, _, _ in DOC_PAGES}
+    return sorted(p.name for p in (root / "docs").glob("*.md") if p.name not in listed)
+
+
 def pages(root: Path) -> list[Page]:
     return [
         Page("README.md", "index.html", "Home"),
+        *doc_pages(root),
         Page("docs/adr/README.md", "architecture/index.html", "Architecture decisions"),
         *adr_pages(root),
         Page("VALIDATION.md", "validation.html", "Validation record and known limitations"),
@@ -82,6 +112,7 @@ def pages(root: Path) -> list[Page]:
 # renamed heading breaks the build instead of leaving a dead menu entry.
 NAVIGATION = [
     NavLink("Home", "index.html"),
+    *(NavLink(label, out) for stem, out, label in DOC_PAGES if (ROOT / "docs" / f"{stem}.md").exists()),
     NavLink("What it does", "index.html#what-it-does"),
     NavLink("Status", "index.html#status"),
     NavLink("Getting started", "index.html#getting-started"),
@@ -278,7 +309,9 @@ def build(root: Path, out: Path, commit: str) -> list[str]:
     site = pages(root)
     by_source = {p.source: p for p in site}
     md = make_markdown()
-    errors: list[str] = []
+    errors = [
+        f"docs/{name} is not listed in DOC_PAGES, so it would have no menu entry" for name in unlisted_doc_pages(root)
+    ]
     for page in site:
         title, body = render_page(root, page, by_source, md, errors)
         target = out / page.out

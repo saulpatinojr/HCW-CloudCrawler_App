@@ -92,6 +92,10 @@ started for this change.
 | Workflow syntax | `yamllint -c .yamllint.yaml` and `actionlint` on `pages.yml` | yamllint clean; actionlint only the known `ubuntu-26.04` label message |
 | Looks right | Microsoft Edge headless screenshots of `index.html` and one ADR at 1280 pixels, and of `validation.html` at 500 pixels (the smallest width headless Edge uses) | Readable, no sideways scrolling at 500 pixels, dark theme applied. A screenshot at 390 pixels was cut off by the headless minimum width, so a real phone was not checked |
 
+### Guide pages added to the site (ticket #11)
+
+Run on 2026-10-25 on the branch `cc/pages-docs-pages-1`, from `main` at `189ebf7`. The builder now also renders the guide pages kept in `docs/` (Product overview, Architecture, Known limitations and Security overview in this change; the others follow). A page in `docs/` that `DOC_PAGES` in `scripts/build-pages.py` does not list fails the build, so no page can exist without a menu entry. `uv run --locked --only-group docs python scripts/build-pages.py` built 14 pages and every internal link and fragment resolved; `tests/unit/test_build_pages.py` (builds the whole site into a temporary folder, checks the not-production notice on every page, the menu, and that the checker reports a broken link) and `tests/unit/test_workflows.py` passed; `markdownlint-cli2` reported 0 issues on `docs/*.md`. The text of these pages was checked against the code, the settings file `.env.example`, `README.md` and this file; the sign-in and Azure host statements repeat what this file already says is untested.
+
 ## Did not run
 
 | Check | Why | Where it runs |
