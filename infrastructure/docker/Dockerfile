@@ -4,7 +4,13 @@
 #
 # Build:  docker build -f infrastructure/docker/Dockerfile -t hcw-cloud-crawler-appliance:dev .
 # Prove:  docker run --rm -e AZURE_CLIENT_SECRET=x hcw-cloud-crawler-appliance:dev   # exit 3: refused
-#         docker run --rm -p 8080:8080 hcw-cloud-crawler-appliance:dev               # GET /api/health answers
+#         docker run --rm hcw-cloud-crawler-appliance:dev                            # exit 3: it listens on every
+#                                                                                    # interface, so sign-in is needed
+#         docker run --rm -p 8080:8080 -e CC_AUTH_MODE=entra -e CC_ENTRA_TENANT_ID=<tenant> \
+#           -e CC_ENTRA_AUDIENCE=<audience> hcw-cloud-crawler-appliance:dev          # sign-in on: GET /api/health answers
+#         docker run --rm -p 127.0.0.1:8080:8080 -e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true \
+#           hcw-cloud-crawler-appliance:dev                                          # lab only: no sign-in, opt-out
+# The image sets CC_BIND_HOST=0.0.0.0 and never sets the opt-out: leaving sign-in off is a choice the operator makes.
 
 FROM python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS deps
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1

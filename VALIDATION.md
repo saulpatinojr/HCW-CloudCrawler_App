@@ -55,6 +55,24 @@ access. These rows are about this change only; the rows above were not re-run fo
 | Azure MCP 3.0.0 contract | `uv run pytest tests/contract -q -m azmcp` | 1 passed (the real server over `npx`, no Azure sign-in); the snapshot is unchanged |
 | Known vulnerabilities | `uv run pip-audit -r requirements.lock.txt --strict` | No known vulnerabilities found |
 
+## Ran for the unauthenticated-start refusal, the role check and the real-tenant runbook (ticket #8, ADR 0004 amendment)
+
+Run on the branch `cc/auth-hardening-8` on 2026-10-26, from `main` at `8142b69`, Python 3.14.6, uv 0.12.0, Docker Desktop 29.9.2 (context `desktop-linux`),
+PowerShell 7.6.7 on Windows, in a session with no Entra tenant and no Azure access. No version, lockfile or dependency changed.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Lint, format, lockfiles, version guard | `uv run --frozen ruff check .`, `ruff format --check .`, `bash scripts/check-lockfiles.sh`, `uv run --frozen python scripts/check-release-version.py` | All passed; the guard answered `release version consistent: 0.1.0` |
+| Full suite and coverage gate | `uv run --frozen pytest -q --cov=packages --cov=src` | 598 passed, 45 skipped (the tests that need `bash` and `jq`), 1 deselected (the `azmcp` contract test); coverage above the 96 percent gate |
+| Refusal, opt-out, role check | `tests/unit/test_auth_hardening.py` | Sign-in off on `0.0.0.0`, `::` and two documentation addresses (one IPv4, one IPv6) is refused through `Settings.from_env`, through the constructor and through `main()` (exit 3, the setting named, uvicorn never called) and in a fresh process; loopback starts; only a clear yes is an opt-out; the opt-out beside `entra` is refused; roles with sign-in off are refused; a token with the role passes, with none of them (absent, empty, other, wrong case, a string, a mixed list, an object, the role name as a scope, an app-only token) gets `403` with one fixed body that names no role and no `WWW-Authenticate`; no token, a bad token and a wrong-audience token with the role stay `401`; `/api/health` stays open; the denial is logged as a status and the word `role` only; a person with the scope and the role can accept a decision, an app-only token with the role cannot; the Dockerfile never sets the opt-out and only `ci.yml` uses it |
+| Runbook, static | `tests/unit/test_runbook.py` | The role value (`CloudCrawler.Access`) differs from the scope value (`access_as_user`), the scope equals the appliance's default human scope, the role is a valid `CC_AUTH_REQUIRED_ROLES`, all seven calls are present with their expected answers, no secret is created and no token is printed, no placeholder is left, and each step is at most 40 lines |
+| Mutation checks | a script that broke one guard at a time and ran `tests/unit` and `tests/security` | 13 of 13 broken guards made at least one test fail: refusal removed, opt-out allowed beside `entra`, any text counted as the opt-out, `authorize` skipped, role check always passing, all-roles instead of any-role, a non-list `roles` claim trusted, a 403 body that names the role, 401 instead of 403, the opt-out in the Dockerfile, role equal to scope in the runbook, scope different from the default, the opt-out dropped from CI |
+| Image, local runtime | `docker build -f infrastructure/docker/Dockerfile`, then the `ci.yml` step "Startup refusal, non-root and health" extracted and run with Git Bash against that image, plus the single `docker run` commands | The step exited 0. A bare `docker run` printed `startup_refused` naming `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK` and exited 3; with the opt-out `GET /api/health` answered and the container log carried the one `warning` line; with placeholder Entra settings `/api/health` said `"auth":"entra"` and `/api/nope` without a token answered 401; the opt-out together with `CC_AUTH_MODE=entra` exited 3; `AZURE_CLIENT_SECRET` still exited 3. The image and the containers were removed afterwards |
+| Runbook commands, parsed and exercised without Entra | PowerShell parser over all 10 blocks; the JSON bodies of steps 1 and 2 built and read back; the step 5 `curl.exe` calls (the header array, `--data-binary "@file"`, `-w`) against a local sign-in-off server | 0 parse errors; the bodies hold one role, one scope, token version 2 and the `api://` identifier; `tools/list` answered 200 and `adr_accept` on an unknown decision answered `not_found: no such decision`. This proves the shell syntax and the request shapes, not what Entra answers |
+| Markdown, workflow lint | `markdownlint-cli2` (README, CHANGELOG, `docs/**`), `yamllint -c .yamllint.yaml`, `zizmor --offline` on `ci.yml` | 0 errors; clean; no findings. `actionlint` reports only `ubuntu-26.04` as an unknown runner label (already present before this change) |
+
+**Not run, and why:** the runbook itself (it needs a sandbox Entra tenant: whether `az ad app create`, the two `az rest` calls, the app role assignment and the Azure CLI pre-authorization behave as written, and whether a real token carries `roles` as assumed, are all unobserved); the changed `ci.yml` image job on a GitHub runner (the same step ran locally on Docker Desktop); the image scan (`image-scan.yml`) on the new image.
+
 ## Ran for the leftover cleanup and the image scan (tickets #12 and #15)
 
 Run on the branch `cc/template-cleanup-image-scan` on 2026-10-25 (the scan and the image on `main` at `0fd502e`; the branch was then rebased onto `main` at `fa1f38a`, which changes no file the image contains, and the test, lint and guard rows were run again there), Python 3.14.6, uv 0.12.0, Docker Desktop 29.9.2 on
@@ -102,7 +120,7 @@ Run on 2026-10-25 on the branch `cc/pages-docs-pages-1`, from `main` at `189ebf7
 | --- | --- | --- |
 | GitHub Pages deployment (`configure-pages`, `upload-pages-artifact`, `deploy-pages`, the `github-pages` environment) and the public site address | Pages is not enabled and the deploy job is off until the repository variable `PAGES_ENABLED` is `true`; a pull request never deploys | The first run after the owner follows the README section "The documentation site". The `pages-build` job runs on the pull request |
 | External links on the site (https addresses inside the Markdown) | The check is offline and resolves internal links only | Not run anywhere; a link checker over the live site is the follow-up once it is public |
-| Entra sign-in against a real tenant | No Entra tenant and no network access to `login.microsoftonline.com` in the session; every token in the tests is minted locally and the key set is a local fixture | The owner's first deployment with `CC_AUTH_MODE=entra`: the README lists the app registration and the check (`/api/health` shows `"auth": "entra"`, `POST /mcp` without a token answers 401, then a real token from the website works) |
+| Entra sign-in against a real tenant | No Entra tenant and no network access to `login.microsoftonline.com` in the session; every token in the tests is minted locally and the key set is a local fixture | The owner's run of the README runbook "Checking sign-in against a real tenant" in a sandbox tenant (its seven calls also observe the real `scp`, `roles`, `aud` and `iss` values), or the owner's first deployment with `CC_AUTH_MODE=entra` |
 | The image scan on a GitHub runner | The scan was run on Docker Desktop on Windows, and no workflow was started here. A runner differs in how bind-mounted folders are owned (the script runs Trivy as the runner's own user id) and in the Trivy database mirror it can reach | The first run is the pull request that adds `image-scan.yml` (its trigger covers its own files) and then the Monday schedule; the owner can also use **Run workflow**. If it fails on a permission error, the script's `--user` and cache folder are the place to look |
 | Container registry path for Azure MCP (`azure-sdk/azure-mcp` versus `azure-mcp`) | No registry read; not needed by this slice (no Azure MCP container yet) | ADR 0001 step 1, at the first derived-image build |
 | Gitleaks, CodeQL, dependency review | GitHub-hosted | `security.yml`, `codeql.yml`, `dependency-review.yml`. `security` and CodeQL passed on `main` at `ae2f271`; dependency review passed on pull request 23 |
@@ -132,18 +150,20 @@ Run on 2026-10-25 on the branch `cc/pages-docs-pages-1`, from `main` at `189ebf7
 - Resource Graph exports carry no diagnostic settings, locks or sub-resource encryption state; claims on those stay
   `unknown` until the App edition's collectors exist.
 - `/api/health` reports `azureConnectivity: not-configured` unless `CC_AZMCP_MODE` names a host.
-- Sign-in is **off by default**, and that is decided (owner, 2026-10-25, ADR 0004 "Owner decisions"): the appliance does not refuse to start without it. With `CC_AUTH_MODE=off`, `/api` and `/mcp` accept requests without any sign-in and the
-  human-only tools only require a non-empty `actorId`; that is for a trusted lab network only (the README says so, and
-  the server binds loopback unless `CC_BIND_HOST` is set; the container image sets `0.0.0.0`, also decided, and starting unauthenticated on a non-loopback address logs one `warning` line). Ticket #8 stays open
-  until the owner has enabled and checked it in a real deployment.
+- Sign-in is **off by default**, and that is decided (owner, 2026-10-25, ADR 0004 "Owner decisions"). With `CC_AUTH_MODE=off`, `/api` and `/mcp` accept requests without any sign-in and the
+  human-only tools only require a non-empty `actorId`; that is for a trusted lab network only (the README says so). Since the amendment of
+  2026-10-26 the appliance **refuses to start** (exit 3) with sign-in off on a non-loopback address, unless
+  `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` is set on purpose (then one `warning` line). The container image binds `0.0.0.0` and does not set
+  the opt-out, so it needs sign-in on or the opt-out added by whoever runs it. Ticket #8 stays open until the owner has run the README's
+  real-tenant runbook, or enabled and checked sign-in in a real deployment.
 - Entra sign-in (ADR 0004) is **not tested against a real Entra tenant**: the claims and issuer shapes follow Microsoft Learn
   (access tokens, claims validation, retrieved 2026-10-24) but were not observed on a live token. Specifically unverified: that
   v1.0 and v2.0 `iss` values are exactly the two forms accepted; which `aud` form a given app registration issues (the setting
   takes both); that `scp` and `idtyp` look as assumed for the website's delegated tokens; and that the key set URL answers as
   coded. The `503` answer when the key set cannot be fetched is intended (owner decision, 2026-10-25), not a gap.
 - Entra sign-in does not yet include: an allow-list of client applications (who can obtain a token is controlled in Entra by
-  "Assignment required"); per-role authorisation inside the model-class tools (any valid token for the tenant and audience can
-  read, ingest, propose and evaluate; the owner decided on 2026-10-25 that this is fine for now); sovereign clouds (the public authority `login.microsoftonline.com` and
+  "Assignment required"); a per-tool permission model (since 2026-10-26 `CC_AUTH_REQUIRED_ROLES` adds one optional app-role gate for the whole
+  service, empty by default, so by default any valid token for the tenant and audience can read, ingest, propose and evaluate); sovereign clouds (the public authority `login.microsoftonline.com` and
   `sts.windows.net` are fixed in `security/entra.py`); revocation (a stolen token works until it expires, as with any access
   token); token binding or proof-of-possession; rate limiting of failed sign-ins. A person's delegated token proves consent,
   not attention: an on-behalf-of service holding a person's token acts as that person.

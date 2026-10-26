@@ -161,13 +161,17 @@ uv run pytest tests/contract -q -m azmcp
 port can read evidence and accept decisions as if they were a trusted person. Run the appliance only on a trusted lab
 network until you turn sign-in on. Turning it on is a decision recorded in
 [ADR 0004](docs/adr/0004-entra-token-validation-on-api-and-mcp.md). The defaults described here are decided, not open
-(the owner's answers of 2026-10-25 are in that ADR's "Owner decisions" section): sign-in stays off by default, with the
-warning below, and the appliance does not refuse to start without it.
+(the owner's answers of 2026-10-25 and the amendment of 2026-10-26 are in that ADR): sign-in stays off by default on
+this machine, and the appliance refuses to start without it on any other network address unless you opt out on purpose.
 
-Two things make the default less exposed than it used to be. The server now listens on `127.0.0.1` (this machine
-only) unless `CC_BIND_HOST` says otherwise; the container image sets `CC_BIND_HOST=0.0.0.0`, so the image still
-listens on every interface. And if it starts unauthenticated on a non-loopback address, it writes one `warning` line.
-`GET /api/health` reports `"auth": "off"` or `"auth": "entra"` so you can see which one is running.
+Three things make the default less exposed than it used to be. The server listens on `127.0.0.1` (this machine only)
+unless `CC_BIND_HOST` says otherwise. With sign-in off it **refuses to start** on any other address (exit code 3, and
+the message names the setting) unless you also set `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true`, a lab-only opt-out
+whose long name is meant to be hard to set by accident; using it writes one `warning` line. The container image sets
+`CC_BIND_HOST=0.0.0.0` and does **not** set the opt-out, so `docker run` with no settings now stops with that message
+(owner decision of 2026-10-26, ADR 0004 amendment). To run the image, turn sign-in on (the settings below), or, in a lab
+only, add `-e CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK=true` yourself. And `GET /api/health` reports `"auth": "off"` or
+`"auth": "entra"` so you can see which one is running.
 
 ### What sign-in does
 
@@ -184,9 +188,12 @@ The tools for a person (`adr_accept`, `review_decide`, and `collection_run_azure
 `actorId` from the token's `oid` claim. You can leave `actorId` out; if you send one it must be the same object id,
 or the call is refused. They also need a token a person signed in to get (it carries the scope `access_as_user`), so a
 service or an agent that signs in as itself can read, ingest, propose and evaluate, but cannot accept or decide.
-There is no list of allowed client applications and no role check on those model tools yet: any valid token for your
-tenant and audience can call them. That is a decision for now (ADR 0004), so control who can obtain a token with
-"Assignment required" in step 4 below.
+There is no list of allowed client applications. By default any valid token for your tenant and audience can call the
+model tools (ADR 0004), so control who can obtain a token with "Assignment required" in step 4 below. To go further,
+set `CC_AUTH_REQUIRED_ROLES` to one or more app role values (see "Optional app role" below): a token must then carry at
+least one of them in its `roles` claim, or it gets `403` with a generic body that does not name the roles. It is one
+gate for the whole service, checked after the token is valid, and it does not change the person-only rule above: a
+person's delegated token still works for the person-only tools when it also carries the role.
 
 ### Settings
 
@@ -201,11 +208,13 @@ environment variables). The shapes below use placeholder ids; use your own from 
 | `CC_ENTRA_HUMAN_SCOPE` | no | `access_as_user` | The scope a token needs to call a tool for a person. |
 | `CC_ENTRA_CLOCK_SKEW_SECONDS` | no | `60` | Tolerance on `exp` and `nbf`; 0 to 300. |
 | `CC_ENTRA_JWKS_CACHE_SECONDS` | no | `900` | How long signing keys are cached; 60 to 86400. |
-| `CC_BIND_HOST` | no | `127.0.0.1` | The interface to listen on (an IP address). |
+| `CC_AUTH_REQUIRED_ROLES` | no | `CloudCrawler.Access` | App role values, comma or space separated. A token needs at least one in its `roles` claim, or the answer is `403`. Empty (the default) checks no role. Refused when `CC_AUTH_MODE` is `off`. |
+| `CC_BIND_HOST` | no | `127.0.0.1` | The interface to listen on (an IP address). With sign-in off, anything but loopback is refused at start-up unless the next setting is `true`. |
+| `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK` | no | empty | **Lab only.** `true` lets the server start with sign-in off on a non-loopback address. Refused when `CC_AUTH_MODE` is `entra`. The image never sets it. |
 
 If `CC_AUTH_MODE=entra` is set without the tenant id or the audience, the appliance refuses to start and says which
-setting is missing. If any `CC_ENTRA_*` setting is present while sign-in is `off`, it also refuses to start, so a
-half-finished setup cannot look protected.
+setting is missing. If any `CC_ENTRA_*` setting (or `CC_AUTH_REQUIRED_ROLES`) is present while sign-in is `off`, it
+also refuses to start, so a half-finished setup cannot look protected.
 
 ### What you do in Microsoft Entra, once
 
@@ -227,10 +236,166 @@ half-finished setup cannot look protected.
    `POST /mcp` without a token answers `401`.
 7. Make the client (the website) request tokens for the scope `api://<client id>/access_as_user`.
 
+**Optional app role.** To require a role as well: in the app registration open App roles, Create app role. Display name
+`Use Cloud Crawler`; Allowed member types "Both (Users/Groups + Applications)"; Value `CloudCrawler.Access`;
+Description `Lets a user or a service call Cloud Crawler.`; leave "Do you want to enable this app role?" ticked. The role
+value must differ from the scope name `access_as_user`, because Entra refuses an app that uses one value for both. Then
+in step 4 assign the role to the people (or a group) when you add them, and set `CC_AUTH_REQUIRED_ROLES=CloudCrawler.Access`.
+A service that signs in as itself gets the role from an application permission an administrator grants it
+([app roles](https://learn.microsoft.com/en-us/entra/identity-platform/howto-add-app-roles-in-apps)).
+
 Details: [register an application](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app),
 [expose a web API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis)
 and [restrict an app to assigned users](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal).
-Not yet checked against a real tenant: see `VALIDATION.md`.
+Not yet checked against a real tenant: see `VALIDATION.md`, and the short sandbox runbook that follows.
+
+### Checking sign-in against a real tenant
+
+Do this once, in a **sandbox** Microsoft Entra tenant, before you trust sign-in for anyone else. It needs no Terraform
+(this repository has none) and creates one app registration, which step 8 deletes. Nothing here is run by CI or by an
+agent, and it has not been run yet: until you run it, "works against a real tenant" is a claim nobody has observed. You
+need the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli), `curl.exe` (Windows 10 and later
+include it), [uv](https://docs.astral.sh/uv/), a clone of this repository, and an account that may create app
+registrations in the sandbox tenant (the Application Administrator role is enough). The commands are PowerShell. Steps
+1, 2, 3, 5 and 8 use one window, so its variables stay; steps 4, 6 and 7 use a second window opened in the repository
+folder.
+
+**What you are checking.** Entra puts the delegated scope `access_as_user` in the token's `scp` claim and the app role
+`CloudCrawler.Access` in its `roles` claim. The two values are deliberately different: Entra refuses an app whose role
+and scope share one value, which is the mistake the Cloud Assessor run hit, and `tests/unit/test_runbook.py` fails if
+they ever match here.
+
+#### Step 1. Create the app registration, its role and its scope
+
+```powershell
+az login
+$name = 'HCW Cloud Crawler API (sandbox)'; $roleValue = 'CloudCrawler.Access'; $scopeValue = 'access_as_user'
+$app = az ad app create --display-name $name --sign-in-audience AzureADMyOrg --query appId -o tsv
+$obj = az ad app show --id $app --query id -o tsv
+$role = @{ id = [guid]::NewGuid().ToString(); value = $roleValue; displayName = 'Use Cloud Crawler'; description = 'Lets a user or a service call Cloud Crawler.'; isEnabled = $true; allowedMemberTypes = @('User', 'Application') }
+$scope = @{ id = [guid]::NewGuid().ToString(); value = $scopeValue; type = 'User'; isEnabled = $true; adminConsentDisplayName = 'Act as the signed-in user'; adminConsentDescription = 'Lets the caller use Cloud Crawler as the signed-in user.'; userConsentDisplayName = 'Act as you'; userConsentDescription = 'Lets the app use Cloud Crawler as you.' }
+$body = @{ identifierUris = @("api://$app"); appRoles = @($role); api = @{ requestedAccessTokenVersion = 2; oauth2PermissionScopes = @($scope) } } | ConvertTo-Json -Depth 6
+$file = Join-Path $env:TEMP 'cc-api-app.json'; Set-Content -Path $file -Value $body
+az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/$obj" --headers 'Content-Type=application/json' --body "@$file"
+```
+
+You should see no error and no output after the last command (Microsoft Graph answers "204 No Content"). An error that
+mentions a duplicate or conflicting value means the role and the scope share a value: stop and fix `$roleValue`.
+
+#### Step 2. Create the service principal, assign yourself the role, let the Azure CLI ask for the scope
+
+A service principal (the tenant's own copy of the app, which is where role assignments live) comes first. Then you give
+yourself the role, so your token carries it, and pre-authorize the Azure CLI's public application id
+`04b07795-8ddb-461a-bbee-02f9e1bf7b46` for the scope, so it can request a token without a consent screen (see
+[the Microsoft Learn example](https://learn.microsoft.com/en-us/azure/azure-sovereign-clouds/private/foundry-local/how-to-configure-authentication#step-4-authorize-azure-cli);
+never do this outside a sandbox).
+
+```powershell
+$sp = az ad sp create --id $app --query id -o tsv; $me = az ad signed-in-user show --query id -o tsv
+Set-Content -Path $file -Value (@{ principalId = $me; resourceId = $sp; appRoleId = $role.id } | ConvertTo-Json)
+az rest --method POST --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$sp/appRoleAssignedTo" --headers 'Content-Type=application/json' --body "@$file" --query appRoleId -o tsv
+Set-Content -Path $file -Value (@{ api = @{ preAuthorizedApplications = @(@{ appId = '04b07795-8ddb-461a-bbee-02f9e1bf7b46'; delegatedPermissionIds = @($scope.id) }) } } | ConvertTo-Json -Depth 6)
+az rest --method PATCH --uri "https://graph.microsoft.com/v1.0/applications/$obj" --headers 'Content-Type=application/json' --body "@$file"
+```
+
+You should see one line, the role's id (a GUID). If the first `az rest` says the service principal does not exist yet,
+wait ten seconds and run that line again.
+
+#### Step 3. Read back what Entra now holds
+
+```powershell
+az ad app show --id $app --query '{appRoles: appRoles[].value, scopes: api.oauth2PermissionScopes[].value, tokenVersion: api.requestedAccessTokenVersion, identifierUris: identifierUris}' -o json
+```
+
+Expect `appRoles` to be `["CloudCrawler.Access"]`, `scopes` to be `["access_as_user"]` (two different values),
+`tokenVersion` to be `2`, and `identifierUris` to be `["api://<the application id>"]`.
+
+#### Step 4. Start the appliance with sign-in on (second window)
+
+```powershell
+uv sync --frozen --all-packages
+$tenant = az account show --query tenantId -o tsv; $app = az ad app list --display-name 'HCW Cloud Crawler API (sandbox)' --query '[0].appId' -o tsv
+$env:CC_AUTH_MODE = 'entra'; $env:CC_ENTRA_TENANT_ID = $tenant; $env:CC_ENTRA_AUDIENCE = "$app api://$app"; $env:CC_AUTH_REQUIRED_ROLES = 'CloudCrawler.Access'; $env:PORT = '8080'
+uv run --frozen python -m cloud_crawler_appliance
+```
+
+Leave it running. It listens on `127.0.0.1` only and writes short JSON event lines, never content.
+
+#### Step 5. Make the calls (first window)
+
+The token stays in a variable and is never printed; do not paste it anywhere.
+
+```powershell
+$base = 'http://127.0.0.1:8080'; $tenant = az account show --query tenantId -o tsv; $app = az ad app list --display-name 'HCW Cloud Crawler API (sandbox)' --query '[0].appId' -o tsv
+$good = az account get-access-token --tenant $tenant --scope "api://$app/access_as_user" --query accessToken -o tsv
+$wrong = az account get-access-token --tenant $tenant --resource-type arm --query accessToken -o tsv
+$rpc = Join-Path $env:TEMP 'cc-rpc.json'; Set-Content -Path $rpc -Value '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+$mcp = @('-H', 'Content-Type: application/json', '-H', 'Accept: application/json, text/event-stream')
+$h = curl.exe -s "$base/api/health" | ConvertFrom-Json
+"1 health, no token          (expect True entra): " + $h.ok + ' ' + $h.auth
+"2 mcp, no token             (expect 401): " + (curl.exe -s -o NUL -w '%{http_code}' $mcp --data-binary "@$rpc" "$base/mcp")
+"3 route, junk token         (expect 401): " + (curl.exe -s -o NUL -w '%{http_code}' -H 'Authorization: Bearer not-a-token' "$base/api/nope")
+"4 route, wrong audience     (expect 401): " + (curl.exe -s -o NUL -w '%{http_code}' -H "Authorization: Bearer $wrong" "$base/api/nope")
+"5 route, valid token        (expect 404): " + (curl.exe -s -o NUL -w '%{http_code}' -H "Authorization: Bearer $good" "$base/api/nope")
+"6 mcp tools/list, valid     (expect 200): " + (curl.exe -s -o NUL -w '%{http_code}' $mcp -H "Authorization: Bearer $good" --data-binary "@$rpc" "$base/mcp")
+```
+
+Line 5 answers `404` because the token passed every check and the route simply does not exist. A `401` there means a check
+failed (add `-i` to a call to see `WWW-Authenticate`), and a `403` means the token has no `CloudCrawler.Access` role in
+its `roles` claim. Optional extra: it asks a person-only tool about a decision that does not exist, so the reply is
+`not_found` (the token counted as a signed-in person) and not `forbidden`:
+
+```powershell
+Set-Content -Path $rpc -Value '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"adr_accept","arguments":{"decisionId":"dec_none"}}}'
+curl.exe -s $mcp -H "Authorization: Bearer $good" --data-binary "@$rpc" "$base/mcp"
+```
+
+Expect text containing `not_found: no such decision`.
+
+#### Step 6. Check the role gate says no (second window, then first window)
+
+In the second window press Ctrl+C, then restart with a role your token does not have:
+
+```powershell
+$env:CC_AUTH_REQUIRED_ROLES = 'CloudCrawler.NotAssigned'; uv run --frozen python -m cloud_crawler_appliance
+```
+
+In the first window:
+
+```powershell
+"7 route, valid token, other role required (expect 403): " + (curl.exe -s -w ' %{http_code}' -H "Authorization: Bearer $good" "$base/api/nope")
+```
+
+Expect `{"error":{"code":"forbidden","message":"this identity is not allowed to use the service"}} 403`. The body does not
+name any role.
+
+#### Step 7. Check the start-up refusal (optional, second window)
+
+Press Ctrl+C, then ask for the unsafe combination: sign-in off, every network interface.
+
+```powershell
+Remove-Item Env:CC_ENTRA_TENANT_ID, Env:CC_ENTRA_AUDIENCE, Env:CC_AUTH_REQUIRED_ROLES; $env:CC_AUTH_MODE = 'off'; $env:CC_BIND_HOST = '0.0.0.0'
+uv run --frozen python -m cloud_crawler_appliance; "exit code: $LASTEXITCODE"
+```
+
+Expect one line starting `{"event": "startup_refused"` that names `CC_ALLOW_UNAUTHENTICATED_NON_LOOPBACK`, then
+`exit code: 3`. Nothing listened on the network.
+
+#### Step 8. Clean up
+
+Press Ctrl+C in the second window if something still runs. Then, in the first window, delete the app registration (this
+also removes its service principal and role assignment) and the local files and variables:
+
+```powershell
+az ad app delete --id $app; Remove-Item $file, $rpc; Remove-Item Env:CC_*; Remove-Item Variable:good, wrong
+```
+
+Entra keeps a deleted app registration for 30 days; that is harmless in a sandbox. To check, run `az ad app list
+--display-name 'HCW Cloud Crawler API (sandbox)' --query '[].appId'` and expect `[]`.
+
+If any line differs from what is written, do not turn sign-in on for anyone else. Open an issue with the line number and
+the status code only: never paste a token, a tenant id or an application id. What this runbook can and cannot prove is
+listed in `VALIDATION.md`.
 
 ## Releasing the engine
 
