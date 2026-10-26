@@ -51,7 +51,8 @@ sign-in does not cover yet is on [Known limitations](known-limitations.md).
 - **Its logs hold no content.** Log lines carry counts, durations, flags and hashed identifiers. A rejected token is
   logged as a status and a fixed reason word.
 - **It redacts what it ingests.** Payloads are redacted when they arrive, and the raw payload's hash is taken before
-  redaction so a change is still noticed.
+  redaction so a change is still noticed. Every redaction pattern is tested to take time in proportion to the length of
+  the text, so one crafted value cannot hold the process for seconds.
 - **Only read-only Azure calls are allowed.** The Azure MCP host has an allow-list of read-only tools, and a contract
   test checks it against the pinned 3.0.0 server's tool list.
 - **The AddOn cannot reach Azure at all** ([ADR 0003](adr/0003-the-addon-never-calls-azure.md)).

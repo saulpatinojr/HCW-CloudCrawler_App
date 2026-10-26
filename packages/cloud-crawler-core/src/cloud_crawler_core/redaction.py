@@ -18,10 +18,21 @@ REDACTED = "<redacted>"
 
 _GUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 _SUBSCRIPTION_PATH = re.compile(r"/subscriptions/[^\s\"']*", re.IGNORECASE)
+# Every alternative must take time linear in the text, because `redact_payload` runs this over every string of
+# everything that is ingested and `scrub` over every exception message. The JSON web token alternative used to be
+# quadratic on a long run of `eyJ` with no dot: each `eyJ` in the run started a scan to the end of the run. It now
+# starts only where a run of token characters begins (the look-behind) and takes the first segment possessively (no
+# giving characters back), so a run is scanned once. The one behaviour change: a token whose first segment is glued
+# directly to a preceding letter, digit, `_` or `-` is not matched at that segment (a space, a quote, `=`, `:`, `/`,
+# `.` or the start of the text all still are). Its claims segment also starts with `eyJ`, after a dot, so the claims
+# and the signature are still redacted and only the header stays.
+# The other alternatives start with a fixed literal and end with an open quantifier, so they were already linear.
+# tests/test_redaction_linear_time.py runs every pattern in this module against a hostile set and compares two text
+# sizes, so a pattern added later is checked without being listed.
 _SECRET_SHAPED = re.compile(
     r"(AccountKey=[A-Za-z0-9+/=]{20,}"
     r"|SharedAccessKey=[A-Za-z0-9+/=]{20,}"
-    r"|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"
+    r"|(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{10,}+\.[A-Za-z0-9_-]{10,}"
     r"|sig=[A-Za-z0-9%+/=]{20,}"
     r"|ghp_[A-Za-z0-9]{20,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
