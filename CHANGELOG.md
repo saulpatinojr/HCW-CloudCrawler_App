@@ -11,6 +11,18 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Added
+
+- **The remaining guide pages on the documentation site** (ticket #11): Quick start, Installation, Configuration,
+  Deployment, Operations, Testing and Troubleshooting, so the site now has the whole standard page list. Each is a
+  numbered procedure for a junior administrator: one action per step, what you should see after it, PowerShell 7 and Git
+  Bash commands where they differ, and a link to the official documentation for every outside tool. The commands were run
+  before they were written down (`VALIDATION.md` lists which). Deployment and Operations say plainly what is not supported
+  yet, including that refusing to start without sign-in on a network address and an optional role check are planned and
+  tracked in issue #8, not done. `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide
+  page alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are
+  unchanged, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
+
 ## [0.1.0] - 2026-10-25
 
 The first release of the engine `cloud-crawler-core` 0.1.0 and the App edition 0.1.0, first merged in

@@ -36,6 +36,29 @@ def test_every_guide_page_in_docs_has_a_menu_entry():
     assert bp.unlisted_doc_pages(ROOT) == []
 
 
+def test_every_listed_guide_page_exists():
+    for stem, _, _ in bp.DOC_PAGES:
+        assert (DOCS / f"{stem}.md").exists(), stem
+
+
+PROCEDURE_PAGES = (
+    "quick-start",
+    "installation",
+    "configuration",
+    "deployment",
+    "operations",
+    "testing",
+    "troubleshooting",
+)
+
+
+@pytest.mark.parametrize("stem", PROCEDURE_PAGES)
+def test_a_procedure_page_says_what_you_should_see_and_shows_commands(stem):
+    text = (DOCS / f"{stem}.md").read_text(encoding="utf-8")
+    assert "You should see" in text
+    assert "```" in text, "a procedure page shows the commands to paste"
+
+
 def test_an_unlisted_page_is_reported(tmp_path):
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "quick-start.md").write_text("# a\n", encoding="utf-8")
