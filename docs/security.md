@@ -73,5 +73,8 @@ sign-in does not cover yet is on [Known limitations](known-limitations.md).
 
 ## What has not been tested
 
-The Entra sign-in has never been run against a real Entra tenant: every token in the tests is made locally.
-[Known limitations](known-limitations.md) lists this and the rest.
+The Entra sign-in was run once against a real Entra tenant, the owner's demo tenant, on 2026-10-26, and every expected
+answer matched ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)).
+It has not been verified behind HTTPS on a public host name, with a token for a service, for a user who is not assigned,
+with an expired token or one from another tenant, or across a signing-key rotation. Every token in the automated tests is
+still made locally. [Known limitations](known-limitations.md) lists this and the rest.

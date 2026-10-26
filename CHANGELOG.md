@@ -32,8 +32,8 @@ once, merge one before rebasing the next.
 - A short sandbox runbook in the README, "Checking sign-in against a real tenant": Azure CLI and PowerShell steps that
   create the Entra app registration with an app role (`CloudCrawler.Access`) and a delegated scope (`access_as_user`,
   deliberately a different value), start the appliance with sign-in on, make seven calls with the expected status codes,
-  and clean up. A test fails if the role and the scope values ever match. Not yet run against a real tenant
-  (`VALIDATION.md`). The engine package is unchanged, so the AddOn needs no entry in its `docs/whats-new-upstream.md`.
+  and clean up. A test fails if the role and the scope values ever match. It has since been run against a real tenant
+  (see "Changed" below, and `VALIDATION.md`). The engine package is unchanged, so the AddOn needs no entry in its `docs/whats-new-upstream.md`.
 - **The remaining guide pages on the documentation site** (ticket #11): Quick start, Installation, Configuration,
   Deployment, Operations, Testing and Troubleshooting, so the site now has the whole standard page list. Each is a
   numbered procedure for a junior administrator: one action per step, what you should see after it, PowerShell 7 and Git
@@ -43,6 +43,20 @@ once, merge one before rebasing the next.
   the optional role check). `pages.yml` now also runs when a file in `docs/*.md` changes; before, a change to a guide page
   alone did not rebuild the site. Documentation and tests only: the engine, the tool schemas and the image are unchanged
   by this entry, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
+
+### Changed
+
+- **Documents now record the real-tenant sign-in run of 2026-10-26** (ticket #8) instead of saying it "has not been run yet".
+  The README runbook "Checking sign-in against a real tenant" was run once in the owner's demo Microsoft Entra tenant
+  ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)): all seven calls
+  answered as written, the person check, the start-up refusal and the role gate worked, and a real version 2.0 token
+  carried the expected `iss`, `aud`, `scp` and `roles` values. `VALIDATION.md` has a new dated "Ran" entry and a rewritten
+  "Did not run" row; the README, ADR 0004 (a dated update, no decision changed) and the Deployment, Operations,
+  Configuration, Known limitations, Security and Testing pages say the same. Still not verified: HTTPS ingress behind a
+  public host name, a token from an application permission, an unassigned user with "Assignment required?" on, an
+  expired or other-tenant token, signing-key rotation, the `api://<app id>` audience form (and the version 1.0 `iss`
+  form) and the `idtyp` claim; only the demo tenant was used. Documentation only: the engine, the tool schemas, the
+  image and the code are unchanged, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
 
 ## [0.1.0] - 2026-10-25
 

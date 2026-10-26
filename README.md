@@ -247,18 +247,21 @@ A service that signs in as itself gets the role from an application permission a
 Details: [register an application](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app),
 [expose a web API](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-configure-app-expose-web-apis)
 and [restrict an app to assigned users](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/assign-user-or-group-access-portal).
-Not yet checked against a real tenant: see `VALIDATION.md`, and the short sandbox runbook that follows.
+The short sandbox runbook that follows was run against a real tenant on 2026-10-26; `VALIDATION.md` says what that run
+showed and what is still not verified.
 
 ### Checking sign-in against a real tenant
 
 Do this once, in a **sandbox** Microsoft Entra tenant, before you trust sign-in for anyone else. It needs no Terraform
-(this repository has none) and creates one app registration, which step 8 deletes. Nothing here is run by CI or by an
-agent, and it has not been run yet: until you run it, "works against a real tenant" is a claim nobody has observed. You
-need the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli), `curl.exe` (Windows 10 and later
-include it), [uv](https://docs.astral.sh/uv/), a clone of this repository, and an account that may create app
-registrations in the sandbox tenant (the Application Administrator role is enough). The commands are PowerShell. Steps
-1, 2, 3, 5 and 8 use one window, so its variables stay; steps 4, 6 and 7 use a second window opened in the repository
-folder.
+(this repository has none) and creates one app registration, which step 8 deletes. CI does not run it. It was run once,
+on 2026-10-26 with the owner's authorisation, in the owner's demo tenant, and every expected answer below matched
+([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)); `VALIDATION.md`
+lists what that run covered and what it did not. A result in one directory says nothing about yours, so run it in your
+own sandbox tenant too. You need the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli),
+`curl.exe` (Windows 10 and later include it), [uv](https://docs.astral.sh/uv/), a clone of this repository, and an
+account that may create app registrations in the sandbox tenant (the Application Administrator role is enough). The
+commands are PowerShell. Steps 1, 2, 3, 5 and 8 use one window, so its variables stay; steps 4, 6 and 7 use a second
+window opened in the repository folder.
 
 **What you are checking.** Entra puts the delegated scope `access_as_user` in the token's `scp` claim and the app role
 `CloudCrawler.Access` in its `roles` claim. The two values are deliberately different: Entra refuses an app whose role

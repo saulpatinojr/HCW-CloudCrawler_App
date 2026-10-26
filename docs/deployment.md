@@ -17,9 +17,14 @@ answers `403` to a valid token that lacks the role. Both came with
 
 ## What is not supported yet
 
-- **Sign-in proven against a real directory.** Every test token is made locally. The README has a sandbox runbook,
-  [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant); it has not been run yet.
-  Issue #8 stays open until it is.
+- **Sign-in proven beyond one demo directory.** The README's sandbox runbook,
+  [Checking sign-in against a real tenant](../README.md#checking-sign-in-against-a-real-tenant), was run on 2026-10-26 in
+  the owner's demo tenant, and all seven calls, the start-up refusal and the role check answered as written
+  ([the result](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/8#issuecomment-6409098598)). That run used
+  plain HTTP on one laptop and a person's token. Not verified: HTTPS in front of the program (Container Apps or another
+  ingress) with a public host name in `CC_ALLOWED_HOSTS`, a token for a service (an application permission), a user who
+  is not assigned when "Assignment required?" is on, an expired token, a token from another tenant, and signing-key
+  rotation ([Known limitations](known-limitations.md)).
 - **Fine-grained access.** The role check is one gate for the whole service, and there is no list of allowed client
   applications ([Known limitations](known-limitations.md)).
 - **A published image and a managed deployment.** You build the image yourself. There is no Azure Container Apps
