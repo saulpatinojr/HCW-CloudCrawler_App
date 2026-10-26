@@ -1,0 +1,7 @@
+# Two findings in the first commit of pull request 59 (the private-key rule on the fake key headers that the redaction
+# test used to spell out as literals). They are fixtures, not keys, and the headers are now built at run time in
+# packages/cloud-crawler-core/tests/test_redaction_linear_time.py, so the current tree has no literal for the scanner
+# to read. The commit stays in the pull request's history, so its two fingerprints are listed here. Nothing else is
+# ignored. Delete this file once the branch has been squash-merged: the commit then no longer exists.
+3d391fd24f77cc42ab4eb372f269819aa0e07495:packages/cloud-crawler-core/tests/test_redaction_linear_time.py:private-key:270
+3d391fd24f77cc42ab4eb372f269819aa0e07495:packages/cloud-crawler-core/tests/test_redaction_linear_time.py:private-key:273
