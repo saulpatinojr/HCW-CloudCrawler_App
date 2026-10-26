@@ -203,6 +203,17 @@ def test_the_check_itself_would_have_caught_the_old_pattern():
     assert ratio > MAX_RATIO, f"the old pattern grew only {ratio:.1f}x on 8x the text"
 
 
+def test_the_check_would_also_have_caught_a_required_key_tail():
+    # The key alternatives end with the token pattern, optional. Made required, `sig=<long value>` tries the token
+    # pattern at every shorter value and is quadratic on `sig=` repeated (the families `signature-repeats`,
+    # `account-key-repeats` and `shared-access-key-repeats` above). The control keeps those families honest, as the
+    # legacy pattern does for the `eyJ` ones.
+    required = re.compile("(sig=[A-Za-z0-9%+/=]{20,}(?:" + redaction._TOKEN_IN_RUN + "))")
+    small, large = _repeat("sig=")(1_000), _repeat("sig=")(8_000)
+    ratio = _per_call_seconds(required.search, large) / _per_call_seconds(required.search, small)
+    assert ratio > MAX_RATIO, f"a required key tail grew only {ratio:.1f}x on 8x the text"
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # The patterns must still redact what they redacted before.
 # ---------------------------------------------------------------------------------------------------------------------

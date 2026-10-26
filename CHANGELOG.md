@@ -32,31 +32,31 @@ once, merge one before rebasing the next.
   string it ingests, and its JSON web token alternative took time proportional to the square of the text on a long run
   of `eyJ` with no dot: 65,535 characters (`"eyJ" * 21845`) held the process for about a second, and about 80 such
   strings fit in a 5 MB upload. [Pull request 59](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/59) made it
-  linear, but its fix **left a regression**: a token glued directly to a preceding letter, digit, `_` or `-`
-  (`Bearer%20<token>`, `%3D<token>`, an escaped `\n<token>`, `x-<token>`) kept its header readable, and a truncated
-  two-part token, a token with an opaque payload and an unsigned token (`header.payload.`) were **not redacted at all**.
-  The old pattern redacted all of those. No release contained that version (the latest tag is `v0.1.0`). The first
-  version of this entry called the change a behaviour change "decided in the ticket"; no such decision was recorded, and
-  the claim is withdrawn.
+  linear, but its version left a regression. It is on `main` and in no release (the latest tag, `v0.1.0`, does not
+  contain it). A token glued directly to a preceding letter, digit, `_` or `-` (`Bearer%20<token>`, `%3D<token>`, an
+  escaped `\n<token>`, `x-<token>`) kept its header readable, and a truncated two-part token, a token with an opaque
+  payload and an unsigned token (`header.payload.`) were **not redacted at all**. The pattern from before pull request 59
+  redacted all of those. This entry replaces the earlier one and fixes the regression.
   The pattern now starts at the start of a run of token characters, skips the part of the run in front of its first
-  `eyJ`, and then matches what the old pattern matched from that `eyJ`; the key and header alternatives (`AccountKey=`,
+  `eyJ`, and then matches what the old pattern matched from that `eyJ`. The key and header alternatives (`AccountKey=`,
   `SharedAccessKey=`, `sig=`, the private key header) also take a token that follows them in the same run, because their
-  values can stop in the middle of a run. **Guaranteed:** every JSON web token shape the old pattern redacted is still
-  redacted, including when it is glued behind a key value or a private key header, and the token characters of the same
-  run in front of the token are redacted with it (the `20` of `Bearer%20<token>`). **Not guaranteed:** (1) a match
-  stops at the end of the second segment, so the signature of a normal three-part token stays readable, as it did before
-  and still does (not changed here); (2) when two secrets touch with no separator the match boundaries can differ from
-  the old pattern; the case seen is a token whose second segment runs into a keyword (`<token>.<segment>AccountKey=<value>`),
-  where the key's value stays readable. The tests count these cases (a few dozen in 300,000 random glued texts) and fail
-  if the number grows or anything else is lost; the page "Known limitations" describes both.
-  The tests run every pattern in the module against a hostile set of 42 text families at two sizes (30 from before, 12
-  new ones that chain key values and key headers with long runs of `eyJ`), keep the old quadratic pattern to prove the
-  timing check would have caught it, and compare the pattern with a copy of the whole old pattern: named cases for each
-  token shape after each preceding string and after each key value or header, an exhaustive and a seeded random check of
-  the documented layouts, and a seeded fuzz of the whole alternation. They fail on the version from pull request 59 and
-  on the fix without the key tails. The engine public surface does not change; the fix reaches the AddOn at the next
-  engine release (ADR 0002), after which its `MAX_TOKEN_STARTS` guard in `src/cloud_crawler_lab/inputs.py` can be
-  removed.
+  values can stop in the middle of a run. **What this is meant to do:** every JSON web token shape the old pattern
+  redacted is redacted, glued or not, including behind a key value or a private key header, and the token characters of
+  the same run in front of the token are redacted with it (the `20` of `Bearer%20<token>`). **What the tests check:**
+  that, on enumerated layouts and on a seeded fuzz of 300,000 texts over the whole pattern, with a copy of the old pattern
+  as the yardstick. They are samples, not a proof. **Not covered:** (1) a match stops at the end of the second segment,
+  so the signature of a normal three-part token stays readable, as it always did; (2) a key value that runs straight into
+  a token swallows the token's first segment, also as before; (3) when two secrets touch with no separator the match
+  boundaries can differ from the old pattern. The case seen is a token whose second segment runs into a keyword
+  (`<token>.<segment>AccountKey=<value>`), where the key's value stays readable; the old pattern did the same unless a
+  `ghp_` match came first. The fuzz shows it in 27 of 300,000 random glued texts, and the tests set a ceiling on that
+  count. The page "Known limitations" describes all three.
+  Tests: the hostile-set check now covers 42 text families at two sizes (the 30 from before and 12 new ones that chain
+  key values and key headers with long runs of `eyJ`), the old quadratic pattern is kept to prove the timing check would
+  have caught it (and a key tail that is not optional, to prove the new families are guarded), and a new test file
+  compares the pattern with the whole old pattern. These tests fail on the version from pull request 59 and on a fix
+  without the key tails. The engine public surface does not change; the fix reaches the AddOn at the next engine release
+  (ADR 0002), after which its `MAX_TOKEN_STARTS` guard in `src/cloud_crawler_lab/inputs.py` can be removed.
 
 ### Added
 

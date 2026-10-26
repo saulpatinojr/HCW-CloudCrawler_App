@@ -76,12 +76,19 @@ shape with `<redacted>`. The shapes it knows are a storage account key or shared
 that sign-in tokens are made of), a private key header, and any value stored under a key name such as `password` or
 `token`. It is not a general secret finder: a secret in a shape it does not know is stored as it arrived.
 
+- **Only the header of a private key is replaced.** The key text that follows the header line is not.
+- **Only text is scanned.** Field names (apart from the denied names such as `password`) and values that are not text,
+  such as bytes, are stored as they arrived.
 - **The third part of a JSON web token stays readable.** A token has three parts joined by dots. Redaction covers the
   first two and stops there, so the signature at the end of a normal token is not redacted. This has always been so, and
   the fix for [ticket #53](https://github.com/saulpatinojr/HCW-CloudCrawler_App/issues/53) did not change it.
+- **A key value that runs straight into a token swallows the token's first part.** The values of `AccountKey=`,
+  `SharedAccessKey=` and `sig=` take letters and digits, so `sig=<24 letters>eyJ...` has no break where the token
+  starts: the value takes the first part, and the dot and the second part stay readable. This was so before the fix too.
 - **Two secrets with nothing between them can be cut at a different place than before.** The case that has been seen
-  is a token whose second part runs straight into a keyword, written like `<token>.<part>AccountKey=<value>`: the token
-  now takes everything up to the `=`, so the key's value stays readable. Before, the same text behaved the same way
-  unless a `ghp_` match happened to come first. The tests build random texts of this kind on purpose, count how many
-  lose something, and fail if the count grows or if anything else is lost. It needs a token and a keyword to touch with
-  no separator, which is unusual.
+  is a token whose second part runs straight into a keyword, written like `<token>.<part>AccountKey=<value>` (the same
+  with `SharedAccessKey=`, `sig=` and the private key header): the token takes everything up to the `=` (for the header,
+  up to its space), so the key's value stays readable. The text before the fix behaved the same way unless a `ghp_`
+  match happened to come first, so this is not new, and someone who controls the text in front of a secret can build it
+  on purpose. The tests build random texts of this kind, count them (27 in 300,000 with the seed they use), and fail if
+  the count rises above a stated ceiling or if anything else is lost. Those tests are samples, not a proof.

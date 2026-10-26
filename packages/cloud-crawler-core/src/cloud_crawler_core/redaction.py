@@ -40,12 +40,16 @@ _SUBSCRIPTION_PATH = re.compile(r"/subscriptions/[^\s\"']*", re.IGNORECASE)
 # its own run at most once and runs do not overlap, so this stays linear. `ghp_` needs no tail: the token alternative is
 # tried before it at the start of its run.
 #
-# Not covered: when two matches meet with no separator the boundaries can differ from the old pattern. The case that
-# has been seen is a token whose second segment runs straight into a keyword, `<token>.<segment>AccountKey=<value>`.
-# The token now takes the whole segment up to the `=`, so the keyword's value is left visible. The old pattern left it
-# visible too, unless an earlier `ghp_` match happened to pre-empt the token. The test file
-# test_redaction_secret_shaped.py counts these cases and states the bound. Also unchanged: a match stops at the end of
-# the SECOND segment, so the signature of a three-part token stays visible.
+# Not covered. (1) and (2) are unchanged from before ticket #53: (1) a match stops at the end of the SECOND segment, so
+# the signature of a three-part token stays visible. (2) The `AccountKey=`, `SharedAccessKey=` and `sig=` values take
+# letters and digits, so a value that runs straight into a token swallows its first segment and the rest of the token
+# stays visible. (3) When two secrets meet with no separator the boundaries can differ from the old pattern. A token
+# whose second segment runs straight into a keyword (`<token>.<segment>AccountKey=<value>`, the same with
+# `SharedAccessKey=`, `sig=` and the private key header) takes the segment up to the `=` (for the header, up to its
+# space), so the value stays visible. The old pattern did the same unless an earlier `ghp_` match pre-empted the token,
+# and anyone who controls the text in front of a secret can build the case on purpose. The checks in
+# test_redaction_secret_shaped.py are samples (enumerated layouts and a seeded fuzz), not a proof. They count these
+# cases and set a ceiling on them.
 #
 # The other alternatives start with a fixed literal and end with an open quantifier, so they were already linear.
 # tests/test_redaction_linear_time.py runs every pattern in this module against a hostile set and compares two text

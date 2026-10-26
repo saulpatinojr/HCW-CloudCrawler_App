@@ -5,30 +5,36 @@ characters begins (a token character is a letter, a digit, `_` or `-`). That ver
 was glued to a letter, digit, `_` or `-` in front of it (`Bearer%20<token>`, `\\n<token>`, `x-<token>`): a truncated
 token, an opaque-payload token and an unsigned token were not redacted at all, and a normal token kept its header. The
 pattern in `redaction.py` redacts from the start of the run, and four of its alternatives (`AccountKey=`,
-`SharedAccessKey=`, `sig=`, the private key header) can be followed by a glued token, so these tests state exactly what
-is guaranteed, with the reference pattern kept in `redaction_fixtures.py` (the pattern before the ticket) as the
-yardstick.
+`SharedAccessKey=`, `sig=`, the private key header) can be followed by a glued token. These tests check it against the
+pattern as it was before the ticket, kept in `redaction_fixtures.py` as the yardstick. They are checks on enumerated
+layouts and on seeded samples, not a proof; the argument behind them is in the comment above `_TOKEN_IN_RUN` in
+`redaction.py`.
 
-What is guaranteed (a, b) and what is bounded (c):
+What they check (a, b) and what they bound (c):
 
-(a) For every text built from the documented atoms, where atoms are separated by a space or another character that is
+(a) For the texts built from the documented atoms, where atoms are separated by a space or another character that is
     not a token character, or sit in one of the enumerated glued layouts (a preceding string glued to a token, a key
     value or private key header followed directly, or after `_` or `-`, by a token), everything the reference pattern
     redacts is redacted by the engine's pattern, and any extra redacted character is a token character in a run in
-    which the reference redacted something. The enumerated layouts are checked exhaustively and in seeded random
-    sequences.
+    which the reference redacted something. The enumerated layouts are checked exhaustively (with three leads and
+    trails) and in 20,000 seeded random sequences of up to five of them.
 (b) Named table-driven cases: each token shape (three-part, truncated two-part, opaque payload, unsigned with a
     trailing dot, five-part encrypted) after each preceding string, and each key value or header followed by a glued
     token, give exactly the expected text.
 (c) A seeded fuzz over the whole alternation, with the keyword atoms glued together in any order, loses nothing the
-    reference redacted except in one counted case: a match of the engine's pattern ends strictly inside a match of the
-    reference that begins inside it ("a cut"). The case seen is a token whose second segment runs straight into a
-    keyword (`<token>.<segment>AccountKey=<value>`); the token now takes the segment up to the `=`. The reference had
-    the same boundary unless a preceding `ghp_` match pre-empted the token. The number of texts with a cut is bounded
-    below, and a loss that is not a cut fails the test.
+    reference redacted except in one counted case, a "cut": a match of the engine's pattern that begins before a
+    reference match and ends strictly inside it. Two kinds are seen and bounded separately. A keyword cut: a token
+    whose second segment runs straight into a keyword (`<token>.<segment>AccountKey=<value>`, the same with
+    `SharedAccessKey=`, `sig=` or the private key header); the token takes the segment up to the `=` (or the space of
+    the header), so the keyword's value stays readable. The reference had the same boundary unless a preceding `ghp_`
+    match pre-empted the token. A signature cut: the reference redacted a token's second part and signature only
+    because a preceding `ghp_` match pre-empted the first part; the engine's pattern redacts the whole token up to its
+    second segment and leaves the signature, as it always does. Each count has a ceiling (1.25 times what the seeded
+    fuzz measures, rounded up; the signature cut measures none with this seed), and any other loss fails the test.
 
-Not guaranteed, and unchanged: a match stops at the end of the second segment, so the signature of a three-part token
-stays readable (`tail` in `redaction_fixtures.Shape`).
+Not covered, and unchanged: a match stops at the end of the second segment, so the signature of a three-part token
+stays readable (`tail` in `redaction_fixtures.Shape`); a key value that runs straight into a token swallows the token's
+first segment (the value classes take letters and digits), so the rest of the token stays readable.
 
 The harness is checked against the two earlier versions of the pattern (the look-behind-only one and the bare
 JSON-web-token fix without the key tails): both must fail it, so it cannot go blind.
@@ -225,58 +231,107 @@ FUZZ_ATOMS = [
     "eyJ", "eyJ", "eyJ" + "a" * 12, ".", ".", "b" * 12, "A", "b", "_", "-", " ", "=", "%20", "\\n", '"', "+", "/",
     "sig=", "AccountKey=", "SharedAccessKey=", "ghp_", "A" * 20, "k" * 12, "-" * 5, "BEGIN ", "PRIVATE KEY",
     armor("PRIVATE KEY"), armor("RSA PRIVATE KEY"), "sig=" + "A" * 20, "AccountKey=" + "A" * 20,
-    "SharedAccessKey=" + "A" * 20, "ghp_" + "A" * 20,
+    "SharedAccessKey=" + "A" * 20, "ghp_" + "A" * 20, "e", "y", "J", "%2B", ".eyJ", "\u00e9",
 ]  # fmt: skip
 FUZZ_ROUNDS = 300_000
 FUZZ_SEED = 20261026
-MAX_CUT_FRACTION = (
-    0.0003  # measured about 0.00008 (a few dozen texts in 300,000); a change that makes cuts common must fail
-)
+# What the seeded fuzz measures for the engine's pattern is KEYWORD_CUTS_MEASURED texts with a keyword cut and
+# SIGNATURE_CUTS_MEASURED with a signature cut (none with this seed; a wider run of 900,000 texts found one); the
+# ceilings are 1.25 times the measurement, rounded up. A change that loses anything else, or makes cuts more common,
+# fails, and so does a signature cut: if a new seed or new atoms produce one, read it before raising the ceiling.
+KEYWORD_CUTS_MEASURED = 27
+SIGNATURE_CUTS_MEASURED = 0
+MAX_KEYWORD_CUTS = 34
+MAX_SIGNATURE_CUTS = 0
 
 
 def whole_alternation_fuzz(pattern: re.Pattern[str], rounds: int, seed: int) -> dict[str, int]:
-    """Count the fuzz texts in which `pattern` leaves readable something the reference redacted: `uncut` when no match
-    of `pattern` cuts the reference match (a plain loss) and `cut` when one does (the counted case)."""
+    """Count the fuzz texts in which `pattern` leaves readable something the reference redacted. For each reference
+    match that is not fully redacted: `keyword_cut` when a match of `pattern` begins before it and ends inside it, at
+    the `=` of a keyword or the space of a private key header; `signature_cut` when such a match ends at the dot in
+    front of a token's signature; `unexplained` for every other loss, including a match of `pattern` that begins at
+    the same place and stops early."""
     rng = random.Random(seed)
-    counts = {"texts": 0, "uncut": 0, "cut": 0}
+    counts = {"texts": 0, "unexplained": 0, "keyword_cut": 0, "signature_cut": 0}
     for _ in range(rounds):
         text = "".join(rng.choice(FUZZ_ATOMS) for _ in range(rng.randint(1, 12)))
         mask = redacted_mask(pattern, text)
         spans = [m.span() for m in pattern.finditer(text)]
-        lost_plain = lost_cut = False
+        seen = {"unexplained": False, "keyword_cut": False, "signature_cut": False}
         for match in OLD_SECRET_SHAPED.finditer(text):
             start, end = match.span()
             if all(mask[start:end]):
                 continue
-            if any(s <= start < e < end for s, e in spans):
-                lost_cut = True
+            cutters = [e for s, e in spans if s < start < e < end]
+            if not cutters:
+                seen["unexplained"] = True
+            elif match.group(0).startswith("eyJ") and text[cutters[0]] == ".":
+                seen["signature_cut"] = True
+            elif not match.group(0).startswith("eyJ") and text[cutters[0]] in "= ":
+                seen["keyword_cut"] = True
             else:
-                lost_plain = True
+                seen["unexplained"] = True
         counts["texts"] += 1
-        counts["uncut"] += lost_plain
-        counts["cut"] += lost_cut
+        for kind, hit in seen.items():
+            counts[kind] += hit
     return counts
 
 
-def test_the_whole_alternation_loses_nothing_except_the_counted_cut_case():
+def test_the_whole_alternation_loses_nothing_except_the_counted_cuts():
     counts = whole_alternation_fuzz(ENGINE, FUZZ_ROUNDS, FUZZ_SEED)
-    assert counts["uncut"] == 0, counts
-    assert counts["cut"] <= FUZZ_ROUNDS * MAX_CUT_FRACTION, counts
+    assert counts["texts"] == FUZZ_ROUNDS
+    assert counts["unexplained"] == 0, counts
+    assert counts["keyword_cut"] <= MAX_KEYWORD_CUTS, counts
+    assert counts["signature_cut"] <= MAX_SIGNATURE_CUTS, counts
 
 
-def test_the_cut_case_is_what_the_comment_in_redaction_py_says_it_is():
-    # `<token>.<segment>AccountKey=<value>`: the token takes the segment up to the `=`, so the value stays readable.
+@pytest.mark.parametrize(
+    ("keyword", "closing"),
+    [
+        ("AccountKey=", "V" * 24),
+        ("SharedAccessKey=", "V" * 24),
+        ("sig=", "V" * 24),
+        (armor("PRIVATE KEY")[:-5], "-----"),  # the header, whose "keyword" ends at the space after BEGIN
+    ],
+    ids=["account-key", "shared-access-key", "signature", "private-key-header"],
+)
+def test_the_cut_case_is_what_the_comment_in_redaction_py_says_it_is(keyword, closing):
+    # `<token>.<segment><keyword><value>`: the token takes the segment up to the `=`, so the value stays readable.
     token = "eyJ" + "a" * 12 + "." + "b" * 12
-    value = "V" * 24
-    glued = f"{token}AccountKey={value}"
-    # Without a `ghp_` match in front, the engine's pattern and the reference agree: the value stays readable in both.
-    assert ENGINE.sub(REDACTED, glued) == OLD_SECRET_SHAPED.sub(REDACTED, glued) == REDACTED + "=" + value
-    # With a `ghp_` match in front the reference could not start the token, so it redacted the value and left the
-    # token's second segment readable. The engine's pattern reads the same text the other way round. This is the
-    # counted case (a cut): one piece of a glued pair of secrets is left, where the reference left the other.
+    glued = f"{token}{keyword}{closing}"
+    # Without a `ghp_` match in front, the engine's pattern and the reference agree: what follows the segment stays.
+    assert ENGINE.sub(REDACTED, glued) == OLD_SECRET_SHAPED.sub(REDACTED, glued)
+    assert closing in ENGINE.sub(REDACTED, glued)
+    # With a `ghp_` match in front the reference could not start the token, so it redacted the keyword and its value
+    # and left the token's second segment readable. The engine's pattern reads the same text the other way round.
+    # This is a keyword cut: one piece of a glued pair of secrets is left, where the reference left the other.
     preempted = f"ghp_{'t' * 24}{glued}"
-    assert OLD_SECRET_SHAPED.sub(REDACTED, preempted) == REDACTED + "." + "b" * 12 + REDACTED
-    assert ENGINE.sub(REDACTED, preempted) == REDACTED + "=" + value
+    old, new = OLD_SECRET_SHAPED.sub(REDACTED, preempted), ENGINE.sub(REDACTED, preempted)
+    assert old.startswith(REDACTED + "." + "b" * 12) and "b" * 12 not in new
+    assert new != old
+
+
+def test_a_key_value_that_runs_into_a_token_swallows_its_first_segment_as_before():
+    # The value classes take letters and digits, so `sig=<24 characters>eyJ...` has no break in front of the token: the
+    # value takes the first segment, and the dot and the second segment stay readable. The reference did the same.
+    token = "eyJ" + "a" * 12 + "." + "b" * 12
+    text = "sig=" + "s" * 24 + token
+    assert ENGINE.sub(REDACTED, text) == OLD_SECRET_SHAPED.sub(REDACTED, text) == REDACTED + "." + "b" * 12
+
+
+def test_a_reference_ghp_match_next_to_a_token_left_its_second_segment_and_the_engine_redacts_it():
+    # `ghp_<24>eyJ...` : the reference's `ghp_` match took the first segment, so only the dot and the second segment
+    # stayed. The engine's token alternative starts at the start of the run and takes both segments.
+    token = "eyJ" + "a" * 12 + "." + "b" * 12
+    text = "ghp_" + "t" * 24 + token
+    assert OLD_SECRET_SHAPED.sub(REDACTED, text) == REDACTED + "." + "b" * 12
+    assert ENGINE.sub(REDACTED, text) == REDACTED
+
+
+def test_a_non_ascii_letter_in_front_of_a_token_is_not_a_token_character():
+    token = "eyJ" + "a" * 12 + "." + "b" * 12
+    for text in ("\u00e9" + token, "\u0663" + token, "\uff21" + token):  # e acute, an Arabic digit, a full-width A
+        assert ENGINE.sub(REDACTED, text) == OLD_SECRET_SHAPED.sub(REDACTED, text) == text[0] + REDACTED
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -289,7 +344,7 @@ def test_the_checks_above_fail_the_earlier_versions_of_the_pattern(pattern):
     failing_units = [label for label, unit in UNITS if differences_from_old(pattern, "x " + unit)]
     assert failing_units, "the enumerated layouts no longer tell this version from the reference"
     counts = whole_alternation_fuzz(pattern, 50_000, FUZZ_SEED)
-    assert counts["uncut"] > 0, counts
+    assert counts["unexplained"] > 0, counts
 
 
 def test_the_look_behind_only_version_left_a_glued_token_readable():
