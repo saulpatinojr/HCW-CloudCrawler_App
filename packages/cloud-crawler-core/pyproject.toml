@@ -1,10 +1,10 @@
 [project]
 name = "cloud-crawler-core"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cloud Crawler engine: evidence, decision records, deterministic drift detectors and review proposals over normalised Azure evidence. Pure functions, pydantic only, no HTTP client, no cloud SDK."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.14.6,<3.15"
+requires-python = ">=3.14.6,<3.16"
 dependencies = [
   "pydantic>=2.14,<3",
 ]

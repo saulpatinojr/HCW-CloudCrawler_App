@@ -11,6 +11,8 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-03
+
 ### Security
 
 - **The appliance refuses to start without sign-in on a non-loopback address** (ticket #8, owner decision of 2026-10-26,
@@ -147,6 +149,18 @@ once, merge one before rebasing the next.
   expired or other-tenant token, signing-key rotation, the `api://<app id>` audience form (and the version 1.0 `iss`
   form) and the `idtyp` claim; only the demo tenant was used. Documentation only: the engine, the tool schemas, the
   image and the code are unchanged, so there is nothing for the AddOn's `docs/whats-new-upstream.md`.
+- **The engine and the appliance now accept Python 3.15** (website issue
+  [saulpatinojr/HCW-HybridCloudWorks#1386](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1386)). Both
+  `pyproject.toml` files said `requires-python = ">=3.14.6,<3.15"`, so the published wheel
+  `cloud_crawler_core-0.1.0-py3-none-any.whl` carries `Requires-Python: <3.15,>=3.14.6` and pip refuses to install it
+  on Python 3.15 (`Package 'cloud-crawler-core' requires a different Python: 3.15.2 not in '<3.15,>=3.14.6'`). The
+  AddOn (`saulpatinojr/HCW-CloudCrawler_AddOn`) is moving to the website's Python 3.15.2 base image and installs that
+  wheel with `pip install --require-hashes --no-deps`, which cannot override the range. The ceiling is widened, not
+  moved: the range is now `>=3.14.6,<3.16` in both files and in `uv.lock`, the lower bound, the pinned 3.14.6
+  interpreter (`.python-version`), the CI runners and the appliance image (`python:3.14.8-slim-trixie`) are unchanged,
+  and the test suite was run on 3.14 and on 3.15.2 (see the pull request). This reaches the AddOn only through the
+  next release: the version is `0.1.1` in all six places so that the tag `v0.1.1` can publish a wheel whose
+  `Requires-Python` admits 3.15 (the `v0.1.0` wheel cannot be changed).
 
 ## [0.1.0] - 2026-10-25
 
