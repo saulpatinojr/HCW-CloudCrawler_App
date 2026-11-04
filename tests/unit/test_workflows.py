@@ -327,7 +327,10 @@ def test_dependabot_lockfiles_only_acts_for_dependabot_and_never_runs_dependency
     # The built-in token stays read-only; the only write is the App's contents-only token.
     assert not re.search(r"(?m)^[^#\n]*: write", body.replace("permission-contents: write", ""))
     assert "actions/create-github-app-token@" in body and "permission-contents: write" in body
-    assert "secrets.LOCKFILES_APP_CLIENT_ID" in body and "secrets.LOCKFILES_APP_PRIVATE_KEY" in body
+    assert "secrets.HCW_MAIN_ADMIN_CLIENT_ID" in body and "secrets.HCW_MAIN_ADMIN_PRIVATE_KEY" in body
+    assert "LOCKFILES_APP" not in body, "the old dedicated-App secret names are gone (ADR 0006, amended)"
+    # The App is installed on several repositories; with no owner and no repositories input the token covers this one.
+    assert not re.search(r"(?m)^\s+(owner|repositories):", body), "the App token must stay scoped to this repository"
     assert "$APP_TOKEN" in body and "github.token" not in body and "secrets.GITHUB_TOKEN" not in body
     # The export is the shared script, which only reads uv.lock; nothing resolves, syncs, builds or runs the project.
     assert "bash scripts/export-lockfiles.sh" in body

@@ -9,12 +9,13 @@
 #   1. checks out the pull request branch without storing a credential,
 #   2. regenerates the export with scripts/export-lockfiles.sh (uv export --frozen: reads uv.lock only; nothing is
 #      resolved, downloaded or built, so no dependency code runs),
-#   3. if the export changed, commits it and pushes it with a short-lived token of the lockfile GitHub App
-#      (ADR 0006). The push must not use GITHUB_TOKEN: a push made with it starts no workflow, and checks from a
-#      workflow_dispatch run do not count as a pull request's required checks
+#   3. if the export changed, commits it and pushes it with a short-lived token of the HCW Main Admin GitHub App
+#      (ADR 0006; the App the add-ons' core-update.yml opens its pull requests with). The push must not use
+#      GITHUB_TOKEN: a push made with it starts no workflow, and checks from a workflow_dispatch run do not count as a
+#      pull request's required checks
 #      (https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks#checks-from-some-workflow-jobs-are-not-evaluated).
 #      A push made with the App's token is an ordinary push, so `ci` and `security` run on the new commit as usual.
-# The App's id and key are Dependabot secrets (LOCKFILES_APP_CLIENT_ID, LOCKFILES_APP_PRIVATE_KEY), because a workflow
+# The App's id and key are Dependabot secrets (HCW_MAIN_ADMIN_CLIENT_ID, HCW_MAIN_ADMIN_PRIVATE_KEY), because a workflow
 # Dependabot starts can read only those. Until the owner adds them the job stops with an error that says so.
 # Anything else (a stale uv.lock, a failing test) is still caught by ci on the new commit and needs a person.
 name: dependabot-lockfiles
@@ -77,23 +78,24 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: The lockfile App is set up
+      - name: The HCW Main Admin App is set up
         if: steps.export.outputs.changed == 'true'
         env:
-          HAS_ID: ${{ secrets.LOCKFILES_APP_CLIENT_ID != '' }}
-          HAS_KEY: ${{ secrets.LOCKFILES_APP_PRIVATE_KEY != '' }}
+          HAS_ID: ${{ secrets.HCW_MAIN_ADMIN_CLIENT_ID != '' }}
+          HAS_KEY: ${{ secrets.HCW_MAIN_ADMIN_PRIVATE_KEY != '' }}
         run: |
           if [ "$HAS_ID" != "true" ] || [ "$HAS_KEY" != "true" ]; then
-            echo "::error::The Dependabot secrets LOCKFILES_APP_CLIENT_ID and LOCKFILES_APP_PRIVATE_KEY are not set, so the regenerated requirements.lock.txt cannot be pushed in a way that runs the required checks. Set them up (ADR 0006, Validation), or run 'make lock' on this branch and push."
+            echo "::error::The Dependabot secrets HCW_MAIN_ADMIN_CLIENT_ID and HCW_MAIN_ADMIN_PRIVATE_KEY are not set, so the regenerated requirements.lock.txt cannot be pushed in a way that runs the required checks. Set them up (ADR 0006, Validation), or run 'make lock' on this branch and push."
             exit 1
           fi
-      - name: Get a short-lived token of the lockfile App, for this repository, contents only
+      - name: Get a short-lived token of the HCW Main Admin App, for this repository only, contents only
         if: steps.export.outputs.changed == 'true'
         id: app
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          client-id: ${{ secrets.LOCKFILES_APP_CLIENT_ID }}
-          private-key: ${{ secrets.LOCKFILES_APP_PRIVATE_KEY }}
+          # no owner and no repositories input: the token covers this repository only (the App is on several)
+          client-id: ${{ secrets.HCW_MAIN_ADMIN_CLIENT_ID }}
+          private-key: ${{ secrets.HCW_MAIN_ADMIN_PRIVATE_KEY }}
           permission-contents: write
       - name: Commit the export and push it to the Dependabot branch
         if: steps.export.outputs.changed == 'true'
