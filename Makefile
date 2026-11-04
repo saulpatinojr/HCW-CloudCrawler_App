@@ -7,7 +7,7 @@ setup:
 
 lock:
 	uv lock
-	uv export --format requirements-txt --no-dev --no-emit-project --no-emit-workspace --no-header -o requirements.lock.txt
+	bash scripts/export-lockfiles.sh
 
 lint:
 	uv run ruff check .

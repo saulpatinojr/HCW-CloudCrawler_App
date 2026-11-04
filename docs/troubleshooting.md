@@ -121,6 +121,6 @@ Another program is already using the port (8080 unless you changed it).
 
 | You see | Why | What to do |
 | --- | --- | --- |
-| `check-lockfiles.sh` says the export drifted | `pyproject.toml` changed without new lock files. | Run `make lock`, or `uv lock` then the `uv export` line in the `Makefile`, and commit both files. |
+| `check-lockfiles.sh` says the export drifted | `pyproject.toml` changed without new lock files. | Run `make lock` (it runs `uv lock`, then `scripts/export-lockfiles.sh`) and commit both files. On a Dependabot pull request, comment `@dependabot recreate`: the `dependabot-lockfiles` workflow regenerates the export on the new commit. |
 | `build-pages.py` exits 1 | A link points at nothing, or a page in `docs/` is not listed in `DOC_PAGES` in the script. | Read the first `error:` line; it names the file and the link. |
 | A test about `.trivyignore.yaml` fails | An accepted-risk entry is past its expiry date. | Renew or remove it (README, "Image scan and accepted risk"). |

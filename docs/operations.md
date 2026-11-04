@@ -91,7 +91,8 @@ PowerShell 7 and Git Bash. If you run from source, the program's window is the l
 Every Monday, and when the image's files change, a workflow scans the image with
 [Trivy](https://trivy.dev/docs/latest/guide/) (`.github/workflows/image-scan.yml`). It fails on a fixable HIGH or CRITICAL
 finding. Dependabot opens weekly update pull requests, and each pull request runs CodeQL, a dependency review, a secret
-scan and `pip-audit`. Nothing watches your running server.
+scan and `pip-audit`. On its Python pull requests a workflow (`.github/workflows/dependabot-lockfiles.yml`) rewrites
+`requirements.lock.txt` from `uv.lock` and starts the checks again, so they need no hand-run `make lock`. Nothing watches your running server.
 
 ## What is not supported yet
 
