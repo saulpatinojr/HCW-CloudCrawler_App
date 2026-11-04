@@ -64,9 +64,9 @@ Say in your pull request which of these you ran and what each result proves. Do 
   renamed.
 - **Dependencies are locked.** After you change `pyproject.toml`, run `uv lock` (or `make lock`, which also rewrites
   `requirements.lock.txt`, the hash-pinned set the image installs) and commit both files. Never edit them by hand.
-  On Dependabot's own pull requests `.github/workflows/dependabot-lockfiles.yml` does the export for you
-  ([ADR 0006](docs/adr/0006-dependabot-pull-requests-regenerate-the-lockfile-export.md)); if such a pull request falls
-  behind `main`, comment `@dependabot recreate` on it rather than fixing it by hand.
+  On Dependabot's own pull requests `.github/workflows/dependabot-lockfiles.yml` does the export for you once the
+  lockfile App is set up ([ADR 0006](docs/adr/0006-dependabot-pull-requests-regenerate-the-lockfile-export.md)); if
+  such a pull request falls behind `main`, comment `@dependabot recreate` on it rather than fixing it by hand.
 - **Workflows:** every `uses:` is a full commit SHA with the version in a trailing comment, every runner is
   `ubuntu-26.04`, and every workflow starts with `permissions: contents: read`. `tests/unit/test_workflows.py` pins the
   exact set of workflow files and these rules, so adding a workflow means adding its name to that test.

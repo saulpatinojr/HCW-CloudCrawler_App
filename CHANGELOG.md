@@ -22,9 +22,12 @@ once, merge one before rebasing the next.
   ([ADR 0006](docs/adr/0006-dependabot-pull-requests-regenerate-the-lockfile-export.md)). `.github/dependabot.yml`
   excludes `requirements.lock.txt` from the `uv` entry (`exclude-paths`), so Dependabot edits `pyproject.toml` and
   `uv.lock` only. The new `.github/workflows/dependabot-lockfiles.yml` regenerates the export on Dependabot's own pull
-  requests, pushes it, and starts `ci` and `security` on that commit (`security.yml` gains a `workflow_dispatch`
-  trigger with no inputs for this). `scripts/export-lockfiles.sh` is now the one place the export flags live: `make
-  lock` and `scripts/check-lockfiles.sh` call it too. `tests/unit/test_workflows.py` pins what the new workflow may do.
+  requests and pushes it with a short-lived, contents-only token of a dedicated GitHub App, so the required checks run
+  on that commit as on any push (a push made with `GITHUB_TOKEN` would start none, and checks from a
+  `workflow_dispatch` run never count as a pull request's required checks). **Owner step:** create the App and add the
+  Dependabot secrets `LOCKFILES_APP_CLIENT_ID` and `LOCKFILES_APP_PRIVATE_KEY` (ADR 0006, Validation); until then the
+  workflow stops with an error naming them. `scripts/export-lockfiles.sh` is now the one place the export flags live:
+  `make lock` and `scripts/check-lockfiles.sh` call it too. `tests/unit/test_workflows.py` pins what the workflow may do.
 
 ## [0.1.1] - 2026-11-03
 

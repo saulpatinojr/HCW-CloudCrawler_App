@@ -6,8 +6,6 @@ on:
   pull_request:
   push: { branches: [main] }
   schedule: [{ cron: "23 6 * * 1" }]
-  # Started by dependabot-lockfiles.yml on the commit it pushes; takes no input, so a manual run is a scheduled one.
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
