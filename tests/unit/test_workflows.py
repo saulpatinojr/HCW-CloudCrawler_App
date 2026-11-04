@@ -19,6 +19,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 EXPECTED = {
     "ci.yml",
     "codeql.yml",
+    "dependabot-lockfiles.yml",
     "dependency-review.yml",
     "image-scan.yml",
     "pages.yml",
@@ -307,3 +308,46 @@ def test_the_docs_group_is_the_only_new_dependency_and_is_not_a_default_group():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert config["dependency-groups"]["docs"] == ["markdown-it-py==4.2.0"]
     assert "default-groups" not in config.get("tool", {}).get("uv", {})
+
+
+def test_dependabot_lockfiles_only_acts_for_dependabot_and_never_runs_dependency_code():
+    """The one workflow that pushes to a pull request branch, so what it may do is pinned (ADR 0006)."""
+    body = text("dependabot-lockfiles.yml")
+    head = body.partition("\njobs:\n")[0]
+    assert re.search(r"(?m)^  pull_request:$", head) and "workflow_run" not in head
+    for gate in (
+        "github.event.pull_request.user.login == 'dependabot[bot]'",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "startsWith(github.event.pull_request.head.ref, 'dependabot/uv/')",
+        '"49699333+dependabot[bot]@users.noreply.github.com"',
+        "steps.head.outputs.dependabot == 'true'",
+    ):
+        assert gate in body, gate
+    assert not re.search(r"(?m)^[^#\n]*github\.actor\b", body), "github.actor is spoofable on a re-run"
+    # The built-in token stays read-only; the only write is the App's contents-only token.
+    assert not re.search(r"(?m)^[^#\n]*: write", body.replace("permission-contents: write", ""))
+    assert "actions/create-github-app-token@" in body and "permission-contents: write" in body
+    assert "secrets.LOCKFILES_APP_CLIENT_ID" in body and "secrets.LOCKFILES_APP_PRIVATE_KEY" in body
+    assert "$APP_TOKEN" in body and "github.token" not in body and "secrets.GITHUB_TOKEN" not in body
+    # The export is the shared script, which only reads uv.lock; nothing resolves, syncs, builds or runs the project.
+    assert "bash scripts/export-lockfiles.sh" in body
+    code = "\n".join(line.split("#", 1)[0] for line in body.splitlines())
+    for forbidden in ("uv lock", "uv sync", "uv run", "uv build", "make", "pip install -r", "pytest"):
+        assert not re.search(rf"(?m)^\s*(?:- run: |run: )?{forbidden}\b", code), forbidden
+    assert "git add requirements.lock.txt" in body and "git add -A" not in body and "git add ." not in body
+    export = (ROOT / "scripts" / "export-lockfiles.sh").read_text(encoding="utf-8")
+    assert "uv export --frozen" in export and "uv lock" not in export.replace("uv.lock", "")
+
+
+def test_dependabot_lockfiles_does_not_rely_on_workflow_dispatch_for_required_checks():
+    """Checks from a workflow_dispatch run never satisfy a pull request's required checks (GitHub documentation,
+    "Troubleshooting required status checks"), so the push itself must be one that starts them: the App's token."""
+    body = text("dependabot-lockfiles.yml")
+    code = "\n".join(line.split("#", 1)[0] for line in body.splitlines())
+    assert "gh workflow run" not in code and "workflow_dispatch" not in code
+
+
+def test_dependabot_never_edits_the_generated_export():
+    config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    uv_block = config.split('package-ecosystem: "uv"', 1)[1]
+    assert re.search(r'(?m)^    exclude-paths:\n      - "requirements\.lock\.txt"$', uv_block)

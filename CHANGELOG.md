@@ -11,6 +11,24 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies: `pydantic` 2.14.1 → 2.14.2 (the exact pin in `pyproject.toml`) with `pydantic-core` 2.50.1 → 2.50.2, and
+  `sse-starlette` 3.5.0 → 3.6.0 (through the `mcp` SDK), in `uv.lock` and `requirements.lock.txt`. This replaces the
+  open Dependabot pull requests #62 and #65, which both failed `lint`: #62 rewrote the export in a shape `uv export`
+  does not produce, and #65 moved `sse-starlette` in the export alone and left `uv.lock` at 3.5.0. The engine package's
+  `pydantic>=2.14,<3` range is unchanged, so nothing reaches the lab edition.
+- **Dependabot Python pull requests no longer need a hand-run `make lock`**
+  ([ADR 0006](docs/adr/0006-dependabot-pull-requests-regenerate-the-lockfile-export.md)). `.github/dependabot.yml`
+  excludes `requirements.lock.txt` from the `uv` entry (`exclude-paths`), so Dependabot edits `pyproject.toml` and
+  `uv.lock` only. The new `.github/workflows/dependabot-lockfiles.yml` regenerates the export on Dependabot's own pull
+  requests and pushes it with a short-lived, contents-only token of a dedicated GitHub App, so the required checks run
+  on that commit as on any push (a push made with `GITHUB_TOKEN` would start none, and checks from a
+  `workflow_dispatch` run never count as a pull request's required checks). **Owner step:** create the App and add the
+  Dependabot secrets `LOCKFILES_APP_CLIENT_ID` and `LOCKFILES_APP_PRIVATE_KEY` (ADR 0006, Validation); until then the
+  workflow stops with an error naming them. `scripts/export-lockfiles.sh` is now the one place the export flags live:
+  `make lock` and `scripts/check-lockfiles.sh` call it too. `tests/unit/test_workflows.py` pins what the workflow may do.
+
 ## [0.1.1] - 2026-11-03
 
 ### Security
