@@ -447,8 +447,8 @@ order, and the release becomes public only as the very last step of the third:
    re-checks the checksums, verifies the attestations again, creates the release as a
    **draft** (not visible to the public) with the three files, re-reads the draft by its id until all three files are
    `uploaded` (GitHub's states are `uploaded` and `open`; it waits up to about two minutes), checks that the draft
-   holds exactly `cloud_crawler_core-0.1.0-py3-none-any.whl`,
-   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`, and only then
+   holds exactly `cloud_crawler_core-<version>-py3-none-any.whl`,
+   `cloud_crawler_core-<version>.tar.gz` and `cloud-crawler-core.cdx.json`, and only then
    makes it public. A failure before that last step leaves no public release.
 4. `pypi` (tag runs only): nothing is published to PyPI unless the repository
    variable `PYPI_ENABLED` is `true` (it is not set). No container image is published
@@ -485,7 +485,7 @@ in one pull request (`make lock` updates `uv.lock`).
 
 ### Release steps
 
-1. **Check the changelog, and the pull requests.** `CHANGELOG.md` has the `## [0.1.0] - 2026-10-25` section holding
+1. **Check the changelog, and the pull requests.** `CHANGELOG.md` has the `## [0.1.1] - 2026-11-03` section holding
    everything that ships, and nothing under `[Unreleased]`. If you tag on a different day, change the date in that heading
    in a pull request first (the notes come from that section; a tag is refused while `[Unreleased]` has entries or the
    section has no valid date, and a date more than a week old only gives a warning). Keep both `pyproject.toml` files,
@@ -507,7 +507,7 @@ in one pull request (`make lock` updates `uv.lock`).
    `cloud-crawler-core-release-files`. The `attest` job is why this step is required: the attestation steps are the one
    part nothing else can rehearse, and if they fail on the real tag, that tag is lost for good. The price is two permanent
    entries in the public signing log that name `refs/heads/main`; they cannot be mistaken for a release, because the tag
-   run only accepts attestations for `refs/tags/v0.1.0`. Without `-f attest=true` only `build` runs, which is a
+   run only accepts attestations for `refs/tags/v0.1.1`. Without `-f attest=true` only `build` runs, which is a
    cheaper check of the changelog and the build but does not satisfy step 3. If the run is red, read the message, fix
    `main` in a pull request, and run this step again.
 3. **Check, then tag the commit the dry run built.** Do not tag whatever `git pull` gives you. `main` may have moved since
@@ -518,7 +518,7 @@ in one pull request (`make lock` updates `uv.lock`).
    git switch main
    git pull origin main
    $sha = git rev-parse origin/main
-   uv run python scripts/pre-tag-check.py --sha $sha --tag v0.1.0
+   uv run python scripts/pre-tag-check.py --sha $sha --tag v0.1.1
    ```
 
    (`git pull` only brings your copy up to date; what gets tagged is `$sha`.) The check prints `ok:` lines and ends with
@@ -528,17 +528,17 @@ in one pull request (`make lock` updates `uv.lock`).
    clone. If `main` has moved since the dry run, run step 2 again first. Only after `safe to tag`:
 
    ```powershell
-   git tag -a v0.1.0 $sha -m "cloud-crawler-core 0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.1.1 $sha -m "cloud-crawler-core 0.1.1"
+   git push origin v0.1.1
    ```
 
 4. **Check the result.** The run for the tag is green (all of `build`, `attest` and `release`), and
-   [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.0)
-   lists three assets: `cloud_crawler_core-0.1.0-py3-none-any.whl`,
-   `cloud_crawler_core-0.1.0.tar.gz` and `cloud-crawler-core.cdx.json`. To check where a wheel came from:
+   [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.1)
+   lists three assets: `cloud_crawler_core-0.1.1-py3-none-any.whl`,
+   `cloud_crawler_core-0.1.1.tar.gz` and `cloud-crawler-core.cdx.json`. To check where a wheel came from:
 
    ```bash
-   gh attestation verify cloud_crawler_core-0.1.0-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0
+   gh attestation verify cloud_crawler_core-0.1.1-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.1
    ```
 
 5. **Adopt it in the AddOn (first time only).** See the next section: the AddOn's `core-update.yml` does **not** pick up

@@ -29,7 +29,7 @@ and agents follow the same rules. `README.md` is the overview.
 
 ## Set up and check your change
 
-You need Python 3.14.6 (the repository pins it) and [uv](https://docs.astral.sh/uv/). Node.js 22 is needed only for the
+You need Python 3.14.6 (the repository pins it; the packages accept 3.14.6 up to, but not including, 3.16) and [uv](https://docs.astral.sh/uv/). Node.js 22 is needed only for the
 Azure MCP contract test. The `Makefile` targets run in bash; on Windows, run the `uv run ...` lines in PowerShell
 directly (they are the same commands).
 

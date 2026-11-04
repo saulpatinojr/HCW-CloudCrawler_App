@@ -45,7 +45,7 @@ installed.
     uv run --frozen python scripts/check-release-version.py
     ```
 
-    You should see `release version consistent: 0.1.0`.
+    You should see `release version consistent: 0.1.1`.
 
 5. **Check the lock files match.** After you change `pyproject.toml`, `make lock` fixes a mismatch.
 
