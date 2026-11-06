@@ -11,6 +11,15 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Changed
+
+- CodeRabbit, the review bot, is removed until further notice (the owner's instruction of 2026-11-06): its settings file
+  `.coderabbit.yaml` is deleted and the README no longer lists it among the repository's configuration. Earlier
+  `VALIDATION.md` sections, the decision record and the test comments that credit a CodeRabbit finding record what was
+  true then and stay. Repository process only; nothing in the engine, the image or the API changes. The `Protect main`
+  ruleset still requires one approving review, as `.github/workflows/repository-admin.yml` sets it; lowering it there
+  and in the live ruleset is the owner's step.
+
 ## [0.1.1] - 2026-11-04
 
 ### Security

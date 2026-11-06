@@ -737,7 +737,7 @@ Docs: [Using custom workflows with GitHub Pages](https://docs.github.com/en/page
 
 This repository carries `CONTRIBUTING.md` (how a change gets into `main`), `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
 `.github/SECURITY.md`, `.github/CODEOWNERS`, the pull request template and the issue forms (bug report, feature request,
-decision record, work item), CodeQL, dependency review, Dependabot, CodeRabbit and Qlty configuration, and `docs/adr/`.
+decision record, work item), CodeQL, dependency review, Dependabot and Qlty configuration, and `docs/adr/`.
 Pull requests open ready for review and follow the pull request template in `.github/`; `CHANGELOG.md` is updated in the same
 pull request as the change.
 
