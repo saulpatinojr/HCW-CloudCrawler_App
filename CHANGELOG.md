@@ -11,6 +11,19 @@ once, merge one before rebasing the next.
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
+  line of `infrastructure/docker/Dockerfile` agree: each `FROM` must be `PYTHON_IMAGE@PYTHON_IMAGE_DIGEST` (or an
+  earlier stage of the same file), the digest must be `sha256:` and 64 hex characters, and the tag must carry
+  `PYTHON_VERSION`. It is ported from the Cloud Assessor App's script of the same name and runs in the `lint` job of
+  `ci.yml` and in `make lint`. Until now nothing compared the two files, so a digest changed in one place and not the
+  other would only have been caught by eye. `tests/unit/test_check_versions.py` runs it against the real files and
+  against altered copies (a different digest, a different tag, a version the tag does not carry, a value that is not a
+  digest, no `FROM` at all), each of which must fail. The sentences in `versions.env` and `infrastructure/README.md`
+  that said nothing in CI compares the two now name the check, and `docs/testing.md`, `docs/troubleshooting.md` and
+  `CONTRIBUTING.md` list it.
+
 ### Changed
 
 - The appliance image's base moves from `python:3.14.8-slim-trixie` to `python:3.14.10-slim-trixie` (CPython 3.14.10 on

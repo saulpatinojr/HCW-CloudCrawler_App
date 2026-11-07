@@ -3,7 +3,7 @@
 | Path | What |
 | --- | --- |
 | `docker/Dockerfile` | The appliance image: hash-pinned runtime set, engine and application as source trees, uid 10001, pip removed, health check on `/api/health`. |
-| `docker/versions.env` | The base image tag and digest every `FROM` must match. The Dockerfile writes the same digest out in full on each `FROM` line, and nothing in CI or the tests compares the two files, so when you change one, change the other in the same pull request. |
+| `docker/versions.env` | The base image tag and digest every `FROM` must match. The Dockerfile writes the same digest out in full on each `FROM` line, so when you change one, change the other in the same pull request. `scripts/check-versions.sh` (run by the `lint` job of `ci.yml` and by `make lint`) fails when they disagree. |
 
 To move the base image: resolve the new digest (`docker buildx imagetools inspect python:<tag>`, copy the `Digest:` line of
 the index), change `versions.env` and both `FROM` lines of the Dockerfile together, then run `bash scripts/scan-image.sh`.

@@ -38,11 +38,13 @@ uv sync --frozen --all-packages
 uv run --frozen ruff check .
 uv run --frozen ruff format --check .
 bash scripts/check-lockfiles.sh
+bash scripts/check-versions.sh
 uv run --frozen pytest -q --cov=packages --cov=src --cov-fail-under=96
 ```
 
 `make lint` and `make test` run the same checks (`make lint` also runs `scripts/check-release-version.py`, which checks
-that every file naming the release version agrees). Two more commands for specific changes:
+that every file naming the release version agrees). `scripts/check-versions.sh` checks that `infrastructure/docker/versions.env`
+and every `FROM` line of the Dockerfile name the same base image digest. Two more commands for specific changes:
 
 - `make test-contract` starts the real Azure MCP Server 3.0.0 through `npx` (network needed, no Azure sign-in). Run it
   for anything that touches the Azure MCP contract.
