@@ -12,7 +12,7 @@
 #           hcw-cloud-crawler-appliance:dev                                          # lab only: no sign-in, opt-out
 # The image sets CC_BIND_HOST=0.0.0.0 and never sets the opt-out: leaving sign-in off is a choice the operator makes.
 
-FROM python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS deps
+FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS deps
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /build
 COPY requirements.lock.txt ./
@@ -30,7 +30,7 @@ for forbidden in ("azure", "msal", "boto3"):
 print("image contents verified: engine and appliance import; no cloud SDK")
 PY
 
-FROM python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS appliance
+FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS appliance
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8080 CC_BIND_HOST=0.0.0.0
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \

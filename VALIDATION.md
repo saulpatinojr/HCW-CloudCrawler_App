@@ -354,3 +354,25 @@ reached Azure, a registry or a workflow from the session.
   whether that has been done since was not checked. The issue forms name labels (`needs-triage`, `architecture`,
   `decision`) that the repository did not have when last listed on 2026-10-25, and GitHub ignores a label that does not
   exist. `labels.json` still defines two labels (`finops-finding`, `terraform`) that no form or workflow uses.
+
+## Ran for the base image move to python:3.14.10-slim-trixie
+
+Run on 2026-11-07 on the branch `images/python-3.14.10-trixie`, from `main` at `82713e8`, on Linux with Python 3.14.6
+(the repository's pin) and uv 0.11.32. The change moves `infrastructure/docker/versions.env` and both `FROM` lines of the
+Dockerfile from `python:3.14.8-slim-trixie@sha256:a2b82f3c...` to
+`python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d`. Nothing reached
+Azure or a registry other than the read below.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Base image digest | Docker Hub tag API, `GET hub.docker.com/v2/namespaces/library/repositories/python/tags/<tag>` for `3.14.10-slim-trixie`, `3.14-slim-trixie` and `3.14.11-slim-trixie` | `3.14.10-slim-trixie` and `3.14-slim-trixie` both report `sha256:af8a5aa1...7cb1d` (last updated 2026-11-05); `3.14.11-slim-trixie` answers 404 |
+| Dependency resolution | `uv sync --all-packages` | 70 packages resolved, 67 checked |
+| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 90 files formatted |
+| Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 1481 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+
+Not run in this session: the image build (`docker build -f infrastructure/docker/Dockerfile ...`), the `ci.yml` `image`
+job's checks, hadolint and `bash scripts/scan-image.sh`, because this session has no Docker. `image-scan.yml` runs on
+the pull request because it changes `infrastructure/docker/**`; its result is the first scan of the new base, and the
+entries of `.trivyignore.yaml` (taken against the 3.14.8 image on Debian 13.7) are re-read against it there. Nothing in
+CI compares `versions.env` with the `FROM` lines, so the two were compared by eye and with `grep`.

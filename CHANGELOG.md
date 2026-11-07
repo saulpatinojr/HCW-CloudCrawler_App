@@ -13,6 +13,14 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- The appliance image's base moves from `python:3.14.8-slim-trixie` to `python:3.14.10-slim-trixie` (CPython 3.14.10 on
+  Debian 13), pinned by its index digest `sha256:af8a5aa14780…` in `infrastructure/docker/versions.env` and in both
+  `FROM` lines of `infrastructure/docker/Dockerfile` together. 3.14.10 is the newest Python 3.14 build on Docker Hub
+  (read on 2026-11-07; `python:3.14-slim-trixie` points at the same digest and no 3.14.11 exists), and it is the same
+  pin as the Cloud Assessor App. The final stage keeps its `apt-get upgrade` step for Debian security fixes published
+  after the base. `.python-version` and `make setup` stay on 3.14.6, the local and CI interpreter (the newest 3.14
+  build uv 0.11.32 can download) and the floor of `requires-python`; the image's 3.14.10 is inside the same range.
+  The image was not built or scanned in this change; `image-scan.yml` scans it on the pull request (`VALIDATION.md`).
 - `dependabot-lockfiles.yml` now says why the HCW Main Admin App's token could not be made when that step fails (issue
   #70). Before, the only message named missing secrets, so a 401 from a wrong key was first read as "not set". The new
   step runs only when the token step fails, after the check that both secrets are present, and names the usual causes:
