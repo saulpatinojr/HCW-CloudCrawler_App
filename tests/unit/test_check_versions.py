@@ -112,6 +112,38 @@ def test_a_platform_flag_before_the_pinned_image_passes(tmp_path):
     assert result.stdout.count("ok FROM") == 2
 
 
+def test_a_from_line_inside_a_heredoc_is_text_not_a_stage(tmp_path):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(
+        f"FROM {image}@{digest} AS build\n"
+        "RUN python - <<'PY'\n"
+        'print("""\n'
+        "FROM not-an-image\n"
+        '""")\n'
+        "PY\n"
+        "RUN <<-EOF cat > /tmp/notes\n"
+        "\tfrom also-not-an-image\n"
+        "\tEOF\n"
+        "FROM build\n",
+        encoding="utf-8",
+    )
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.count("ok FROM") == 2
+
+
+def test_a_from_after_a_heredoc_is_still_checked(tmp_path):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(
+        f"FROM {image}@{digest} AS build\nRUN <<EOF\necho hi\nEOF\nFROM python:3.14-slim\n", encoding="utf-8"
+    )
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 1
+    assert "FROM python:3.14-slim is neither an earlier stage nor" in result.stdout
+
+
 def test_a_dockerfile_without_from_fails(tmp_path):
     empty = tmp_path / "Dockerfile"
     empty.write_text("# no stages\n", encoding="utf-8")
