@@ -144,6 +144,25 @@ def test_a_from_after_a_heredoc_is_still_checked(tmp_path):
     assert "FROM python:3.14-slim is neither an earlier stage nor" in result.stdout
 
 
+@pytest.mark.parametrize("command", ["RUN echo '<<EOF'", 'RUN echo "<<EOF"', "RUN echo hi # <<EOF", "RUN cat <<<EOF"])
+def test_text_that_only_looks_like_a_heredoc_opens_none(tmp_path, command):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(f"FROM {image}@{digest} AS build\n{command}\nFROM python:3.14-slim\n", encoding="utf-8")
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 1, result.stdout
+    assert "FROM python:3.14-slim is neither an earlier stage nor" in result.stdout
+
+
+def test_a_heredoc_that_never_closes_fails(tmp_path):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(f"FROM {image}@{digest} AS build\nRUN <<EOF\necho hi\nFROM python:3.14-slim\n", "utf-8")
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 1
+    assert "a heredoc never closes" in result.stdout
+
+
 def test_a_dockerfile_without_from_fails(tmp_path):
     empty = tmp_path / "Dockerfile"
     empty.write_text("# no stages\n", encoding="utf-8")

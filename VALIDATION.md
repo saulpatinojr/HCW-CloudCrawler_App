@@ -386,11 +386,11 @@ in `make lint`, and adds `tests/unit/test_check_versions.py`. Nothing reached Az
 | Check | Command | Result |
 | --- | --- | --- |
 | The new check on the real files | `bash scripts/check-versions.sh` | Exit 0; two `ok FROM python:3.14.10-slim-trixie@sha256:af8a5aa1...7cb1d` lines, one per `FROM` |
-| The new tests | `uv run pytest -q tests/unit/test_check_versions.py` | 15 passed: the real files pass, an earlier-stage `FROM` passes, a `--platform` flag before the pinned image passes, and a `FROM` line inside a heredoc is ignored; a `FROM` with a different digest, a `FROM` with a different tag, an unpinned `from`/indented `From`/`FROM --platform=...`, a `FROM` after a heredoc, a `PYTHON_VERSION` the tag does not carry, a digest that is not `sha256:<64 hex>` (including 64 non-hex characters) and a Dockerfile with no `FROM` each fail |
+| The new tests | `uv run pytest -q tests/unit/test_check_versions.py` | 20 passed: the real files pass, an earlier-stage `FROM` passes, a `--platform` flag before the pinned image passes, and a `FROM` line inside a heredoc is ignored; `<<EOF` inside quotes or a comment, and `<<<`, open no heredoc, so a `FROM` after them is still checked; a heredoc that never closes fails; a `FROM` with a different digest, a `FROM` with a different tag, an unpinned `from`/indented `From`/`FROM --platform=...`, a `FROM` after a heredoc, a `PYTHON_VERSION` the tag does not carry, a digest that is not `sha256:<64 hex>` (including 64 non-hex characters) and a Dockerfile with no `FROM` each fail |
 | Dependency resolution | `uv sync --all-packages` | 70 packages resolved, 67 checked |
 | Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 91 files already formatted |
 | Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
-| Tests | `uv run pytest -q --cov=packages --cov=src` | 1496 passed, 1 deselected; coverage 98 percent against the 96 percent gate |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 1501 passed, 1 deselected; coverage 98 percent against the 96 percent gate |
 | Documentation site links | `uv run python scripts/build-pages.py` | Exit 0 |
 
 Not run in this session: `actionlint` and `zizmor` on the changed `ci.yml` (this session cannot download the linters;

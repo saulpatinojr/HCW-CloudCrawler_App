@@ -19,8 +19,10 @@ case "$image" in
   *) echo "::error file=${VERSIONS}::PYTHON_IMAGE ${image} does not carry PYTHON_VERSION ${version:-<empty>}"; exit 1 ;;
 esac
 # The Dockerfile without the bodies of its heredocs (`RUN <<EOF` ... `EOF`): a line inside one is text, not an
-# instruction, so a `FROM` there must not be read as a stage. `<<-` strips leading tabs before the closing word,
-# as Docker does; several heredocs on one line close in order; `<<<` (a here-string) opens none.
+# instruction, so a `FROM` there must not be read as a stage. A marker is `<<` or `<<-` outside quotes and comments,
+# then the word, bare or quoted (`<<'PY'`); `<<-` strips leading tabs before the closing word, as Docker does;
+# several heredocs on one line close in order; `<<<` (a here-string) opens none. A heredoc that never closes is an
+# error, so a misread marker cannot hide the FROM lines after it.
 instructions() {
   awk '
     n > 0 {
@@ -31,14 +33,30 @@ instructions() {
     }
     {
       print
-      rest = $0
-      while (match(rest, /(^|[^<])<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*["\047]?/)) {
-        found = substr(rest, RSTART, RLENGTH); rest = substr(rest, RSTART + RLENGTH)
-        n++; dash[n] = (found ~ /<<-/)
-        sub(/^[^<]*<<-?[ \t]*["\047]?/, "", found); sub(/["\047]$/, "", found); word[n] = found
+      len = length($0); quote = ""
+      for (i = 1; i <= len; i++) {
+        c = substr($0, i, 1)
+        if (quote != "") { if (c == quote) quote = ""; else if (c == "\\" && quote == "\"") i++; continue }
+        if (c == "\\") { i++; continue }
+        if (c == "\047" || c == "\"") { quote = c; continue }
+        if (c == "#" && (i == 1 || substr($0, i - 1, 1) ~ /[ \t]/)) break
+        if (substr($0, i, 2) != "<<" || substr($0, i + 2, 1) == "<" || (i > 1 && substr($0, i - 1, 1) == "<")) continue
+        j = i + 2; d = 0
+        if (substr($0, j, 1) == "-") { d = 1; j++ }
+        while (substr($0, j, 1) ~ /[ \t]/) j++
+        q = substr($0, j, 1); if (q == "\047" || q == "\"") j++; else q = ""
+        w = ""
+        while (substr($0, j, 1) ~ /[A-Za-z0-9_]/) { w = w substr($0, j, 1); j++ }
+        if (w == "" || w ~ /^[0-9]/ || (q != "" && substr($0, j, 1) != q)) continue
+        if (q != "") j++
+        n++; word[n] = w; dash[n] = d; i = j - 1
       }
-    }' "$1"
+    }
+    END { if (n > 0) { print "unterminated heredoc: no line closes <<" word[1] > "/dev/stderr"; exit 1 } }' "$1"
 }
+if ! parsed="$(instructions "$DOCKERFILE")"; then
+  echo "::error file=${DOCKERFILE}::a heredoc never closes, so its FROM lines cannot be told from instructions"; exit 1
+fi
 stages=" "; bad=0; seen=0
 # Docker reads instruction keywords in any case and allows leading whitespace; flags such as --platform come first.
 while read -r -a words; do
@@ -50,6 +68,6 @@ while read -r -a words; do
   elif [ "$from" = "$want" ]; then echo "ok FROM ${from}"
   else echo "::error file=${DOCKERFILE}::FROM ${from} is neither an earlier stage nor ${want}"; bad=1; fi
   if [ "${as,,}" = as ] && [ -n "$name" ]; then stages="${stages}${name} "; fi
-done < <(instructions "$DOCKERFILE" | grep -iE '^[[:space:]]*FROM[[:space:]]')
+done < <(grep -iE '^[[:space:]]*FROM[[:space:]]' <<<"$parsed")
 if [ "$seen" -eq 0 ]; then echo "::error file=${DOCKERFILE}::no FROM line"; exit 1; fi
 exit $bad
