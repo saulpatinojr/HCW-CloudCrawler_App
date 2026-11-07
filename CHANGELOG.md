@@ -13,6 +13,13 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- `dependabot-lockfiles.yml` now says why the HCW Main Admin App's token could not be made when that step fails (issue
+  #70). Before, the only message named missing secrets, so a 401 from a wrong key was first read as "not set". The new
+  step runs only when the token step fails, after the check that both secrets are present, and names the usual causes:
+  a private key that is not that App's, a Client ID that is not that App's, or the App not installed on this
+  repository. `tests/unit/test_workflows.py` pins it. Repository process only; nothing in the engine, the image or the
+  API changes.
+
 - CodeRabbit, the review bot, is removed until further notice (the owner's instruction of 2026-11-06): its settings file
   `.coderabbit.yaml` is deleted and the README no longer lists it among the repository's configuration. Earlier
   `VALIDATION.md` sections, the decision record and the test comments that credit a CodeRabbit finding record what was

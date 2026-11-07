@@ -329,6 +329,11 @@ def test_dependabot_lockfiles_only_acts_for_dependabot_and_never_runs_dependency
     assert "actions/create-github-app-token@" in body and "permission-contents: write" in body
     assert "secrets.HCW_MAIN_ADMIN_CLIENT_ID" in body and "secrets.HCW_MAIN_ADMIN_PRIVATE_KEY" in body
     assert "LOCKFILES_APP" not in body, "the old dedicated-App secret names are gone (ADR 0006, amended)"
+    # A failed sign-in is explained as wrong secrets or a missing installation, not as missing secrets (issue #70).
+    explain = next(s for s in steps(jobs(body)["export"]) if "Say why the App's token could not be made" in s)
+    assert "if: failure() && steps.app.outcome == 'failure'" in explain
+    for cause in ("not a key of that App", "not that App's Client ID", "not installed on this repository"):
+        assert cause in explain, cause
     # The App is installed on several repositories; with no owner and no repositories input the token covers this one.
     assert not re.search(r"(?m)^\s+(owner|repositories):", body), "the App token must stay scoped to this repository"
     assert "$APP_TOKEN" in body and "github.token" not in body and "secrets.GITHUB_TOKEN" not in body
