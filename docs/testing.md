@@ -55,6 +55,15 @@ installed.
 
     You should see `lockfile export matches uv.lock`.
 
+    Then check that the base image pin in `infrastructure/docker/versions.env` matches every `FROM` line of the
+    Dockerfile (CI runs this too):
+
+    ```text
+    bash scripts/check-versions.sh
+    ```
+
+    You should see one `ok FROM python:3.14.10-slim-trixie@sha256:...` line per `FROM` and no `::error` line.
+
 6. **Check the packages for known vulnerabilities** with [pip-audit](https://pypi.org/project/pip-audit/).
 
     ```text

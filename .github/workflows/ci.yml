@@ -1,7 +1,7 @@
 # Actions are pinned to full commit SHAs (version in the trailing comment); Dependabot (github-actions ecosystem)
 # proposes updates. Runners: ubuntu-26.04, never ubuntu-latest (program convention). uv is installed with pip at the
 # exact version this repository was authored with.
-# Jobs: lint (ruff, lockfile export, release version consistency), test (96 percent coverage gate; the azmcp-marked
+# Jobs: lint (ruff, lockfile export, base image pin versus FROM lines, release version consistency), test (96 percent coverage gate; the azmcp-marked
 # contract test excluded),
 # contract (the real Azure MCP Server 3.0.0 over stdio through npx: initialize and tools/list only, no Azure call),
 # image (build, startup refusal under a secret-bearing variable, non-root, health answers).
@@ -28,6 +28,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: bash scripts/check-lockfiles.sh
+      - name: versions.env and every FROM of the Dockerfile name the same base image digest
+        run: bash scripts/check-versions.sh
       - name: Every place that names the release version agrees (a v* tag can never be corrected)
         run: python scripts/check-release-version.py
       - name: No client-secret credential path anywhere in the application

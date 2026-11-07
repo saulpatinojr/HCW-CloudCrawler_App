@@ -376,3 +376,24 @@ job's checks, hadolint and `bash scripts/scan-image.sh`, because this session ha
 the pull request because it changes `infrastructure/docker/**`; its result is the first scan of the new base, and the
 entries of `.trivyignore.yaml` (taken against the 3.14.8 image on Debian 13.7) are re-read against it there. Nothing in
 CI compares `versions.env` with the `FROM` lines, so the two were compared by eye and with `grep`.
+
+## Ran for the base image pin check (`scripts/check-versions.sh`)
+
+Run on 2026-11-07 on the branch `ci/base-pin-consistency`, from `main`, on Linux with Python 3.14.6 and uv 0.11.32.
+The change adds `scripts/check-versions.sh` (ported from the Cloud Assessor App), runs it in `ci.yml`'s `lint` job and
+in `make lint`, and adds `tests/unit/test_check_versions.py`. Nothing reached Azure or a registry.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| The new check on the real files | `bash scripts/check-versions.sh` | Exit 0; two `ok FROM python:3.14.10-slim-trixie@sha256:af8a5aa1...7cb1d` lines, one per `FROM` |
+| The new tests | `uv run pytest -q tests/unit/test_check_versions.py` | 8 passed: the real files pass, an earlier-stage `FROM` passes, and a `FROM` with a different digest, a `FROM` with a different tag, a `PYTHON_VERSION` the tag does not carry, a digest that is not `sha256:<64 hex>` and a Dockerfile with no `FROM` each fail |
+| Dependency resolution | `uv sync --all-packages` | 70 packages resolved, 67 checked |
+| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 91 files already formatted |
+| Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 1489 passed, 1 deselected; coverage 98 percent against the 96 percent gate |
+| Documentation site links | `uv run python scripts/build-pages.py` | Exit 0 |
+
+Not run in this session: `actionlint` and `zizmor` on the changed `ci.yml` (this session cannot download the linters;
+the change adds one `run:` step with no `${{ }}` expression), and the `lint` job itself on GitHub, which runs on the pull
+request. The two earlier records above that say nothing in CI compares `versions.env` with the `FROM` lines were true
+when they were written and are left as they were.
