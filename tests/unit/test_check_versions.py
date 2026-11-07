@@ -81,6 +81,37 @@ def test_a_broken_versions_env_fails(tmp_path, replace):
     assert run(DOCKERFILE, broken).returncode == 1
 
 
+def test_a_digest_of_64_non_hex_characters_fails(tmp_path):
+    _, digest = pin()
+    broken = tmp_path / "versions.env"
+    broken.write_text(VERSIONS.read_text(encoding="utf-8").replace(digest, "sha256:" + "g" * 64), encoding="utf-8")
+    result = run(DOCKERFILE, broken)
+    assert result.returncode == 1
+    assert "64 lowercase hex" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "line",
+    ["from python:3.14-slim AS late", "  From python:3.14-slim", "\tFROM --platform=linux/amd64 python:3.14-slim"],
+)
+def test_an_unpinned_from_in_any_case_or_indent_fails(tmp_path, line):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(f"FROM {image}@{digest} AS build\n{line}\n", encoding="utf-8")
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 1, result.stdout
+    assert "FROM python:3.14-slim is neither an earlier stage nor" in result.stdout
+
+
+def test_a_platform_flag_before_the_pinned_image_passes(tmp_path):
+    image, digest = pin()
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(f"FROM --platform=$BUILDPLATFORM {image}@{digest} AS build\nfrom build\n", encoding="utf-8")
+    result = run(dockerfile, VERSIONS)
+    assert result.returncode == 0, result.stdout
+    assert result.stdout.count("ok FROM") == 2
+
+
 def test_a_dockerfile_without_from_fails(tmp_path):
     empty = tmp_path / "Dockerfile"
     empty.write_text("# no stages\n", encoding="utf-8")
