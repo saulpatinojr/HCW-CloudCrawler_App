@@ -97,6 +97,13 @@ jobs:
           client-id: ${{ secrets.HCW_MAIN_ADMIN_CLIENT_ID }}
           private-key: ${{ secrets.HCW_MAIN_ADMIN_PRIVATE_KEY }}
           permission-contents: write
+      - name: Say why the App's token could not be made
+        # The secrets are present (the step before the token checked), so a failure here means they are wrong or the App
+        # cannot act on this repository, not that they are missing. Issue #70: a 401 was first read as "not set".
+        if: failure() && steps.app.outcome == 'failure'
+        run: |
+          echo "::error::The HCW Main Admin App's token could not be made, although both Dependabot secrets are set. Usual causes: HCW_MAIN_ADMIN_PRIVATE_KEY is not a key of that App (HTTP 401 'A JSON web token could not be decoded'; generate a new key on the App's page and replace the secret), HCW_MAIN_ADMIN_CLIENT_ID is not that App's Client ID, or the App is not installed on this repository (HTTP 404; add it under the App's Install App, Repository access). Steps: ADR 0006, Validation. Meanwhile run 'make lock' on this branch and push."
+          exit 1
       - name: Commit the export and push it to the Dependabot branch
         if: steps.export.outputs.changed == 'true'
         env:
