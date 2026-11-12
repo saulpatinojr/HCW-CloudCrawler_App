@@ -19,6 +19,11 @@ once, merge one before rebasing the next.
   ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)); a deliberate
   exception needs an entry with a reason in its allow-list, which is empty today. A step that starts a runtime through
   a program it runs (the `contract` job's test starts `npx`) is listed in `INDIRECT_RUNTIME` and checked the same way.
+  A set-up step with its own `if:` covers only later steps under the same condition (or one of its top-level `||`
+  terms), a command in backticks counts like one in `$(...)`, and every set-up step must ask for Python 3.15 or
+  Node.js 26 or newer.
+- `.qlty/qlty.toml` pins qlty's ruff to 0.17.4, the version in `uv.lock`: qlty's own default, 0.14.6, cannot read
+  `target-version = "py315"`, so `qlty check` errored on the whole pull request.
 - `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
   line of `infrastructure/docker/Dockerfile` agree: each `FROM` must be `PYTHON_IMAGE@PYTHON_IMAGE_DIGEST` (or an
   earlier stage of the same file), the digest must be `sha256:` and 64 hex characters, and the tag must carry
