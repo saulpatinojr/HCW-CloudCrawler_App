@@ -24,6 +24,10 @@ once, merge one before rebasing the next.
   Node.js 26 or newer. A step's condition now counts GitHub's unwritten `success()`, a quoted `NAME="a b"` prefix
   counts, setup-uv sets Python up only with a `python-version`, an exact version must meet the full floor (Node.js
   26.11.0), and the two lockfile steps that run uv through a script are listed in `INDIRECT_RUNTIME`.
+  A path in front of the interpreter (`/usr/bin/python3`) now counts, as do `python3.15.2`, a wrapper's options
+  (`sudo -u nobody`) and a command after a `case` pattern, while a heredoc, a comment or a script quoted across lines
+  for a container does not; `&&` and `||` of status functions are followed; and a version with trailing text
+  (`26.11.0-rc.1`, `26.11.0.0`) is reported as unreadable.
 - `.qlty/qlty.toml` pins qlty's ruff to 0.17.4, the version in `uv.lock`: qlty's own default, 0.14.6, cannot read
   `target-version = "py315"`, so `qlty check` errored on the whole pull request.
 - `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
