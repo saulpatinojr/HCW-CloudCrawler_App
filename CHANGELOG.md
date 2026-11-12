@@ -26,6 +26,31 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- Python 3.15 and Node.js 26, the HCW runtime floors (the newest Python line and the newest Node.js long-term-support
+  line; [HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Before,
+  this repository ran Python 3.14 and its contract test ran on Node.js 22, while the website and the AddOns were
+  already on 3.15.2.
+  - **The image.** Its base moves from `python:3.14.10-slim-trixie` to `python:3.15.2-slim-trixie` (CPython 3.15.2 on
+    Debian 13), pinned by its index digest `sha256:65a65fc7b30b…` in `infrastructure/docker/versions.env` and in both
+    `FROM` lines of `infrastructure/docker/Dockerfile`. It is the same pin as the website's lab image and the Cloud
+    Crawler AddOn, and on 2026-11-12 Docker Hub showed `python:3.15-slim-trixie` on the same digest and no 3.15.3. The
+    Dockerfile's `python3.14` folder names become `python3.15`.
+  - **Python everywhere else.** `.python-version` now names the 3.15 line (`3.15`, as the AddOn does) instead of
+    3.14.6, `make setup` pins the same, `requires-python` in both `pyproject.toml` files is `>=3.15.1,<3.16` (the
+    AddOns' range), ruff checks against `py315`, and every workflow's `setup-python` asks for `3.15`. `uv.lock` and its
+    export `requirements.lock.txt` were made again with uv 0.11.32 (the version the workflows install): no package
+    version changed; only the Python 3.14 wheels and one 3.14-only marker dropped out. Every locked package has a
+    wheel for 3.15, so nothing is compiled from source. uv 0.11.32 cannot download a finished Python 3.15 by itself, so
+    `CONTRIBUTING.md` now says to install 3.15 first; in CI, `setup-python` does that.
+  - **Node.js.** The `contract` job in `ci.yml` installs Node.js 26 instead of 22. ADR 0001 said Node.js 22 was needed
+    for `npx @azure/mcp@3.0.0`, but the package accepts Node.js 22 or later (its npm `engines` field), so the ADR gains
+    a dated "Update of 2026-11-12" rather than a rewritten line, and the README, `CONTRIBUTING.md`, the docs and the
+    "npx is not on PATH" messages say Node.js 26.
+  - **The AddOn.** The engine wheel's `Requires-Python` becomes `>=3.15.1,<3.16` from the next release (the published
+    v0.1.1 wheel is unchanged). The AddOn already requires 3.15.1 or later and runs 3.15.2, so it needs no change.
+  - Every job that runs Python or Node.js already chooses its version with `setup-python` or `setup-node`; none relies
+    on the runner's own interpreter, so no step was added. Checks run: `VALIDATION.md`, "Ran for the move to Python
+    3.15 and Node.js 26".
 - The appliance image's base moves from `python:3.14.8-slim-trixie` to `python:3.14.10-slim-trixie` (CPython 3.14.10 on
   Debian 13), pinned by its index digest `sha256:af8a5aa14780…` in `infrastructure/docker/versions.env` and in both
   `FROM` lines of `infrastructure/docker/Dockerfile` together. 3.14.10 is the newest Python 3.14 build on Docker Hub

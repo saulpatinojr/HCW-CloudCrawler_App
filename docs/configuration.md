@@ -52,7 +52,7 @@ Entra settings (including `CC_AUTH_REQUIRED_ROLES`) with `CC_AUTH_MODE` left `of
 
 This mode starts Azure MCP Server 3.0.0 with your own Azure sign-in and only reads. It has not been run against a live
 account in the project's tests ([Known limitations](known-limitations.md)). You need [Node.js](https://nodejs.org/en/download)
-22 and the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli).
+26 and the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli).
 
 1. **Sign in.** See [Sign in with Azure CLI](https://learn.microsoft.com/en-us/cli/azure/authenticate-azure-cli).
 

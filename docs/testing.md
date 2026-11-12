@@ -6,7 +6,7 @@ Run the same checks on your computer that the project runs on every pull request
 
 - Do the [Quick start](quick-start.md) steps 1 to 3, so the code and packages are on your computer.
 - Stay in the `HCW-CloudCrawler_App` folder.
-- For step 7 only, install [Node.js](https://nodejs.org/en/download) 22 and be online. For step 9 only, run Docker Desktop
+- For step 7 only, install [Node.js](https://nodejs.org/en/download) 26 and be online. For step 9 only, run Docker Desktop
   ([install](https://docs.docker.com/desktop/setup/install/windows-install/)).
 
 The commands are the same in PowerShell 7 and Git Bash. Steps 5 and 9 start `bash`, so on Windows Git for Windows must be
@@ -62,7 +62,7 @@ installed.
     bash scripts/check-versions.sh
     ```
 
-    You should see one `ok FROM python:3.14.10-slim-trixie@sha256:...` line per `FROM` and no `::error` line.
+    You should see one `ok FROM python:3.15.2-slim-trixie@sha256:...` line per `FROM` and no `::error` line.
 
 6. **Check the packages for known vulnerabilities** with [pip-audit](https://pypi.org/project/pip-audit/).
 

@@ -1,5 +1,5 @@
 # Lint and format settings for both packages, the scripts and the tests.
-target-version = "py314"
+target-version = "py315"
 line-length = 120
 extend-exclude = [".venv", "samples", "infrastructure", "*.md"]
 

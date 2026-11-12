@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-21
+- **Updated:** 2026-11-12 (Node.js 22 is the lowest version `@azure/mcp@3.0.0` accepts, not a requirement; CI uses
+  Node.js 26; no decision changed; see "Update of 2026-11-12" before "Rollback or revisit trigger")
 - **Owners:** Workload owner and architecture owner
 - **Issue:** none; recorded from the owner-approved proposal *Azure Architecture MCP Appliance on Azure MCP Server 3.0* (website repository, `docs/architecture/azure-architecture-mcp-appliance.md`, sections 5 and 6)
 
@@ -44,7 +46,8 @@ head, so the package was built from the branch rather than from the tagged commi
 ## Consequences
 
 - Development and CI need Node.js 22 for `npx @azure/mcp@3.0.0`; the npm wrapper downloads a platform package into its
-  own cache (upstream fixed the lockfile side effect in 3.0.0-beta.46).
+  own cache (upstream fixed the lockfile side effect in 3.0.0-beta.46). Updated 2026-11-12: 22 is the lowest Node.js
+  the package accepts, not the only one; CI now uses Node.js 26 (see "Update of 2026-11-12").
 - 4.x features the roadmap would want (Advisor prioritisation, service groups) wait for the upgrade ADR.
 - Security backports to the 3.x branch do not change the npm version; the pin is revisited when a backport that
   matters lands only in 4.x.
@@ -55,6 +58,20 @@ head, so the package was built from the branch rather than from the tagged commi
 read-only tools across `advisor`, `pricing`, `policy`, `group`, `subscription`, `wellarchitectedframework` and
 `cloudarchitect`, with every tool the design calls annotated read-only and non-destructive (so no elicitation is
 required). Recorded in `VALIDATION.md`.
+
+## Update of 2026-11-12: Node.js 26, not 22
+
+The first consequence above read as if `npx @azure/mcp@3.0.0` needed Node.js 22 exactly. It does not. The npm
+registry entry for the package (`npm view @azure/mcp@3.0.0 engines`, read on 2026-11-12) says
+`{ node: '>=22.0.0' }`: Node.js 22 is the lowest version it accepts, and any later one is allowed. Hybrid Cloud Works
+asks every repository to run the newest long-term-support (LTS) line of Node.js, which is 26 since October 2026
+([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)), so the
+`contract` job in `.github/workflows/ci.yml` now installs Node.js 26, and the README, CONTRIBUTING and the error
+messages say Node.js 26 (22 or later still works).
+
+No decision in this record changed: the pin is still `@azure/mcp@3.0.0`, the contract snapshot is unchanged, and the
+contract test still sends `initialize` and `tools/list` only. It passed on Node.js 26.13.1 on 2026-11-12 (recorded in
+`VALIDATION.md`, "Ran for the move to Python 3.15 and Node.js 26"), and the `contract` job runs it on every pull request.
 
 ## Rollback or revisit trigger
 

@@ -397,3 +397,41 @@ Not run in this session: `actionlint` and `zizmor` on the changed `ci.yml` (this
 the change adds one `run:` step with no `${{ }}` expression), and the `lint` job itself on GitHub, which runs on the pull
 request. The two earlier records above that say nothing in CI compares `versions.env` with the `FROM` lines were true
 when they were written and are left as they were.
+
+## Ran for the move to Python 3.15 and Node.js 26
+
+Run on 2026-11-12 on the branch `claude/runtime-floor-1707`, from `main` at `fcba97a`, on Linux with CPython 3.15.2
+(installed with uv 0.13.8, because uv 0.11.32 offers only `3.15.0b4` for download; uv 0.11.32 then found it and did
+every step below), uv 0.11.32 and Node.js 26.13.1 (the official `linux-x64` build from nodejs.org, its sha256 checked
+against `SHASUMS256.txt`). The change moves the image base to
+`python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928`, `.python-version` to
+`3.15`, `requires-python` to `>=3.15.1,<3.16`, ruff to `py315`, every workflow's `setup-python` to `3.15` and the
+`contract` job's `setup-node` to `26` ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
+Nothing reached Azure. The image was built and scanned with a local Docker engine.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Base image digest | Docker Hub tag API, `GET hub.docker.com/v2/namespaces/library/repositories/python/tags/<tag>` for `3.15.2-slim-trixie`, `3.15-slim-trixie` and `3.15.3-slim-trixie` | `3.15.2-slim-trixie` and `3.15-slim-trixie` both report `sha256:65a65fc7...36928` (last updated 2026-11-07); `3.15.3-slim-trixie` answers 404. The same digest is on the `FROM` lines of the Cloud Crawler AddOn and in the website's `lab-image/versions.env` |
+| `@azure/mcp` accepts Node.js 26 | `npm view @azure/mcp@3.0.0 engines` | `{ node: '>=22.0.0' }` |
+| Lock | `uv lock` (uv 0.11.32) | 70 packages resolved; no package version changed; the Python 3.14 wheels and the `typing-extensions` marker for Python below 3.15 dropped out. The lock's format `revision` is written as 3 by uv 0.11.32 (it was 5, written by Dependabot's newer uv); uv 0.13.8 writes the same lock with `revision = 5` and no other difference |
+| Every dependency installs on 3.15 from a wheel | `uv sync --frozen --all-packages` | `Using CPython 3.15.2`; 67 packages installed, and only the two workspace packages were built |
+| The image's install set, wheels only | `python3.15 -m pip install --require-hashes --no-deps --only-binary=:all: -r requirements.lock.txt` in a fresh 3.15.2 virtual environment | Exit 0 |
+| Known vulnerabilities | `uv run --frozen pip-audit -r requirements.lock.txt --strict` (the `security.yml` `pip-audit` job's command) | `No known vulnerabilities found` |
+| Lint and format | `uv run --frozen ruff check . && uv run --frozen ruff format --check .` (ruff 0.17.4, target `py315`) | All checks passed; 91 files already formatted |
+| Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Base image pin | `bash scripts/check-versions.sh` | Exit 0; two `ok FROM python:3.15.2-slim-trixie@sha256:65a65fc7...36928` lines |
+| Release version | `uv run --frozen python scripts/check-release-version.py` | `release version consistent: 0.1.1` |
+| Tests | `uv run --frozen pytest -q --cov=packages --cov=src --cov-report=term-missing --cov-fail-under=96` | 1501 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+| Contract test on Node.js 26 | `uv run --frozen pytest tests/contract -q -m azmcp` with Node.js 26.13.1 first on `PATH` | 1 passed: Azure MCP Server 3.0.0 started through `npx` and its `tools/list` matched the snapshot |
+| Documentation site links | `uv run --frozen --group docs python scripts/build-pages.py` | 23 pages built; every internal link and fragment resolves |
+| Workflow syntax | `actionlint` 1.7.12 (the `actionlint-py` package) on the five changed workflows, ignoring only its unknown-label message for `ubuntu-26.04` | No findings |
+| Workflow rules | `zizmor` 1.31.1 `--offline .github/workflows` | One low finding (`self-repository` in `rehearse-self-merging-pr.yml`), the same on `main`; none in a changed file |
+| Image build | `docker build -f infrastructure/docker/Dockerfile ...` | Built from a copy of the Dockerfile that differs in one line only: the `pip install` step reads the session's network proxy certificate through a build secret, which this sandbox needs to reach PyPI. `python --version` in the image prints `Python 3.15.2` |
+| The `ci.yml` `image` job's checks, by hand | the same `docker run` and `curl` lines as the job | Refused to start with `AZURE_CLIENT_SECRET`; no `pip`; user id 10001; refused to start unauthenticated on every interface; the lab opt-out answers `/api/health` with `"edition":"appliance"`; with sign-in on, `/api/health` answers `"auth":"entra"` and `/api/nope` without a token answers 401 |
+| Image scan | Trivy 0.76.1, by the same digest as `scripts/scan-image.sh`, run by hand with the proxy certificate mounted (the script itself could not download the vulnerability database through the proxy) | Gate (`--ignore-unfixed`, HIGH and CRITICAL, `.trivyignore.yaml`): no findings. Register check: three HIGH findings that `.trivyignore.yaml` does not list and that have no fix yet, `CVE-2026-119373`, `CVE-2026-119374` and `CVE-2026-119379` in `libsqlite3-0` 3.46.1-7+deb13u2. The old base `python:3.14.10-slim-trixie@sha256:af8a5aa1...7cb1d` carries the same three, so they are not new with this change |
+
+Not run in this session: `scripts/scan-image.sh` itself (it stops at the vulnerability database download behind this
+sandbox's proxy; `image-scan.yml` runs it on the pull request because the change touches `infrastructure/docker/**`),
+hadolint, and the workflows themselves on GitHub, which run on the pull request. The three `libsqlite3-0` findings need
+an owner's decision (an entry in `.trivyignore.yaml` with a reason, or waiting for Debian's fix); they were present
+before this change.

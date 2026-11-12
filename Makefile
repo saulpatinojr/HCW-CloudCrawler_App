@@ -2,7 +2,7 @@
 .PHONY: setup lock lint test test-contract run run-recorded run-stdio image clean
 
 setup:
-	uv python pin 3.14.6
+	uv python pin 3.15
 	uv sync --all-packages
 
 lock:
@@ -19,7 +19,7 @@ lint:
 test:
 	uv run pytest -q --cov=packages --cov=src --cov-report=term-missing
 
-# Starts the real Azure MCP Server 3.0.0 through npx (Node.js 22 and network needed; no Azure sign-in).
+# Starts the real Azure MCP Server 3.0.0 through npx (Node.js 26 and network needed; no Azure sign-in).
 test-contract:
 	uv run pytest tests/contract -q -m azmcp
 
