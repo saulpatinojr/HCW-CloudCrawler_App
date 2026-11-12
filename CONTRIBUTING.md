@@ -25,13 +25,16 @@ and agents follow the same rules. `README.md` is the overview.
 | `tests/` | Unit, security, acceptance and contract suites (the engine also has tests under its own folder). |
 | `infrastructure/docker/` | The appliance image and its pinned base image. |
 | `.github/workflows/` | CI, security scans, the weekly image scan, CodeQL, dependency review and the release workflows. |
-| `docs/adr/` | Decision records. Copy `docs/adr/template.md`; the next number is 0005. |
+| `docs/adr/` | Decision records. Copy `docs/adr/template.md`; the next number is 0007. |
 
 ## Set up and check your change
 
-You need Python 3.14.6 (the repository pins it; the packages accept 3.14.6 up to, but not including, 3.16) and [uv](https://docs.astral.sh/uv/). Node.js 22 is needed only for the
-Azure MCP contract test. The `Makefile` targets run in bash; on Windows, run the `uv run ...` lines in PowerShell
-directly (they are the same commands).
+You need Python 3.15 (the repository pins the 3.15 line in `.python-version`; the packages accept 3.15.1 up to, but not
+including, 3.16) and [uv](https://docs.astral.sh/uv/). uv 0.11.32, the version the workflows install, cannot download a
+finished 3.15 release by itself, so install CPython 3.15 first (from [python.org](https://www.python.org/downloads/), or
+with a newer uv: `uvx --from uv uv python install 3.15`); uv then finds it. Node.js 26 is needed only for the Azure
+MCP contract test (Node.js 22 or later works). The `Makefile` targets run in bash; on Windows, run the `uv run ...`
+lines in PowerShell directly (they are the same commands).
 
 ```bash
 uv sync --frozen --all-packages

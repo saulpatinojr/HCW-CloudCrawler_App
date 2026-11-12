@@ -30,7 +30,7 @@ _SUBSCRIPTION_PATH = re.compile(r"/subscriptions/[^\s\"']*", re.IGNORECASE)
 # characters of the run in front of that `eyJ` (the `20` of `Bearer%20eyJ...`) are redacted as well. What makes it
 # linear is the look-behind (a run is entered once, at its start) together with the prefix skip (the run is read once
 # from there). The possessive quantifiers are defence in depth: with the look-behind in place the greedy form is linear
-# too. Possessive quantifiers need Python 3.11 or later; the engine requires 3.14.
+# too. Possessive quantifiers need Python 3.11 or later; the engine requires 3.15.
 #
 # The look-behind reads the original text, including characters an earlier match has already consumed. The
 # `AccountKey=`, `SharedAccessKey=` and `sig=` values and the private key header can stop in the middle of a run (their

@@ -41,7 +41,7 @@ def server_params(env: Mapping[str, str] | None = None, *, npx: str | None = Non
     env = dict(os.environ if env is None else env)
     command = npx or shutil.which("npx", path=env.get("PATH"))
     if command is None:
-        raise FileNotFoundError("npx is not on PATH; Node.js 22 is needed to start Azure MCP Server")
+        raise FileNotFoundError("npx is not on PATH; Node.js 26 (22 or later) is needed to start Azure MCP Server")
     args = [
         "-y",
         f"@azure/mcp@{PIN}",
