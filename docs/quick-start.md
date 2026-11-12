@@ -9,7 +9,8 @@ with the repository.
 
 - [Git](https://git-scm.com/install/windows) is installed. Check with `git --version`.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed. It installs the right Python and the exact
-  package versions for you. Check with `uv --version`.
+  package versions for you. Check with `uv --version`: installing Python 3.15 for you needs uv 0.13.6 or newer. With an
+  older uv, install Python 3.15 first ([python.org](https://www.python.org/downloads/)).
 - Nothing else is using port 8080 on your computer.
 
 ## Steps
@@ -33,7 +34,8 @@ The steps work in PowerShell 7 and in Git Bash. Where a command differs, both ar
     You should see nothing; the prompt now ends in `HCW-CloudCrawler_App`.
 
 3. **Install the packages.** The first run can take a minute, because uv also downloads the Python version the project
-   pins ([how uv chooses Python](https://docs.astral.sh/uv/concepts/python-versions/)).
+   pins ([how uv chooses Python](https://docs.astral.sh/uv/concepts/python-versions/)). That download needs uv 0.13.6 or
+   newer; with an older uv, install Python 3.15 first, or uv stops with `No interpreter found for Python >=3.15.1, <3.16`.
 
     ```text
     uv sync --frozen --all-packages

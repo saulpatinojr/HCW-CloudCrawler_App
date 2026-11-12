@@ -25,7 +25,7 @@ and agents follow the same rules. `README.md` is the overview.
 | `tests/` | Unit, security, acceptance and contract suites (the engine also has tests under its own folder). |
 | `infrastructure/docker/` | The appliance image and its pinned base image. |
 | `.github/workflows/` | CI, security scans, the weekly image scan, CodeQL, dependency review and the release workflows. |
-| `docs/adr/` | Decision records. Copy `docs/adr/template.md`; the next number is 0005. |
+| `docs/adr/` | Decision records. Copy `docs/adr/template.md`; the next number is 0007. |
 
 ## Set up and check your change
 
