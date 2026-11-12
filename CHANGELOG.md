@@ -17,7 +17,8 @@ once, merge one before rebasing the next.
   `python`, `pip` or `uv` on the runner before its job has run `actions/setup-node` or `actions/setup-python`, so the
   runner image's own, older Node.js or Python cannot come back unnoticed
   ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)); a deliberate
-  exception needs an entry with a reason in its allow-list, which is empty today.
+  exception needs an entry with a reason in its allow-list, which is empty today. A step that starts a runtime through
+  a program it runs (the `contract` job's test starts `npx`) is listed in `INDIRECT_RUNTIME` and checked the same way.
 - `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
   line of `infrastructure/docker/Dockerfile` agree: each `FROM` must be `PYTHON_IMAGE@PYTHON_IMAGE_DIGEST` (or an
   earlier stage of the same file), the digest must be `sha256:` and 64 hex characters, and the tag must carry

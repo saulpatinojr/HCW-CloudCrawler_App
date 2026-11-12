@@ -12,9 +12,10 @@ A command counts when it is in command position on a line of a `run:` step: at t
 `xargs`, `exec`, `time`, `!`, `if`, `then`, `do` and the like). It does not count inside a quoted string (unless the
 string runs a command with `$(` or `<(`), on a comment line, or as an argument (`docker run image python ...`). The
 set-up step must come before the first such step. Limits, on purpose: a job that runs in a `container:` uses that
-image's runtime and is not checked; a script a step calls (a `.sh` or `.py` file) is not read; a set-up step with its
-own `if:` counts as done, so give it the same condition as the steps that need it; and a composite action is checked on
-its own steps only, because the job that calls it is in another file. The repository has no YAML library (see
+image's runtime and is not checked; a script or program a step calls is not read, so a step that starts a runtime that
+way is listed in INDIRECT_RUNTIME; a set-up step with its own `if:` counts as done, so give it the same condition as the
+steps that need it; and a composite action is checked on its own steps only, because the job that calls it is in
+another file. The repository has no YAML library (see
 test_workflows.py), so the files are read by indentation; the last tests check that the reader saw every step."""
 
 from __future__ import annotations
@@ -33,6 +34,14 @@ ACTIONS = ROOT / ".github" / "actions"
 # a reviewer can check. Keyed by step, not job, so a new step in the same job is still checked. Empty on 2026-11-12:
 # every step that runs Node.js, Python or uv sets its version up first.
 RUNNER_DEFAULT_ALLOWED: dict[str, str] = {}
+
+# Steps that start a runtime indirectly, through a program the step runs, which the command check cannot see in the
+# `run:` text. Each counts as running that runtime, so its set-up step must come first. Same keys, each with a reason.
+INDIRECT_RUNTIME: dict[str, str] = {
+    "ci.yml > contract > Azure MCP Server 3.0.0 tools/list matches the committed snapshot (ADR 0001) > node": (
+        "the azmcp test starts Azure MCP Server 3.0.0 with npx (src/cloud_crawler_appliance/mcp_host/contract.py)"
+    ),
+}
 
 # Where a command may start: the line's start or an opening/joining character, then any `NAME=value` assignments and
 # words that run the next word (`env FOO=1 node`, `sudo node`, `if node ...; then`).
@@ -151,8 +160,14 @@ def action_jobs(text: str) -> dict[str, Job]:
     return {"(composite)": Job(steps=_steps(lines, steps_at, end))}
 
 
-def unset_steps(file: str, jobs: dict[str, Job]) -> list[str]:
-    """The steps that run a runtime before (or without) setting it up: "file > job > step > runtime"."""
+def step_key(file: str, job: str, step: Step, i: int, kind: str) -> str:
+    return f"{file} > {job} > {step.name or f'step {i + 1}'} > {kind}"
+
+
+def unset_steps(file: str, jobs: dict[str, Job], indirect: dict[str, str] | None = None) -> list[str]:
+    """The steps that run a runtime before (or without) setting it up: "file > job > step > runtime". A step named in
+    `indirect` counts as running its runtime even when its `run:` text does not show it."""
+    indirect = INDIRECT_RUNTIME if indirect is None else indirect
     found = []
     for name, job in jobs.items():
         if job.container:
@@ -160,8 +175,9 @@ def unset_steps(file: str, jobs: dict[str, Job]) -> list[str]:
         for kind in COMMAND:
             setup = next((i for i, step in enumerate(job.steps) if SETUP[kind].search(step.uses)), None)
             for i, step in enumerate(job.steps):
-                if (setup is None or setup > i) and runs_runtime(step.run, kind):
-                    found.append(f"{file} > {name} > {step.name or f'step {i + 1}'} > {kind}")
+                key = step_key(file, name, step, i, kind)
+                if (setup is None or setup > i) and (runs_runtime(step.run, kind) or key in indirect):
+                    found.append(key)
     return found
 
 
@@ -310,6 +326,27 @@ def test_the_reader_sees_every_step_of_every_file():
 def test_every_step_that_runs_node_or_python_comes_after_its_version_is_set_up():
     unset = [entry for file, (_, jobs) in every_file().items() for entry in unset_steps(file, jobs)]
     assert [entry for entry in unset if entry not in RUNNER_DEFAULT_ALLOWED] == []
+
+
+def test_an_indirect_step_counts_as_running_its_runtime():
+    jobs = workflow_jobs(SAMPLE)
+    key = "x.yml > good > Install > node"
+    assert key in unset_steps("x.yml", jobs, {key: "a script it runs starts node"})
+    assert key not in unset_steps("x.yml", jobs, {})
+
+
+def test_every_indirect_step_still_exists():
+    """So a renamed or removed step cannot leave the indirect list pointing at nothing."""
+    keys = {
+        step_key(file, name, step, i, kind)
+        for file, (_, jobs) in every_file().items()
+        for name, job in jobs.items()
+        for i, step in enumerate(job.steps)
+        for kind in COMMAND
+    }
+    for entry, reason in INDIRECT_RUNTIME.items():
+        assert reason.strip(), entry
+        assert entry in keys, entry
 
 
 def test_every_allowed_exception_still_exists():
