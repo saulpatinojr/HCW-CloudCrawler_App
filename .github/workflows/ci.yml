@@ -27,7 +27,8 @@ jobs:
       - run: uv sync --frozen --all-packages
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: bash scripts/check-lockfiles.sh
+      - name: requirements.lock.txt matches uv.lock
+        run: bash scripts/check-lockfiles.sh
       - name: versions.env and every FROM of the Dockerfile name the same base image digest
         run: bash scripts/check-versions.sh
       - name: Every place that names the release version agrees (a v* tag can never be corrected)

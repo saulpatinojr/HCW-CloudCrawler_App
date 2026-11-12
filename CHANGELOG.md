@@ -21,7 +21,9 @@ once, merge one before rebasing the next.
   a program it runs (the `contract` job's test starts `npx`) is listed in `INDIRECT_RUNTIME` and checked the same way.
   A set-up step with its own `if:` covers only later steps under the same condition (or one of its top-level `||`
   terms), a command in backticks counts like one in `$(...)`, and every set-up step must ask for Python 3.15 or
-  Node.js 26 or newer.
+  Node.js 26 or newer. A step's condition now counts GitHub's unwritten `success()`, a quoted `NAME="a b"` prefix
+  counts, setup-uv sets Python up only with a `python-version`, an exact version must meet the full floor (Node.js
+  26.11.0), and the two lockfile steps that run uv through a script are listed in `INDIRECT_RUNTIME`.
 - `.qlty/qlty.toml` pins qlty's ruff to 0.17.4, the version in `uv.lock`: qlty's own default, 0.14.6, cannot read
   `target-version = "py315"`, so `qlty check` errored on the whole pull request.
 - `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
