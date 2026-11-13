@@ -461,3 +461,23 @@ Nothing reached Azure.
 Not run in this session: the workflows themselves on GitHub (they run on the pull request), the release workflow's
 attestation and publishing jobs, and the image build (no Dockerfile changed: the image installs from
 `requirements.lock.txt` with pip and never runs uv).
+
+## Ran for the finished workflow runtime check
+
+Run on 2026-11-13 on the branch `claude/runtime-check-port-1707`, from `main` at `7e40c5a`, on Linux with CPython
+3.15.2 and uv 0.13.7 (`UV_PYTHON_DOWNLOADS=never`). The change replaces `tests/unit/test_workflow_runtime_setup.py`
+with the finished copy of the check ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)),
+keeping this repository's lists and its check of the composite action under `.github/actions`. Nothing reached Azure.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Install | `uv sync --all-packages` | Exit 0 |
+| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 92 files already formatted |
+| Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 1857 passed, 1 deselected; coverage 98 percent. 356 of them are in `tests/unit/test_workflow_runtime_setup.py` |
+| Same logic as the canonical copies | the Python syntax trees of this file and `saulpatinojr/HCW-NetworkEyes_App`'s `tests/security/test_workflow_runtime_setup.py` compared with the lists, docstrings and this repository's composite-action block left out; then 21,840 shared cases (command reading, pipx, conditions) and the 97 workflow files of the nine HCW repositories run through both Python copies, the website's JavaScript copy and the two MigrateOrchestrator copies | Identical; 0 disagreements |
+| New findings in this repository | the check over `.github/workflows/*.yml` and `.github/actions/*/action.yml`, with `INDIRECT_RUNTIME` empty, then every script a step calls read one level deep | None found directly; the three `INDIRECT_RUNTIME` entries are still the only steps that start a runtime through a program |
+
+Not run in this session: the workflows themselves on GitHub (they run on the pull request). The composite action
+`.github/actions/self-merging-pr` runs only `gh`; adding a `python3` line and an `npx` step to a copy of it made the
+check name both steps.

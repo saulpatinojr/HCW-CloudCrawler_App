@@ -43,6 +43,29 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- The workflow runtime check, `tests/unit/test_workflow_runtime_setup.py`, is now the finished copy every HCW
+  repository runs ([HCW-HybridCloudWorks issue
+  #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). It is the test that fails when a workflow
+  step runs Node.js or Python before its job has chosen the version, so the runner's own older versions cannot slip
+  back in unnoticed. It now carries the same logic and test cases as the original (the website's
+  `scripts/workflow-runtime-setup.test.mjs`), taken from the Python copy in `saulpatinojr/HCW-NetworkEyes_App`;
+  only the lists of this repository's own steps are its own.
+  What the finished copy reads that this one did not: `yarn` and `pnpm` count as Node.js, and `pytest` and `pipx`
+  as Python; a step that runs `pipx` must also say which Python pipx uses (`--python`, or `PIPX_DEFAULT_PYTHON` in
+  front of it or in an `env:` block), because pipx otherwise builds its tools on the runner's own Python even after
+  `actions/setup-python`; the script given to `bash -c` or `sh -c` is read, while the same words handed to a
+  container stay the container's; more words that run the next word are followed (`nohup`, `stdbuf`, `timeout`,
+  `env -S`, `command -p`, `--`); and a set-up step's own `if:` covers a later step only when that step's condition
+  makes it true, never by matching text that a step can change (`env.*`, `steps.*` of a later step).
+  Two empty lists join it: `PIPX_ALLOWED` and `BELOW_FLOOR_ALLOWED`, for a deliberate exception with its reason.
+  This repository's copy keeps one addition of its own from before: it also checks the steps of each composite
+  action under `.github/actions` (the website's and the add-ons' copies read workflows only), now with the same
+  reader as the workflows.
+  Nothing new was found here: every step already sets its version up first, and no workflow runs pipx. The three
+  steps that start a runtime through a program (the `contract` job's test, which starts `npx`, and the two lockfile
+  steps that run uv through a script) stay in `INDIRECT_RUNTIME`; every other script a workflow calls was read on
+  2026-11-13 and starts nothing the check cannot see. No workflow changed. The AddOn already runs the identical
+  check, so its `docs/whats-new-upstream.md` needs no entry.
 - **uv 0.11.32 to 0.13.7 in every workflow** ([HCW-HybridCloudWorks issue
   #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). uv is the tool that installs this
   repository's Python packages and keeps `uv.lock` (the file that records the exact versions installed). The old
