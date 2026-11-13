@@ -612,7 +612,7 @@ def test_node_in_command_position_counts(line):
         "uv sync --frozen --all-packages",
         "uvx zizmor .github",
         "set -e; uv run pytest",
-        'python -m pip install "uv==0.11.32"',
+        'python -m pip install "uv==0.13.7"',
         "version=`python3 scripts/check.py`",
         'echo "`python3 --version`"',
         'FOO="bar baz" python3 check.py',
@@ -691,7 +691,7 @@ jobs:
       - uses: actions/setup-python@abc
         with: { python-version: "3.15" }
       - name: Install
-        run: python -m pip install "uv==0.11.32"
+        run: python -m pip install "uv==0.13.7"
       - uses: actions/setup-node@abc
       - run: >-
           npx something

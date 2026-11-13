@@ -28,7 +28,7 @@ concurrency:
   group: dependabot-lockfiles-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 env:
-  UV_VERSION: "0.11.32"
+  UV_VERSION: "0.13.7"
   PYTHON_VERSION: "3.15"
 jobs:
   export:

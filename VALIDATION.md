@@ -435,3 +435,29 @@ sandbox's proxy; `image-scan.yml` runs it on the pull request because the change
 hadolint, and the workflows themselves on GitHub, which run on the pull request. The three `libsqlite3-0` findings need
 an owner's decision (an entry in `.trivyignore.yaml` with a reason, or waiting for Debian's fix); they were present
 before this change.
+
+## Ran for the move to uv 0.13.7
+
+Run on 2026-11-13 on the branch `claude/runtime-followups-1707`, from `main` at `c943687`, on Linux with CPython 3.15.2 and
+uv 0.13.7 (installed with `pip install uv==0.13.7` into a scratch virtual environment, with `UV_PYTHON_DOWNLOADS=never`
+so uv used the installed 3.15.2). The change moves every workflow's uv from 0.11.32 to 0.13.7, the version
+`saulpatinojr/HCW-NetworkEyes_App` uses ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
+Nothing reached Azure.
+
+| Check | Command | Result |
+| --- | --- | --- |
+| The lock still matches | `uv lock --check`, then `uv lock` and `bash scripts/export-lockfiles.sh` | `Resolved 70 packages`; `uv.lock` (format `revision = 3`) and `requirements.lock.txt` unchanged (`git status` clean for both) |
+| Install | `uv sync --all-packages` | Exit 0; only the two workspace packages were rebuilt |
+| Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 92 files already formatted |
+| Lockfile export | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 1632 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. `tests/unit/test_workflow_runtime_setup.py` and `tests/unit/test_workflows.py` alone: 190 passed |
+| The release build flag exists in 0.13.7 | `uv build --help` | Lists `--no-create-gitignore`, "Do not create a `.gitignore` file in the output directory" |
+| Engine wheel | `uv build --no-create-gitignore --package cloud-crawler-core --out-dir <scratch>/dist` then `python -I scripts/verify-core-wheel.py` on the wheel | `cloud_crawler_core-0.1.1` wheel and sdist built, no `.gitignore` in the output folder; `wheel verified: ... 24 files, requires ['Requires-Dist: pydantic<3,>=2.14']` |
+| SBOM | `uv export --locked --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 -o <scratch>/sbom.cdx.json`, compared with the same command under uv 0.11.32 | The same five components (`annotated-types` 0.8.0, `pydantic` 2.14.3, `pydantic-core` 2.50.4, `typing-extensions` 4.16.0, `typing-inspection` 0.4.4). uv 0.13.7 adds an `externalReferences` list (each package's download URLs and sha256 hashes) to every component and names itself in `metadata.tools`, so the file is 19,051 bytes instead of 2,281. Nothing in this repository reads the SBOM's structure; `publish-core.yml` only checks that it is not empty and attests it |
+| Documentation site links | `uv run --locked --group docs python scripts/build-pages.py` | 23 pages built; every internal link and fragment resolves |
+| Workflow syntax | `actionlint` 1.7.12 (the `actionlint-py` package) on the five changed workflows, ignoring only its unknown-label message for `ubuntu-26.04` | No findings |
+| Workflow rules | `zizmor` 1.31.1 `--offline .github/workflows` | One low finding (`self-repository` in `rehearse-self-merging-pr.yml`), the same as on `main`; none in a changed file |
+
+Not run in this session: the workflows themselves on GitHub (they run on the pull request), the release workflow's
+attestation and publishing jobs, and the image build (no Dockerfile changed: the image installs from
+`requirements.lock.txt` with pip and never runs uv).
