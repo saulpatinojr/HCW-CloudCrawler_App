@@ -30,7 +30,7 @@ and agents follow the same rules. `README.md` is the overview.
 ## Set up and check your change
 
 You need Python 3.15 (the repository pins the 3.15 line in `.python-version`; the packages accept 3.15.1 up to, but not
-including, 3.16) and [uv](https://docs.astral.sh/uv/). uv 0.13.5 or newer (the workflows install 0.13.7) downloads
+including, 3.16) and [uv](https://docs.astral.sh/uv/). uv 0.13.5 or newer (the workflows install 0.13.8) downloads
 Python 3.15.1 or later for you. An older uv cannot download a 3.15 release the packages accept, so with one install
 CPython 3.15 first (from [python.org](https://www.python.org/downloads/), or with a newer uv: `uvx --from uv uv python install
 3.15`); uv then finds it. Node.js 26 is needed only for the Azure

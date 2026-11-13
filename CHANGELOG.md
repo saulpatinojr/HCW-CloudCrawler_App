@@ -105,6 +105,18 @@ once, merge one before rebasing the next.
   steps that run uv through a script) stay in `INDIRECT_RUNTIME`; every other script a workflow calls was read on
   2026-11-13 and starts nothing the check cannot see. No workflow changed. The AddOn already runs the identical
   check, so its `docs/whats-new-upstream.md` needs no entry.
+- **uv 0.13.7 to 0.13.8 in every workflow** ([HCW-HybridCloudWorks issue
+  #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). uv is the tool that installs this
+  repository's Python packages and keeps `uv.lock` (the file that records the exact versions installed). 0.13.8 is a
+  small bug-fix release ([its release notes](https://github.com/astral-sh/uv/blob/0.13.8/CHANGELOG.md)) and does not
+  change how the lock file is written. The pin moved in the same places as last time: `ci.yml` and
+  `dependabot-lockfiles.yml` (`UV_VERSION`), `security.yml`, `pages.yml` and both install steps of `publish-core.yml`;
+  `tests/unit/test_workflows.py` now expects 0.13.8 in the release workflow (the `--no-create-gitignore` build flag it
+  guards is still there in 0.13.8), and the uv wording in `README.md` and `CONTRIBUTING.md` follows. No lockfile
+  changed. The engine wheel and its source archive built by 0.13.8 are byte-identical to 0.13.7's; the software bill
+  of materials (`cloud-crawler-core.cdx.json`) lists the same five packages, and only its tool version line, its
+  random serial number and its timestamp differ (the last two differ on every run anyway). `VALIDATION.md` has the
+  details.
 - **uv 0.11.32 to 0.13.7 in every workflow** ([HCW-HybridCloudWorks issue
   #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). uv is the tool that installs this
   repository's Python packages and keeps `uv.lock` (the file that records the exact versions installed). The old
