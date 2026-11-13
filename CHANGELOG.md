@@ -43,6 +43,7 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- **opentelemetry-api 1.45.2 fixes CVE-2026-126360.** The `pip-audit` check (it looks up every locked Python package in the public list of known security problems) failed on 2026-11-13 because the lock still held `opentelemetry-api` 1.45.1, for which CVE-2026-126360 was published with 1.45.2 as the fix. `uv lock --upgrade-package opentelemetry-api` moves only that package; nothing else in the lock changes, apart from the lock format number uv 0.13.7 writes (3 to 5), and `requirements.lock.txt` is exported again from it. Found during the workflow runtime-check work ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)), not tracked by an issue of its own.
 - The workflow runtime check is refreshed to round two
   ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
   `tests/unit/test_workflow_runtime_setup.py` is the test that fails when a workflow step runs Node.js or Python before
