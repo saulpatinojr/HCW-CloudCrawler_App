@@ -247,7 +247,7 @@ def test_the_wheel_verifier_needs_no_download_in_the_privileged_job():
     publish = text(RELEASE_FILE)
     assert "--with pydantic" not in publish, "verify-core-wheel.py imports only the standard library"
     assert "--no-create-gitignore" in publish, "dist/.gitignore would become an attested subject"
-    assert '"uv==0.11.32"' in publish, "the flag was checked against uv 0.11.32 (VALIDATION.md)"
+    assert '"uv==0.13.7"' in publish, "the flag was checked against uv 0.13.7 (VALIDATION.md)"
 
 
 def test_the_attestations_are_verified_strictly_in_the_attest_job_and_again_before_publishing():

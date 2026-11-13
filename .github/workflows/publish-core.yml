@@ -68,7 +68,7 @@ jobs:
         with: { persist-credentials: false, fetch-depth: 0 }
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with: { python-version: "3.15" }
-      - run: python -m pip install "uv==0.11.32"
+      - run: python -m pip install "uv==0.13.7"
       - name: The tag, the versions and the changelog agree (a dry run runs the same checks as the tag), and the notes
         env: { EVENT_NAME: "${{ github.event_name }}", REF_NAME: "${{ github.ref_name }}" }
         run: |
@@ -185,7 +185,7 @@ jobs:
     steps:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with: { python-version: "3.15" }
-      - run: python -m pip install "uv==0.11.32"
+      - run: python -m pip install "uv==0.13.7"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: { name: cloud-crawler-core-release-files, path: release-files }
       - name: The files are the ones that were built and attested

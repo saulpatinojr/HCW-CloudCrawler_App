@@ -117,9 +117,9 @@ The roadmap is section 22 of the proposal; nothing here is production.
 
 Prerequisites: Python 3.15.1 or later on the 3.15 line, `uv`, and Node.js 26 for the
 contract test (it runs `npx @azure/mcp@3.0.0`; Node.js 22 or later works).
-uv 0.13.6 or newer downloads Python 3.15 for you. uv 0.11, the version the
-workflows install, can only download a 3.15 beta, which the project refuses, so
-with uv 0.11 install Python 3.15 first, as
+uv 0.13.6 or newer downloads Python 3.15 for you (the workflows install uv
+0.13.7). An older uv can only download a 3.15 beta, which the project refuses,
+so with an older uv install Python 3.15 first, as
 [CONTRIBUTING.md](CONTRIBUTING.md#set-up-and-check-your-change) describes.
 
 ```bash

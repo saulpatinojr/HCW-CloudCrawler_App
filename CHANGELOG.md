@@ -43,6 +43,20 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- **uv 0.11.32 to 0.13.7 in every workflow**
+  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). uv is the
+  tool that installs this repository's Python packages and keeps `uv.lock` (the file that records the exact versions
+  installed). The old version could download only a beta of Python 3.15; 0.13.6 is the first uv that can fetch a stable
+  3.15, and 0.13.7 is the version `saulpatinojr/HCW-NetworkEyes_App` already uses, so the App repositories now share one
+  uv. The pin moved in `ci.yml` and `dependabot-lockfiles.yml` (`UV_VERSION`), `security.yml`, `pages.yml` and both
+  install steps of `publish-core.yml`; `tests/unit/test_workflows.py` now expects 0.13.7 in the release workflow (the
+  `--no-create-gitignore` build flag it guards was checked again in 0.13.7), and the uv wording in `README.md` and
+  `CONTRIBUTING.md` follows. `uv lock --check` passes with uv 0.13.7 and a fresh export leaves `uv.lock` and
+  `requirements.lock.txt` exactly as they were, so no lockfile changed. No Dockerfile copies uv (the image installs from
+  the exported lock file with pip), so the image does not change. One visible difference: the release's software bill
+  of materials (`cloud-crawler-core.cdx.json`, the list of what the engine wheel depends on) made by uv 0.13.7 lists the
+  same five packages but also gives each one's download addresses and sha256 hashes, so the file grows from about 2 KB
+  to about 19 KB. `VALIDATION.md` has the details.
 - Python 3.15 and Node.js 26, the HCW runtime floors (the newest Python line and the newest Node.js long-term-support
   line; [HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Before,
   this repository ran Python 3.14 and its contract test ran on Node.js 22, while the website and the AddOns were
