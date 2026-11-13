@@ -90,6 +90,15 @@ once, merge one before rebasing the next.
   ruleset still requires one approving review, as `.github/workflows/repository-admin.yml` sets it; lowering it there
   and in the live ruleset is the owner's step.
 
+### Security
+
+- The image scan's accepted-risk file (`.trivyignore.yaml`) accepts CVE-2026-119373, CVE-2026-119374 and
+  CVE-2026-119379 in `libsqlite3-0` 3.46.1-7+deb13u2 until 2026-12-13, the owner's decision on #80. Each needs a
+  program that feeds SQLite crafted full-text-search data, an attacker's database file or an attacker's changeset;
+  nothing in the appliance uses SQLite (importing every appliance and engine module, 34, loads neither Python's
+  `sqlite3` module nor the C library; checked 2026-11-13). Debian has marked them minor and will not fix them in
+  Debian 13. The weekly scan had warned about the three since 2026-11-09.
+
 ## [0.1.1] - 2026-11-04
 
 ### Security
