@@ -462,35 +462,6 @@ Not run in this session: the workflows themselves on GitHub (they run on the pul
 attestation and publishing jobs, and the image build (no Dockerfile changed: the image installs from
 `requirements.lock.txt` with pip and never runs uv).
 
-## Ran for the move to uv 0.13.8
-
-Run on 2026-11-13 on the branch `claude/uv-0138-1707`, from `main` at `bd6c1ad`, on Linux with CPython 3.15.2 and
-uv 0.13.8 (installed with `pip install uv==0.13.8` into a scratch virtual environment, with `UV_PYTHON_DOWNLOADS=never`
-so uv used the installed 3.15.2). The change moves every workflow's uv from 0.13.7 to 0.13.8, a bug-fix release with no
-change to the lock format ([release notes](https://github.com/astral-sh/uv/blob/0.13.8/CHANGELOG.md);
-[HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Nothing reached
-Azure.
-
-| Check | Ran | Command | Result |
-| --- | --- | --- | --- |
-| The pinned uv is the one on PyPI | yes | `pip download --no-deps --only-binary=:all: --platform manylinux_2_17_x86_64 uv==0.13.8` | `uv-0.13.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`, sha256 `e18a57b8b352eb7c8feb317b9f6f533c8f0ad9673fd6cf34bbe3cf1a9f6a8984` |
-| The lock still matches | yes | `uv lock --check` | `Resolved 70 packages`, exit 0; `uv.lock` unchanged |
-| Install | yes | `uv sync --all-packages` | Exit 0, `Checked 67 packages` |
-| Lint and format | yes | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 92 files already formatted |
-| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
-| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2200 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
-| The release build flag exists in 0.13.8 | yes | `uv build --help` | Lists `--no-create-gitignore`, "Do not create a `.gitignore` file in the output directory" |
-| Engine wheel, 0.13.7 against 0.13.8 | yes | `uv build --no-create-gitignore --package cloud-crawler-core --out-dir dist` in two scratch copies of `main`, one per uv, then `python -I scripts/verify-core-wheel.py` on each wheel | Both verified (24 files, `Requires-Dist: pydantic<3,>=2.14`), no `.gitignore` in the output folder. Wheel and sdist byte-identical: `cloud_crawler_core-0.1.1-py3-none-any.whl` sha256 `68945ea9b5cb1a61b5016c1d7004798643d91ecef659680452ad45e8c408fd0a`, `cloud_crawler_core-0.1.1.tar.gz` sha256 `c67f8f1f15102007d6049eeb751b59ab8d29bdb02c017d54ac08794ea06262c6` |
-| SBOM, 0.13.7 against 0.13.8 | yes | `uv export --locked --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 -o sbom/cloud-crawler-core.cdx.json` in the same two copies | Not byte-identical, but the same size (19,051 bytes) and the same five components (`annotated-types` 0.8.0, `pydantic` 2.14.3, `pydantic-core` 2.50.4, `typing-extensions` 4.16.0, `typing-inspection` 0.4.4). Only three lines differ: `metadata.tools` names uv 0.13.8, and `serialNumber` and `timestamp`, which are new on every run with either version |
-| Documentation site links | yes | `uv run --locked --group docs python scripts/build-pages.py` (in the 0.13.8 scratch copy) | 23 pages built; every internal link and fragment resolves |
-| Workflow syntax | yes | `actionlint` 1.7.12 (the `actionlint-py` package) on the five changed workflows, ignoring only its unknown-label message for `ubuntu-26.04` | No findings |
-| Workflow rules | yes | `zizmor` 1.31.1 `--offline .github/workflows` | One low finding (`self-repository` in `rehearse-self-merging-pr.yml`), the same as on `main`; none in a changed file |
-| Azure MCP contract test | no | `make test-contract` | Not run: it starts the real Azure MCP server through `npx`, and nothing in it changed (uv does not take part) |
-| The workflows on GitHub, the release's attestation and publishing jobs | no | | They run on the pull request and on a release |
-
-uv 0.13.8, like 0.13.7, prints a warning that `UV_NATIVE_TLS` is deprecated; that variable is set by this session's
-sandbox, and no workflow or script in this repository sets it.
-
 ## Ran for the finished workflow runtime check
 
 Run on 2026-11-13 on the branch `claude/runtime-check-port-1707`, from `main` at `7e40c5a`, on Linux with CPython
@@ -535,3 +506,32 @@ which the shared copy now reads itself. Nothing reached Azure.
 Not run in this session: the workflows themselves on GitHub (they run on the pull request). In a scratch copy of the
 CloudAssessor App's `.github` (not this working tree), a step added to its `self-merging-pr` action (the same as this
 one but for one action pin) that feeds `python3 x.py` to `bash` through a heredoc was named by the check.
+
+## Ran for the move to uv 0.13.8
+
+Run on 2026-11-13 on the branch `claude/uv-0138-1707`, from `main` at `bd6c1ad`, on Linux with CPython 3.15.2 and
+uv 0.13.8 (installed with `pip install uv==0.13.8` into a scratch virtual environment, with `UV_PYTHON_DOWNLOADS=never`
+so uv used the installed 3.15.2). The change moves every workflow's uv from 0.13.7 to 0.13.8, a bug-fix release with no
+change to the lock format ([release notes](https://github.com/astral-sh/uv/blob/0.13.8/CHANGELOG.md);
+[HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Nothing reached
+Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| The pinned uv is the one on PyPI | yes | `pip download --no-deps --only-binary=:all: --platform manylinux_2_17_x86_64 uv==0.13.8` | `uv-0.13.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl`, sha256 `e18a57b8b352eb7c8feb317b9f6f533c8f0ad9673fd6cf34bbe3cf1a9f6a8984` |
+| The lock still matches | yes | `uv lock --check` | `Resolved 70 packages`, exit 0; `uv.lock` unchanged |
+| Install | yes | `uv sync --all-packages` | Exit 0, `Checked 67 packages` |
+| Lint and format | yes | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 92 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2200 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+| The release build flag exists in 0.13.8 | yes | `uv build --help` | Lists `--no-create-gitignore`, "Do not create a `.gitignore` file in the output directory" |
+| Engine wheel, 0.13.7 against 0.13.8 | yes | `uv build --no-create-gitignore --package cloud-crawler-core --out-dir dist` in two scratch copies of `main`, one per uv, then `python -I scripts/verify-core-wheel.py` on each wheel | Both verified (24 files, `Requires-Dist: pydantic<3,>=2.14`), no `.gitignore` in the output folder. Wheel and sdist byte-identical: `cloud_crawler_core-0.1.1-py3-none-any.whl` sha256 `68945ea9b5cb1a61b5016c1d7004798643d91ecef659680452ad45e8c408fd0a`, `cloud_crawler_core-0.1.1.tar.gz` sha256 `c67f8f1f15102007d6049eeb751b59ab8d29bdb02c017d54ac08794ea06262c6` |
+| SBOM, 0.13.7 against 0.13.8 | yes | `uv export --locked --quiet --package cloud-crawler-core --no-dev --format cyclonedx1.5 -o sbom/cloud-crawler-core.cdx.json` in the same two copies | Not byte-identical, but the same size (19,051 bytes) and the same five components (`annotated-types` 0.8.0, `pydantic` 2.14.3, `pydantic-core` 2.50.4, `typing-extensions` 4.16.0, `typing-inspection` 0.4.4). Only three lines differ: `metadata.tools` names uv 0.13.8, and `serialNumber` and `timestamp`, which are new on every run with either version |
+| Documentation site links | yes | `uv run --locked --group docs python scripts/build-pages.py` (in the 0.13.8 scratch copy) | 23 pages built; every internal link and fragment resolves |
+| Workflow syntax | yes | `actionlint` 1.7.12 (the `actionlint-py` package) on the five changed workflows, ignoring only its unknown-label message for `ubuntu-26.04` | No findings |
+| Workflow rules | yes | `zizmor` 1.31.1 `--offline .github/workflows` | One low finding (`self-repository` in `rehearse-self-merging-pr.yml`), the same as on `main`; none in a changed file |
+| Azure MCP contract test | no | `make test-contract` | Not run: it starts the real Azure MCP server through `npx`, and nothing in it changed (uv does not take part) |
+| The workflows on GitHub, the release's attestation and publishing jobs | no | | They run on the pull request and on a release |
+
+uv 0.13.8, like 0.13.7, prints a warning that `UV_NATIVE_TLS` is deprecated; that variable is set by this session's
+sandbox, and no workflow or script in this repository sets it.
