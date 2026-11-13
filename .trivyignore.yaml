@@ -33,31 +33,31 @@ vulnerabilities:
     expired_at: 2027-01-23
   - id: CVE-2026-16742
     statement: >-
-      systemd (libsystemd0, libudev1 257.13-1~deb13u1). The flaw is in systemd-homed. Only the two client libraries
-      are installed; systemd-homed and homectl are absent from the image, and a container has no homed-managed users.
-      Debian has no fix yet.
+      systemd (libsystemd0, libudev1 257.13-1~deb13u1). The flaw is in systemd-homed. Only the two client libraries are
+      installed; systemd-homed and homectl are absent from the image, and a container has no homed-managed users. Debian
+      has no fix yet.
     owner: saulpatinojr
     expired_at: 2027-01-23
   - id: CVE-2026-54369
     statement: >-
-      acl (libacl1 2.3.2-2+b1). The symlink flaw needs a privileged program to call the libacl path functions on a
-      path an attacker controls. getfacl and setfacl are absent, no Python extension module links libacl, and the
-      appliance has no privileged process (uid 10001). Debian has no fix yet.
+      acl (libacl1 2.3.2-2+b1). The symlink flaw needs a privileged program to call the libacl path functions on a path
+      an attacker controls. getfacl and setfacl are absent, no Python extension module links libacl, and the appliance
+      has no privileged process (uid 10001). Debian has no fix yet.
     owner: saulpatinojr
     expired_at: 2027-01-23
   - id: CVE-2026-76642
     statement: >-
-      util-linux 2.41.5-0+deb13u1 (bsdutils, libblkid1, liblastlog2-2, libmount1, libsmartcols1, libuuid1, login,
-      mount, util-linux). The flaw is in mount(8) running post-mount hooks after a failed helper. It needs the mount
-      system call, which a container does not have without CAP_SYS_ADMIN, and a person already running commands
-      inside the container. The application never runs mount. Debian has no fix yet.
+      util-linux 2.41.5-0+deb13u1 (bsdutils, libblkid1, liblastlog2-2, libmount1, libsmartcols1, libuuid1, login, mount,
+      util-linux). The flaw is in mount(8) running post-mount hooks after a failed helper. It needs the mount system
+      call, which a container does not have without CAP_SYS_ADMIN, and a person already running commands inside the
+      container. The application never runs mount. Debian has no fix yet.
     owner: saulpatinojr
     expired_at: 2027-01-23
   - id: CVE-2026-78408
     statement: >-
       util-linux 2.41.5-0+deb13u1 (same packages as CVE-2026-76642). The flaw is in nsenter --join-cgroup. nsenter is
-      installed but needs privileges a container does not have (no CAP_SYS_ADMIN) and a person already running
-      commands inside it; the application never runs nsenter. Debian has no fix yet.
+      installed but needs privileges a container does not have (no CAP_SYS_ADMIN) and a person already running commands
+      inside it; the application never runs nsenter. Debian has no fix yet.
     owner: saulpatinojr
     expired_at: 2027-01-23
   - id: CVE-2026-78409
@@ -84,31 +84,37 @@ vulnerabilities:
     expired_at: 2027-01-23
   - id: CVE-2026-119373
     statement: >-
-      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Nothing in the appliance uses SQLite: no code in src/ or
-      packages/cloud-crawler-core/src mentions it, and importing every cloud_crawler_appliance module on Python 3.15.2
-      did not load Python's sqlite3 module or its C library (checked 2026-11-12). The library comes with the python
-      base image. The container runs one Python process as uid 10001, so reaching it would first need a person running
-      commands inside the container. Debian has no fix yet.
-      Accepted by the owner for 30 days on issue #80.
+      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Exploiting it needs a program that feeds SQLite a crafted FTS5 (full-text
+      search) table with negative rowids and a prefix MATCH query. Nothing in the appliance uses SQLite: no code in src/
+      or packages/cloud-crawler-core/src touches it, and importing every appliance and engine module (34) on Python
+      3.15.2 loaded neither Python's sqlite3 module nor libsqlite3. The library comes with the python base image; the
+      only other programs that link it there are the login-records library and lslogins, which the container never runs.
+      The container runs one Python process as uid 10001, so reaching it would first need a person running commands
+      inside the container. Debian has marked it minor and will not issue a fix for Debian 13 (no-dsa). Checked
+      2026-11-13; accepted by the owner for 30 days on issue #80.
     owner: saulpatinojr
-    expired_at: 2026-12-12
+    expired_at: 2026-12-13
   - id: CVE-2026-119374
     statement: >-
-      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Nothing in the appliance uses SQLite: no code in src/ or
-      packages/cloud-crawler-core/src mentions it, and importing every cloud_crawler_appliance module on Python 3.15.2
-      did not load Python's sqlite3 module or its C library (checked 2026-11-12). The library comes with the python
-      base image. The container runs one Python process as uid 10001, so reaching it would first need a person running
-      commands inside the container. Debian has no fix yet.
-      Accepted by the owner for 30 days on issue #80.
+      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Exploiting it needs a program that feeds SQLite an attacker-supplied
+      database file with a corrupted FTS5 index, deleted from with secure-delete on. Nothing in the appliance uses
+      SQLite: no code in src/ or packages/cloud-crawler-core/src touches it, and importing every appliance and engine
+      module (34) on Python 3.15.2 loaded neither Python's sqlite3 module nor libsqlite3. The library comes with the
+      python base image; the only other programs that link it there are the login-records library and lslogins, which
+      the container never runs. The container runs one Python process as uid 10001, so reaching it would first need a
+      person running commands inside the container. Debian has marked it minor and will not issue a fix for Debian 13
+      (no-dsa). Checked 2026-11-13; accepted by the owner for 30 days on issue #80.
     owner: saulpatinojr
-    expired_at: 2026-12-12
+    expired_at: 2026-12-13
   - id: CVE-2026-119379
     statement: >-
-      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Nothing in the appliance uses SQLite: no code in src/ or
-      packages/cloud-crawler-core/src mentions it, and importing every cloud_crawler_appliance module on Python 3.15.2
-      did not load Python's sqlite3 module or its C library (checked 2026-11-12). The library comes with the python
-      base image. The container runs one Python process as uid 10001, so reaching it would first need a person running
-      commands inside the container. Debian has no fix yet.
-      Accepted by the owner for 30 days on issue #80.
+      sqlite3 (libsqlite3-0 3.46.1-7+deb13u2). Exploiting it needs a program that feeds SQLite an attacker-supplied
+      changeset applied through the session extension. Nothing in the appliance uses SQLite: no code in src/ or
+      packages/cloud-crawler-core/src touches it, and importing every appliance and engine module (34) on Python 3.15.2
+      loaded neither Python's sqlite3 module nor libsqlite3. The library comes with the python base image; the only
+      other programs that link it there are the login-records library and lslogins, which the container never runs. The
+      container runs one Python process as uid 10001, so reaching it would first need a person running commands inside
+      the container. Debian has marked it minor and will not issue a fix for Debian 13 (no-dsa). Checked 2026-11-13;
+      accepted by the owner for 30 days on issue #80.
     owner: saulpatinojr
-    expired_at: 2026-12-12
+    expired_at: 2026-12-13
