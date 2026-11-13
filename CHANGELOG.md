@@ -43,6 +43,43 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- The workflow runtime check is refreshed to round two
+  ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
+  `tests/unit/test_workflow_runtime_setup.py` is the test that fails when a workflow step runs Node.js or Python before
+  its job has chosen the version, so the runner's own older versions cannot slip back in unnoticed. Its logic and test
+  cases are taken unchanged from the canonical Python copy in HCW-NetworkEyes_App
+  ([HCW-NetworkEyes_App#395](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/395)), which works the same way as
+  the website's own check ([HCW-HybridCloudWorks#1719](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1719));
+  only the lists of this repository's own steps are its own. It now reads a script the way the shell runs it in more
+  places: the script a shell is fed through a heredoc (`bash <<'EOF'`, a block of text handed to a command), the
+  commands a heredoc's text runs with `$(...)`, and `$'...'` strings, while the rest of a heredoc's text and a `$` the
+  shell passes on as text stay plain text. A step that runs `pipx` must hand pipx the Python a set-up step installed:
+  the runner's own (`/usr/bin/python3`, or the Azure CLI's `/opt/az/bin/python3`) and a value the test cannot work out
+  (`"$(command -v python3)"`) no longer count, `${{ steps.<id>.outputs.python-path }}` counts only from an earlier
+  `actions/setup-python` step that is sure to have run, a shell variable set earlier in the script counts only in the
+  same shell, and `sudo` passes the setting on only with `-E` or `--preserve-env`. Composite actions
+  (`.github/actions/<name>/action.yml`, a list of steps that workflows reuse) are checked like a job of their own. A
+  version file is read only when it is a `.python-version`, `.nvmrc` or `.node-version` file inside the checkout,
+  `3.15.x` reads as the 3.15 line, YAML's folded `>` scripts and empty values are read as YAML reads them, and a
+  workflow written in a shape the reader cannot follow (a step list on one line) now fails the test instead of being
+  skipped. This copy's own check of composite actions, kept from before, is dropped, because the shared copy now reads
+  them itself: `.github/actions/self-merging-pr/action.yml` is read with the same rules, and an exception for one of its
+  steps would be keyed `.github/actions/self-merging-pr/action.yml > composite > step name > runtime` (it was
+  `actions/self-merging-pr/action.yml > (composite) > ...`; no exception used the old key). Nothing new was found here:
+  the composite action runs only `gh`, and no workflow runs pipx. The three steps that start a runtime through a program
+  (the `contract` job's test, which starts `npx`, and the two lockfile steps that run uv through a script) stay in
+  `INDIRECT_RUNTIME`, the list of steps that start a runtime the check cannot see: the check still does not read the
+  runtime in their own `run:` text. It also carries the fourth review round's fixes (Copilot on
+  [HCW-NetworkEyes_AddOn#109](https://github.com/saulpatinojr/HCW-NetworkEyes_AddOn/pull/109),
+  [HCW-MigrateOrchestrator_AddOn#75](https://github.com/saulpatinojr/HCW-MigrateOrchestrator_AddOn/pull/75) and
+  [HCW-MigrateOrchestrator_App#118](https://github.com/saulpatinojr/HCW-MigrateOrchestrator_App/pull/118)): a comment
+  after a block value in `env:` or `with:` (a value written over several lines after `|`) ends the value instead of
+  being read into it; a GitHub expression given to pipx chooses its Python only when it is setup-python's `python-path`
+  output, `env.pythonLocation`, or an `env.X` or `matrix.X` whose value does, and `$pythonLocation` counts only after a
+  set-up step; a runner path written with `.` or `..` (`/usr/bin/../bin/python3`) is still the runner's; and a set-up
+  step under `(a || b) && c` now covers a later step under `a && c`. No workflow changed. The AddOn
+  (HCW-CloudCrawler_AddOn) gets the same change in its own pull request, with its own `docs/whats-new-upstream.md`
+  entry.
 - The workflow runtime check, `tests/unit/test_workflow_runtime_setup.py`, is now the finished copy every HCW
   repository runs ([HCW-HybridCloudWorks issue
   #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). It is the test that fails when a workflow
