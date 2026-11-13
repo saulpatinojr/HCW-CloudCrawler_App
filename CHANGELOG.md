@@ -13,6 +13,23 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- `tests/unit/test_workflow_runtime_setup.py` fails when a workflow or composite-action step runs `node`, `npm`, `npx`,
+  `python`, `pip` or `uv` on the runner before its job has run `actions/setup-node` or `actions/setup-python`, so the
+  runner image's own, older Node.js or Python cannot come back unnoticed
+  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)); a deliberate
+  exception needs an entry with a reason in its allow-list, which is empty today. A step that starts a runtime through
+  a program it runs (the `contract` job's test starts `npx`) is listed in `INDIRECT_RUNTIME` and checked the same way.
+  A set-up step with its own `if:` covers only later steps under the same condition (or one of its top-level `||`
+  terms), a command in backticks counts like one in `$(...)`, and every set-up step must ask for Python 3.15 or
+  Node.js 26 or newer. A step's condition now counts GitHub's unwritten `success()`, a quoted `NAME="a b"` prefix
+  counts, setup-uv sets Python up only with a `python-version`, an exact version must meet the full floor (Node.js
+  26.11.0), and the two lockfile steps that run uv through a script are listed in `INDIRECT_RUNTIME`.
+  A path in front of the interpreter (`/usr/bin/python3`) now counts, as do `python3.15.2`, a wrapper's options
+  (`sudo -u nobody`) and a command after a `case` pattern, while a heredoc, a comment or a script quoted across lines
+  for a container does not; `&&` and `||` of status functions are followed; and a version with trailing text
+  (`26.11.0-rc.1`, `26.11.0.0`) is reported as unreadable.
+- `.qlty/qlty.toml` pins qlty's ruff to 0.17.4, the version in `uv.lock`: qlty's own default, 0.14.6, cannot read
+  `target-version = "py315"`, so `qlty check` errored on the whole pull request.
 - `scripts/check-versions.sh` checks that the base image pin in `infrastructure/docker/versions.env` and every `FROM`
   line of `infrastructure/docker/Dockerfile` agree: each `FROM` must be `PYTHON_IMAGE@PYTHON_IMAGE_DIGEST` (or an
   earlier stage of the same file), the digest must be `sha256:` and 64 hex characters, and the tag must carry
@@ -26,6 +43,31 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- Python 3.15 and Node.js 26, the HCW runtime floors (the newest Python line and the newest Node.js long-term-support
+  line; [HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Before,
+  this repository ran Python 3.14 and its contract test ran on Node.js 22, while the website and the AddOns were
+  already on 3.15.2.
+  - **The image.** Its base moves from `python:3.14.10-slim-trixie` to `python:3.15.2-slim-trixie` (CPython 3.15.2 on
+    Debian 13), pinned by its index digest `sha256:65a65fc7b30b…` in `infrastructure/docker/versions.env` and in both
+    `FROM` lines of `infrastructure/docker/Dockerfile`. It is the same pin as the website's lab image and the Cloud
+    Crawler AddOn, and on 2026-11-12 Docker Hub showed `python:3.15-slim-trixie` on the same digest and no 3.15.3. The
+    Dockerfile's `python3.14` folder names become `python3.15`.
+  - **Python everywhere else.** `.python-version` now names the 3.15 line (`3.15`, as the AddOn does) instead of
+    3.14.6, `make setup` pins the same, `requires-python` in both `pyproject.toml` files is `>=3.15.1,<3.16` (the
+    AddOns' range), ruff checks against `py315`, and every workflow's `setup-python` asks for `3.15`. `uv.lock` and its
+    export `requirements.lock.txt` were made again with uv 0.11.32 (the version the workflows install): no package
+    version changed; only the Python 3.14 wheels and one 3.14-only marker dropped out. Every locked package has a
+    wheel for 3.15, so nothing is compiled from source. uv 0.11.32 cannot download a finished Python 3.15 by itself, so
+    `CONTRIBUTING.md` now says to install 3.15 first; in CI, `setup-python` does that.
+  - **Node.js.** The `contract` job in `ci.yml` installs Node.js 26 instead of 22. ADR 0001 said Node.js 22 was needed
+    for `npx @azure/mcp@3.0.0`, but the package accepts Node.js 22 or later (its npm `engines` field), so the ADR gains
+    a dated "Update of 2026-11-12" rather than a rewritten line, and the README, `CONTRIBUTING.md`, the docs and the
+    "npx is not on PATH" messages say Node.js 26.
+  - **The AddOn.** The engine wheel's `Requires-Python` becomes `>=3.15.1,<3.16` from the next release (the published
+    v0.1.1 wheel is unchanged). The AddOn already requires 3.15.1 or later and runs 3.15.2, so it needs no change.
+  - Every job that runs Python or Node.js already chooses its version with `setup-python` or `setup-node`; none relies
+    on the runner's own interpreter, so no step was added. Checks run: `VALIDATION.md`, "Ran for the move to Python
+    3.15 and Node.js 26".
 - The appliance image's base moves from `python:3.14.8-slim-trixie` to `python:3.14.10-slim-trixie` (CPython 3.14.10 on
   Debian 13), pinned by its index digest `sha256:af8a5aa14780…` in `infrastructure/docker/versions.env` and in both
   `FROM` lines of `infrastructure/docker/Dockerfile` together. 3.14.10 is the newest Python 3.14 build on Docker Hub

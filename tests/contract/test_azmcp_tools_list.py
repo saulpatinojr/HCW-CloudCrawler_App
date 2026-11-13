@@ -31,7 +31,7 @@ def _params() -> StdioServerParameters:
     """The host's own start command (`mcp_host.contract.server_params`), with a credential class that never prompts
     and is never exercised: only `initialize` and `tools/list` are sent."""
     if shutil.which("npx") is None:
-        pytest.skip("npx is not on PATH; Node.js 22 is needed for the contract test")
+        pytest.skip("npx is not on PATH; Node.js 26 (22 or later) is needed for the contract test")
     env = {k: v for k, v in os.environ.items() if not k.startswith("AZURE_")}
     env["AZURE_TOKEN_CREDENTIALS"] = "ManagedIdentityCredential"
     return server_params(env)

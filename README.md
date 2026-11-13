@@ -115,8 +115,12 @@ The roadmap is section 22 of the proposal; nothing here is production.
 
 ## Getting started
 
-Prerequisites: Python 3.14 (managed by `uv`), `uv` 0.11, Node.js 22 for the
-contract test (it runs `npx @azure/mcp@3.0.0`).
+Prerequisites: Python 3.15.1 or later on the 3.15 line, `uv`, and Node.js 26 for the
+contract test (it runs `npx @azure/mcp@3.0.0`; Node.js 22 or later works).
+uv 0.13.6 or newer downloads Python 3.15 for you. uv 0.11, the version the
+workflows install, can only download a 3.15 beta, which the project refuses, so
+with uv 0.11 install Python 3.15 first, as
+[CONTRIBUTING.md](CONTRIBUTING.md#set-up-and-check-your-change) describes.
 
 ```bash
 uv sync --all-packages
@@ -138,7 +142,7 @@ CC_AZMCP_MODE=recorded uv run python -m cloud_crawler_appliance
 ```
 
 With the real Azure MCP Server 3.0.0 as a child process over stdio (the
-development model; Node.js 22, `az login` first; every call is read-only and
+development model; Node.js 26, `az login` first; every call is read-only and
 the appliance never sees a token):
 
 ```bash

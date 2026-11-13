@@ -12,17 +12,17 @@
 #           hcw-cloud-crawler-appliance:dev                                          # lab only: no sign-in, opt-out
 # The image sets CC_BIND_HOST=0.0.0.0 and never sets the opt-out: leaving sign-in off is a choice the operator makes.
 
-FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS deps
+FROM python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS deps
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_CACHE_DIR=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /build
 COPY requirements.lock.txt ./
 RUN pip install --require-hashes --no-deps --prefix /install -r requirements.lock.txt
-COPY packages/cloud-crawler-core/src/cloud_crawler_core /install/lib/python3.14/site-packages/cloud_crawler_core
-COPY src/cloud_crawler_appliance /install/lib/python3.14/site-packages/cloud_crawler_appliance
+COPY packages/cloud-crawler-core/src/cloud_crawler_core /install/lib/python3.15/site-packages/cloud_crawler_core
+COPY src/cloud_crawler_appliance /install/lib/python3.15/site-packages/cloud_crawler_appliance
 RUN find /install -name "__pycache__" -type d -prune -exec rm -rf {} + \
  && python - <<'PY'
 import importlib.util, sys
-sys.path.insert(0, "/install/lib/python3.14/site-packages")
+sys.path.insert(0, "/install/lib/python3.15/site-packages")
 import cloud_crawler_core, cloud_crawler_appliance  # noqa: F401
 for forbidden in ("azure", "msal", "boto3"):
     if importlib.util.find_spec(forbidden) is not None:
@@ -30,15 +30,15 @@ for forbidden in ("azure", "msal", "boto3"):
 print("image contents verified: engine and appliance import; no cloud SDK")
 PY
 
-FROM python:3.14.10-slim-trixie@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS appliance
+FROM python:3.15.2-slim-trixie@sha256:65a65fc7b30b06cb6df4930fd4650697cb23f4c2698ab81fc87e4b031bc36928 AS appliance
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8080 CC_BIND_HOST=0.0.0.0
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && (python -m pip uninstall -y pip setuptools wheel >/dev/null 2>&1 || true) \
- && rm -rf /usr/local/lib/python3.14/ensurepip /usr/local/lib/python3.14/site-packages/pip* \
-           /usr/local/lib/python3.14/site-packages/setuptools* /usr/local/lib/python3.14/site-packages/wheel* \
+ && rm -rf /usr/local/lib/python3.15/ensurepip /usr/local/lib/python3.15/site-packages/pip* \
+           /usr/local/lib/python3.15/site-packages/setuptools* /usr/local/lib/python3.15/site-packages/wheel* \
            /usr/local/bin/pip* /usr/local/bin/wheel /root/.cache \
  && groupadd --gid 10001 app && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin app
 COPY --from=deps /install /usr/local

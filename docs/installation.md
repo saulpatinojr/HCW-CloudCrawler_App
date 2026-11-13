@@ -14,7 +14,7 @@ the same everywhere) that you build yourself.
 | Container image | You want it to run the way a server would. | Git and [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) |
 
 Two tools are needed only for real Azure data ([Configuration](configuration.md)): [Node.js](https://nodejs.org/en/download)
-22 and the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli). No ready-made image is published
+26 and the [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli). No ready-made image is published
 anywhere, so you always build it yourself.
 
 ## Route 1: from source

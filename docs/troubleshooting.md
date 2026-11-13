@@ -114,7 +114,7 @@ Another program is already using the port (8080 unless you changed it).
 | An empty ledger after a restart | Nothing is saved to disk. | Expected; hand the evidence in again. |
 | Many `unknown` verdicts | The evidence is missing, older than `CC_EVIDENCE_TTL_HOURS`, or lacks the property the check reads. A single virtual machine always gives `unknown` for zone redundancy. | Hand in fresh evidence; the verdict names the missing property. |
 | No `collection_run_azure` tool | No Azure source is set. | Set `CC_AZMCP_MODE` to `recorded` or `stdio`. |
-| `stdio` mode fails to start | Node.js 22 is missing, you are offline, or you are not signed in. | Install Node.js 22, run `az login`, and follow [Configuration](configuration.md), "Use real Azure data". |
+| `stdio` mode fails to start | Node.js is missing (22 or later; 26 is the version CI uses), you are offline, or you are not signed in. | Install Node.js 26, run `az login`, and follow [Configuration](configuration.md), "Use real Azure data". |
 | `"production": false` | It always says this. | Nothing to fix. |
 
 ## A check fails

@@ -53,7 +53,7 @@ def test_a_from_with_a_different_digest_fails(tmp_path):
 def test_a_from_with_a_different_tag_fails(tmp_path):
     image, _ = pin()
     mutated = tmp_path / "Dockerfile"
-    mutated.write_text(DOCKERFILE.read_text(encoding="utf-8").replace(image, "python:3.14.9-slim-trixie"), "utf-8")
+    mutated.write_text(DOCKERFILE.read_text(encoding="utf-8").replace(image, "python:3.15.1-slim-trixie"), "utf-8")
     assert run(mutated, VERSIONS).returncode == 1
 
 
@@ -70,7 +70,7 @@ def test_a_from_that_names_an_earlier_stage_passes(tmp_path):
     "replace",
     [
         ("PYTHON_IMAGE_DIGEST=sha256:", "PYTHON_IMAGE_DIGEST=latest-"),  # not a digest
-        ("PYTHON_VERSION=3.14.10", "PYTHON_VERSION=3.14.9"),  # the tag no longer carries the version
+        ("PYTHON_VERSION=3.15.2", "PYTHON_VERSION=3.15.1"),  # the tag no longer carries the version
     ],
 )
 def test_a_broken_versions_env_fails(tmp_path, replace):
