@@ -69,8 +69,17 @@ once, merge one before rebasing the next.
   the composite action runs only `gh`, and no workflow runs pipx. The three steps that start a runtime through a program
   (the `contract` job's test, which starts `npx`, and the two lockfile steps that run uv through a script) stay in
   `INDIRECT_RUNTIME`, the list of steps that start a runtime the check cannot see: the check still does not read the
-  runtime in their own `run:` text. No workflow changed. The AddOn (HCW-CloudCrawler_AddOn) gets the same change in its
-  own pull request, with its own `docs/whats-new-upstream.md` entry.
+  runtime in their own `run:` text. It also carries the fourth review round's fixes (Copilot on
+  [HCW-NetworkEyes_AddOn#109](https://github.com/saulpatinojr/HCW-NetworkEyes_AddOn/pull/109),
+  [HCW-MigrateOrchestrator_AddOn#75](https://github.com/saulpatinojr/HCW-MigrateOrchestrator_AddOn/pull/75) and
+  [HCW-MigrateOrchestrator_App#118](https://github.com/saulpatinojr/HCW-MigrateOrchestrator_App/pull/118)): a comment
+  after a block value in `env:` or `with:` (a value written over several lines after `|`) ends the value instead of
+  being read into it; a GitHub expression given to pipx chooses its Python only when it is setup-python's `python-path`
+  output, `env.pythonLocation`, or an `env.X` or `matrix.X` whose value does, and `$pythonLocation` counts only after a
+  set-up step; a runner path written with `.` or `..` (`/usr/bin/../bin/python3`) is still the runner's; and a set-up
+  step under `(a || b) && c` now covers a later step under `a && c`. No workflow changed. The AddOn
+  (HCW-CloudCrawler_AddOn) gets the same change in its own pull request, with its own `docs/whats-new-upstream.md`
+  entry.
 - The workflow runtime check, `tests/unit/test_workflow_runtime_setup.py`, is now the finished copy every HCW
   repository runs ([HCW-HybridCloudWorks issue
   #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). It is the test that fails when a workflow

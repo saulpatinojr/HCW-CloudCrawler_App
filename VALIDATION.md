@@ -486,21 +486,21 @@ check name both steps.
 
 Run on 2026-11-13 on the branch `claude/runtime-check-round2-port-1707`, from `main` at `7792ba5`, on Linux with CPython
 3.15.2 and uv 0.13.7. The change replaces `tests/unit/test_workflow_runtime_setup.py` with round two of the check, taken
-from the canonical Python copy in `saulpatinojr/HCW-NetworkEyes_App` (commit `62ee0cc`,
-[HCW-NetworkEyes_App#395](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/395)), which matches the website's
+from the canonical Python copy in `saulpatinojr/HCW-NetworkEyes_App` (commit `8ac3118`, with the fourth review round's
+fixes, [HCW-NetworkEyes_App#395](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/395)), which the website's
 JavaScript copy (merged as `9e2e0dd`,
 [HCW-HybridCloudWorks#1719](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1719); issue
-[HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). It keeps this
-repository's lists and drops this copy's own check of the composite action under `.github/actions`, which the shared
-copy now reads itself. Nothing reached Azure.
+[HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)) matches up to those
+fixes. It keeps this repository's lists and drops this copy's own check of the composite action under `.github/actions`,
+which the shared copy now reads itself. Nothing reached Azure.
 
 | Check | Command | Result |
 | --- | --- | --- |
 | Install | `uv sync --all-packages` | Exit 0 |
 | Lint and format | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 92 files already formatted |
 | Lockfile export | `bash scripts/check-lockfiles.sh` | Exit 0 |
-| Tests | `uv run pytest -q --cov=packages --cov=src` | 2152 passed, 1 deselected; coverage 98 percent. 651 of them are in `tests/unit/test_workflow_runtime_setup.py` (356 before) |
-| Same logic as the canonical copy | the Python syntax trees of this file and `saulpatinojr/HCW-NetworkEyes_App`'s `tests/security/test_workflow_runtime_setup.py` at `62ee0cc` compared with the lists and docstrings left out (the earlier canonical copy, as a control, differs); then 66,583 cases (command reading with both shell texts, pipx, conditions) and the 103 files (99 workflows, 4 composite actions) of the nine HCW repositories plus a folder of made-up workflows run through this copy, the canonical copy, the website's JavaScript copy and the other four Python ports | Identical; 0 disagreements |
+| Tests | `uv run pytest -q --cov=packages --cov=src` | 2200 passed, 1 deselected; coverage 98 percent. 699 of them are in `tests/unit/test_workflow_runtime_setup.py` (356 before) |
+| Same logic as the canonical copy | the Python syntax trees of this file and `saulpatinojr/HCW-NetworkEyes_App`'s `tests/security/test_workflow_runtime_setup.py` at `8ac3118` compared with the lists and docstrings left out (the earlier canonical copy, as a control, differs); then the cases and files below run through this copy, the canonical copy, the other four Python ports, the website's JavaScript copy and the MigrateOrchestrator App's | Identical syntax trees. 66,627 cases (23,958 command readings, each with its two shell texts; 42,498 `pipx` cases; 171 condition cases), and the 104 files (100 workflows, 4 composite actions) of the nine HCW repositories cloned here plus two folders of made-up workflows for the new rules (jobs read, unset steps, `pipx` problems, floor problems): 0 disagreements with the canonical Python copy at `8ac3118` and between the five Python ports. The website's JavaScript copy (`9e2e0dd`) and the MigrateOrchestrator App's (`78feda5`) do not have the fourth round's fixes yet: they agree with the canonical copy as it was before them (`62ee0cc`) on every case, and differ from it now exactly on the 3,085 cases those fixes change (28 answers; the rest are how a GitHub expression is written in the shell text) and on the made-up workflow for them; the fixes reach them in their own pull requests |
 | New findings in this repository | the check over `.github/workflows/*.yml` and `.github/actions/*/action.yml` compared with the copy on `main`, then each `INDIRECT_RUNTIME` step's own `run:` text read by the new copy | None: the same (empty) findings as before, and none of the three `INDIRECT_RUNTIME` steps is read on its own, so all three stay |
 
 Not run in this session: the workflows themselves on GitHub (they run on the pull request). In a scratch copy of the
