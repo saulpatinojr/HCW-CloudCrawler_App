@@ -13,6 +13,11 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- **Decision record 0007: this repository and the `cloud-crawler-core` engine are MIT-licensed** (the owner's
+  decision of 2026-11-14). A decision record writes down a choice and why it was made. The licence was already MIT
+  (`LICENSE`, both `pyproject.toml` files and `NOTICE` say so), but unlike the sibling repositories no record said it.
+  The record lists each App's licence and where it is recorded: CloudAssessor and MigrateOrchestrator are MIT,
+  NetworkEyes is Apache License 2.0 by its own decision. Nothing in the code, the wheel or the images changes.
 - **A `NOTICE` file at the root of the repository** (the owner's request of 2026-11-14). A NOTICE is the short
   plain-text file that sits beside `LICENSE` and says what the licence covers and where outside material comes from; the
   sibling repositories already have one. It says: the repository is MIT (see `LICENSE`); the engine,
