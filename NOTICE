@@ -12,9 +12,11 @@ kept here, and the appliance image built from infrastructure/docker/Dockerfile c
 started at run time through npx (src/cloud_crawler_appliance/mcp_host/contract.py), by the contract test and by the
 development host (CC_AZMCP_MODE=stdio), which download it from npm under its own licence; its npm metadata declares
 MIT. Its container image (mcr.microsoft.com/azure-sdk/azure-mcp) is pinned by ADR 0001 for a later image build; no
-workflow here pulls or publishes it today. Two kinds of file here come from that server:
+workflow here pulls or publishes it today. Two kinds of file here relate to that server:
   - tests/contract/snapshots/azmcp-3.0.0-tools.json is the tool list the server reports (names, titles, descriptions
-    and input schemas), kept as the contract the tests check against.
+    and input schemas), kept as the contract the tests check against. Those tool names, descriptions and schemas are
+    Microsoft's text, "Copyright 2025 (c) Microsoft Corporation.", used under the MIT License
+    (https://github.com/microsoft/mcp/blob/main/LICENSE).
   - samples/azure-mcp/*.json follow the shape of the server's result records; their values are fictional and were
     written by hand, not captured from a live server.
 
