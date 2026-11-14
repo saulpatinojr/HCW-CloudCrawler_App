@@ -207,6 +207,51 @@ FAILS: dict[str, tuple[Callable[[Path], None], str]] = {
     ),
     "$UV_VERSION in a file that sets none": (append(OTHER_FILE, STEP + 'echo "$UV_VERSION"'), "other.yml"),
     "ci.yml without UV_VERSION": (replace(W + "ci.yml", '  UV_VERSION: "0.13.8"\n', ""), "ci.yml"),
+    # An install counts only as an install command's argument in a `run:` script, outside a comment.
+    "a listed workflow's only install is echoed": (
+        replace(W + "security.yml", 'python -m pip install "uv==0.13.8"', 'echo "uv==0.13.8"'),
+        "security.yml",
+    ),
+    "a listed workflow's only install is a YAML comment": (
+        replace(W + "security.yml", "      - run: python -m pip install", "      # - run: python -m pip install"),
+        "security.yml",
+    ),
+    "a listed workflow's only install is a shell comment": (
+        replace(
+            W + "security.yml",
+            '      - run: python -m pip install "uv==0.13.8"',
+            '      - run: |\n          # pip install "uv==0.13.8"\n          echo no install',
+        ),
+        "security.yml",
+    ),
+    "a listed workflow's only install is in a script that is not run:": (
+        replace(
+            W + "security.yml",
+            '      - run: python -m pip install "uv==0.13.8"',
+            "      - uses: actions/github-script@v7\n        with:\n          script: |\n"
+            '            pip install "uv==0.13.8"',
+        ),
+        "security.yml",
+    ),
+    # UV_VERSION counts as set only outside a comment, as a YAML key or a shell assignment.
+    "UV_VERSION set only in a comment": (
+        replace(W + "dependabot-lockfiles.yml", '  UV_VERSION: "0.13.8"', '  # UV_VERSION: "0.13.8"'),
+        "dependabot-lockfiles.yml",
+    ),
+    "UV_VERSION only echoed, not set": (
+        lambda root: (
+            replace(W + "dependabot-lockfiles.yml", '  UV_VERSION: "0.13.8"\n', "")(root),
+            replace(
+                W + "dependabot-lockfiles.yml",
+                '      - run: python -m pip install "uv==${UV_VERSION}"',
+                '      - run: echo "UV_VERSION=0.13.8"\n      - run: python -m pip install "uv==${UV_VERSION}"',
+            )(root),
+        ),
+        "dependabot-lockfiles.yml",
+    ),
+    # A wrong value is still reported wherever it is written, comments included.
+    "another uv in a comment": (append(OTHER_FILE, '# pip install "uv==0.13.7"'), "other.yml"),
+    "another UV_VERSION in a comment": (append(OTHER_FILE, '  # UV_VERSION: "0.13.7"'), "other.yml"),
 }
 
 PASSES: dict[str, Callable[[Path], None]] = {
@@ -227,6 +272,37 @@ PASSES: dict[str, Callable[[Path], None]] = {
     "setup-uv named in a comment": append(OTHER_FILE, "# astral-sh/setup-uv is pinned nowhere in scope"),
     "the uv image at this tag": append(OTHER_FILE, STEP + "docker run --rm ghcr.io/astral-sh/uv:0.13.8 --version"),
     "pip installs another package": append(OTHER_FILE, STEP + "pipx install --python python3.15 checkov==3.3.30"),
+    "UV_VERSION set in env, with a stray comment beside it": append(
+        W + "dependabot-lockfiles.yml", '# UV_VERSION: "0.13.8" (see env above)'
+    ),
+    "UV_VERSION set in a flow-style env": replace(
+        W + "dependabot-lockfiles.yml", 'env:\n  UV_VERSION: "0.13.8"\n', 'env: { UV_VERSION: "0.13.8" }\n'
+    ),
+    "UV_VERSION exported in the run: block": lambda root: (
+        replace(W + "dependabot-lockfiles.yml", '  UV_VERSION: "0.13.8"\n', "")(root),
+        replace(
+            W + "dependabot-lockfiles.yml",
+            '      - run: python -m pip install "uv==${UV_VERSION}"',
+            '      - run: |\n          export UV_VERSION=0.13.8\n          python -m pip install "uv==${UV_VERSION}"',
+        )(root),
+    ),
+    "UV_VERSION written to GITHUB_ENV": lambda root: (
+        replace(W + "dependabot-lockfiles.yml", '  UV_VERSION: "0.13.8"\n', "")(root),
+        replace(
+            W + "dependabot-lockfiles.yml",
+            '      - run: python -m pip install "uv==${UV_VERSION}"',
+            '      - run: echo "UV_VERSION=0.13.8" >> "$GITHUB_ENV"\n'
+            '      - run: python -m pip install "uv==${UV_VERSION}"',
+        )(root),
+    ),
+    "the install in a run: block": replace(
+        W + "security.yml",
+        '      - run: python -m pip install "uv==0.13.8"',
+        '      - name: uv\n        run: |\n          # the pinned uv\n          python -m pip install "uv==0.13.8"',
+    ),
+    "the install with a comment after it": replace(
+        W + "security.yml", 'pip install "uv==0.13.8"', 'pip install "uv==0.13.8"  # the pinned uv'
+    ),
 }
 
 

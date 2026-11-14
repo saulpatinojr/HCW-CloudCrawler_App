@@ -38,17 +38,20 @@ once, merge one before rebasing the next.
   `scripts/check_uv_pins.py`. It uses only Python's standard library, because it runs before uv is installed, and it
   is the same file in HCW-CloudAssessor_App. `UV_VERSION` in `ci.yml` is the one uv version. The step names the
   workflows that must install it (`pages.yml`, `publish-core.yml`, `security.yml` and `dependabot-lockfiles.yml`); the
-  script fails if one of them is missing or does not install that uv. It then reads every `.yml` and `.yaml` file under
+  script fails if one of them is missing or does not install that uv. An install counts only as an argument of a `pip`,
+  `pipx`, `uv pip` or `uv tool` install command in a `run:` script, outside a comment, so `echo "uv==…"` or a
+  commented-out line does not count; and `uv==${UV_VERSION}` counts only in a file that sets `UV_VERSION` outside a
+  comment (a YAML key or a shell assignment). It then reads every `.yml` and `.yaml` file under
   `.github/workflows` and every `action.yml` and `action.yaml` under `.github/actions`, at any depth, line by line (so
   the second install in `publish-core.yml` is checked too), and fails on: uv pinned to anything but `==` and that
   exact version (any operator, including `===`, `~=`, `!=`, `>=` and `uv@…`; any spacing; any extras; and the name in
   any case or spelling pip reads as uv, such as `UV` or `Uv[foo.bar]`); pip, pipx, `uv pip` or `uv tool` installing
   uv with no version; `uses: astral-sh/setup-uv`, or the `ghcr.io/astral-sh/uv` image at another tag; `UV_VERSION`
   given another value in any YAML or shell form; and `${UV_VERSION}`, `$UV_VERSION` or `env.UV_VERSION` in a file that
-  never sets it. Other packages are left alone (`pyuv`, `uvicorn`, `uv-dynamic-versioning`), and so is `uv_==…`,
+  never sets it. These are reported wherever they are written, comments included. Other packages are left alone (`pyuv`, `uvicorn`, `uv-dynamic-versioning`), and so is `uv_==…`,
   which pip refuses as a name. What it cannot see: a version worked out while a job runs, or an install written in a
   way these patterns do not describe. `tests/unit/test_check_uv_pins.py` (also the same file in both repositories)
-  builds a small made-up repository for each of 41 changes that must fail and 13 that must pass, and runs the script
+  builds a small made-up repository for each of 49 changes that must fail and 19 that must pass, and runs the script
   on this repository with the file list `ci.yml` gives it. `setup-python` in the `lint` job now also runs after an
   earlier failure, because the zizmor install makes a Python environment with `python3 -m venv` (zizmor comes from
   PyPI) and runs then too. Nothing here reaches the

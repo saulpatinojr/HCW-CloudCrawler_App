@@ -4,9 +4,13 @@ Run from the repository root by the `lint` job of ci.yml, before uv is installed
 
     python scripts/check_uv_pins.py <workflow that must install that uv> ...
 
-Each listed file must exist and install uv at UV_VERSION (as `uv==<version>`, or `uv==${UV_VERSION}` in a file that sets
-UV_VERSION). Then every `*.yml` and `*.yaml` under .github/workflows and every `action.yml` and `action.yaml` under
-.github/actions, at any depth, is read line by line, comments included, and these fail:
+Each listed file must exist and install uv at UV_VERSION: a `pip`, `pip3`, `python -m pip`, `pipx`, `uv pip` or
+`uv tool` install command in a `run:` script (its value on the same line, or a line of its `run: |` block), outside a
+comment, with `uv==<version>` or `uv==${UV_VERSION}` as an argument; the second form counts only in a file that sets
+UV_VERSION outside a comment (a YAML key, block or flow, or a shell assignment, `export` or a GITHUB_ENV write). Text
+that only mentions the requirement (`echo "uv==…"`, a comment) installs nothing. Then every `*.yml` and `*.yaml` under
+.github/workflows and every `action.yml` and `action.yaml` under .github/actions, at any depth, is read line by line,
+comments included, and these fail:
 
 - a uv requirement that is not `==` and exactly UV_VERSION: any operator (`===`, `~=`, `!=`, `>=`, `<=`, `<`, `>`,
   `@`), any spacing, any extras, and the name in any case or spelling that pip reads as uv (PEP 503: `UV`, `Uv`);
@@ -44,6 +48,17 @@ ASSIGN = re.compile(
     r"(?:\"(?P<dq>[^\"]*)\"|'(?P<sq>[^']*)'|(?P<bare>[^\s,}#;\"']*))"
 )
 USE = re.compile(r"\$\{UV_VERSION\}|\$UV_VERSION\b|\benv\.UV_VERSION\b")
+# UV_VERSION really set (read on the part of a line before a comment): a YAML key, block or flow, in any quoting; a
+# shell assignment where a command starts or after `export`; or a line that writes it to GITHUB_ENV.
+SETS = re.compile(
+    r"^\s*(?:-\s+)?[\"']?UV_VERSION[\"']?\s*:(?:\s|$)"
+    r"|[{,]\s*[\"']?UV_VERSION[\"']?\s*:"
+    r"|(?:^|[;&|(]|\bexport)\s*UV_VERSION="
+    r"|UV_VERSION=.*GITHUB_ENV"
+)
+# A `run:` key (`run:` or `- run:`) and its value on the same line.
+RUN = re.compile(r"^(?P<lead>\s*(?:-\s+)?)run:(?:\s+(?P<value>.*))?$")
+BLOCK = re.compile(r"[|>][-+0-9]*\s*(?:#.*)?")
 SHELL_VAR = {"${UV_VERSION}", "$UV_VERSION"}
 
 
@@ -72,10 +87,43 @@ def scanned(root: Path) -> list[Path]:
     return sorted(p for p in files if p.is_file())
 
 
+def code(line: str) -> str:
+    """The line up to its comment: a `#` that starts the line or follows a space, outside quotes (YAML and shell)."""
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
+
+
+def script_lines(lines: list[str]) -> set[int]:
+    """The numbers of the lines that are shell: a `run:` value on its own line, or a line of a `run: |` block."""
+    found: set[int] = set()
+    block_indent: int | None = None
+    for n, line in enumerate(lines, 1):
+        if block_indent is not None:
+            if not line.strip() or len(line) - len(line.lstrip()) > block_indent:
+                found.add(n)
+                continue
+            block_indent = None
+        if m := RUN.match(line):
+            value = (m["value"] or "").strip()
+            if BLOCK.fullmatch(value):
+                block_indent = len(m["lead"])
+            elif value and not value.startswith("#"):
+                found.add(n)
+    return found
+
+
 def check_file(path: Path, rel: str, want: str) -> tuple[list[str], bool]:
     """The problems in one file, and whether it installs uv at `want`."""
     lines = path.read_text(encoding="utf-8").splitlines()
-    sets_var = any(ASSIGN.search(line) for line in lines)
+    sets_var = any(SETS.search(code(line)) for line in lines)
+    script = script_lines(lines)
     problems: list[str] = []
     installs = False
 
@@ -88,11 +136,10 @@ def check_file(path: Path, rel: str, want: str) -> tuple[list[str], bool]:
                 continue
             version = m["version"] if m["version"] is not None else m["at"]
             op = m["op"] or "@"
-            if op == "==" and (version == want or (version in SHELL_VAR and sets_var)):
-                installs = True
-            elif op == "==" and version in SHELL_VAR:
+            # Anywhere, comments included; whether it installs anything is read from the install commands below.
+            if op == "==" and version in SHELL_VAR and not sets_var:
                 error(n, f"{m.group(0)} uses UV_VERSION, which this file never sets")
-            else:
+            elif not (op == "==" and (version == want or version in SHELL_VAR)):
                 error(n, f"{m.group(0)} is not uv=={want}")
         if m := INSTALL.search(line):
             # One command (up to `;`, `&`, `|` or a comment), with spaces around an operator closed up (`uv == 1`).
@@ -107,6 +154,13 @@ def check_file(path: Path, rel: str, want: str) -> tuple[list[str], bool]:
                     and normalize(b["name"]) == "uv"
                 ):
                     error(n, f"installs {token} with no version; pin uv=={want}")
+        if n in script and (m := INSTALL.search(code(line))):
+            command = re.split(r"[;&|]", m["rest"], maxsplit=1)[0]
+            command = re.sub(r"\s*(===|==|~=|!=|>=|<=|<|>|@)\s*", r"\1", command)
+            for r in REQUIREMENT.finditer(command):
+                version = r["version"]
+                if normalize(r["name"]) == "uv" and r["op"] == "==":
+                    installs = installs or version == want or (version in SHELL_VAR and sets_var)
         if SETUP_UV.search(line):
             error(n, f"astral-sh/setup-uv chooses its own uv; install uv=={want} with pip instead")
         for m in UV_IMAGE.finditer(line):
