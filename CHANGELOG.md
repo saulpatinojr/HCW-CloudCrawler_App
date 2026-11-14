@@ -20,8 +20,8 @@ once, merge one before rebasing the next.
   tool that reads a file and reports mistakes without running it. The `lint` job in `ci.yml` (already a required check;
   no job is added or renamed, and no workflow file is added, so the workflow set in `tests/unit/test_workflows.py` is
   unchanged) gains these steps, copied from the lab edition's `ci.yml` with the same versions and digests:
-  **actionlint 1.7.12** (workflow mistakes, with shellcheck on their scripts), **zizmor 1.31.1** (workflow security)
-  and **hadolint 2.14.0** (`infrastructure/docker/Dockerfile`). Each is downloaded at its pinned version and its
+  **actionlint 1.7.12** (workflow mistakes, with shellcheck on their scripts), **zizmor 1.31.1** (workflow security,
+  on the workflows and on the composite action in `.github/actions`, which is handed the App key) and **hadolint 2.14.0** (`infrastructure/docker/Dockerfile`). Each is downloaded at its pinned version and its
   SHA-256 (a fingerprint of the file) is checked before it runs; the three values were checked again against the
   publishers' own checksum files and PyPI on 2026-11-14. `.github/actionlint.yaml`, the same file as the lab edition's,
   tells actionlint that `ubuntu-26.04` is a GitHub-hosted runner. zizmor reported one low finding, which was already
@@ -29,14 +29,21 @@ once, merge one before rebasing the next.
   safer `uses: $/...` form
   ([GitHub's announcement](https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/),
   [zizmor's explanation](https://docs.zizmor.sh/audits/#self-repository)). The pinned actionlint does not understand
-  `$/` and fails on it, so that one line is ignored in the new `.github/zizmor.yml`, with the reason written there and
-  the step to undo it once actionlint is moved; zizmor still fails the step on every other finding of any severity, as
-  in the lab edition. A new step, **Every workflow uses the uv this workflow uses**, fails when `pages.yml`,
-  `publish-core.yml` or `security.yml` installs a uv other than `UV_VERSION` in `ci.yml`, when
-  `dependabot-lockfiles.yml`'s own `UV_VERSION` differs, or when any `uv==` anywhere under `.github/workflows` names
-  another version (so the second install in `publish-core.yml` is checked too). `setup-python` in the `lint` job now
-  also runs after an earlier failure, because the zizmor install needs Python and runs then too, and
-  `tests/unit/test_workflow_runtime_setup.py` lists the zizmor step as one that starts Python. Nothing here reaches the
+  `$/` and fails on it, so that one line is ignored in the new `.github/zizmor.yml`, with the reason written there
+  (only a `printf` runs between the checkout and that line) and the step to undo it once actionlint accepts `$/`.
+  zizmor matches the ignore against the whole step, so moving the step down by a line can keep it ignored; the file
+  says to check the line number whenever the workflow changes. zizmor still fails the step on every other finding of
+  any severity, as in the lab edition. A new step, **Every workflow uses the uv this workflow uses**, fails when
+  `pages.yml`, `publish-core.yml` or `security.yml` is missing or does not install the uv named by `UV_VERSION` in
+  `ci.yml`, or when `dependabot-lockfiles.yml` is missing or its own `UV_VERSION` differs. It then reads every workflow
+  (`.yml` and `.yaml`) and every composite action under `.github/actions`, and fails on a line that pins uv to another
+  version or with another operator, spacing or extra (`uv>=0.13`, `uv == 0.13.7`, `uv[x]==…`; so the second install in
+  `publish-core.yml` is checked too); installs uv with pip, pipx or `uv tool` and no version; uses
+  `astral-sh/setup-uv`; gives `UV_VERSION` another value in any YAML or shell form; or uses the shell's
+  `${UV_VERSION}` in a file that does not set it. What it cannot see: a version worked out while a job runs, or an
+  install written in a way these patterns do not describe. `setup-python` in the `lint` job now also runs after an
+  earlier failure, because the zizmor install makes a Python environment with `python3 -m venv` (zizmor comes from
+  PyPI) and runs then too. Nothing here reaches the
   lab edition: it already runs these steps, and no engine, tool schema or release asset changed, so its
   `docs/whats-new-upstream.md` needs no entry. What ran is in `VALIDATION.md`.
 

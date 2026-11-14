@@ -43,27 +43,44 @@ jobs:
             echo "::error::a client-secret credential path exists"; exit 1
           fi
           echo "no client-secret credential path"
-      # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). The pages, release and security workflows name it
-      # literally, as the lab editions' do; dependabot-lockfiles.yml carries it in its own env. Then every uv pin in every
-      # workflow is read, so a second install in one file (publish-core.yml has two), or a new workflow, cannot name
-      # another uv either.
+      # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). The workflows listed below must name it
+      # (the pages, release and security ones literally, as the lab editions' do; dependabot-lockfiles.yml in its own env). Then every
+      # workflow and composite action is read for another way of choosing uv: another version, operator, spacing or
+      # extra, an install with no version, astral-sh/setup-uv, or another UV_VERSION value. A version worked out
+      # while a job runs, or an install the patterns do not describe, is not seen.
       - name: Every workflow uses the uv this workflow uses
         run: |
           set -euo pipefail
           for f in .github/workflows/pages.yml .github/workflows/publish-core.yml .github/workflows/security.yml; do
+            [ -f "$f" ] || { echo "::error::${f} is gone; update the list in this step"; exit 1; }
             grep -Fq "\"uv==${UV_VERSION}\"" "$f" || { echo "::error file=${f}::installs a uv other than ${UV_VERSION}"; exit 1; }
           done
           f=.github/workflows/dependabot-lockfiles.yml
+          [ -f "$f" ] || { echo "::error::${f} is gone; update the list in this step"; exit 1; }
           grep -Fqx "  UV_VERSION: \"${UV_VERSION}\"" "$f" || { echo "::error file=${f}::UV_VERSION is not ${UV_VERSION}"; exit 1; }
+          # Every workflow and composite action is then read line by line for: uv with a version operator, any
+          # spacing or extras; pip, pipx or `uv tool` installing uv with no version; astral-sh/setup-uv; and
+          # UV_VERSION given a value that starts with a digit or `$` (block, flow, quoted or shell form).
+          q="[\"']?"
+          re_pin='\buv(\[[A-Za-z0-9,_-]*\])?[[:space:]]*(===?|~=|>=|<=|!=|[<>])[[:space:]]*[0-9A-Za-z._{}$]+'
+          re_bare="(pip3?|pipx|uv[[:space:]]+tool)[[:space:]]+install[[:space:]]+(-[^[:space:]]+[[:space:]]+)*${q}uv${q}([[:space:]]|\$)"
+          re_action='astral-sh/setup[-]uv[@]'
+          re_env="\\bUV_VERSION${q}[[:space:]]*[:=][[:space:]]*${q}[0-9\$][^\"'[:space:],}]*"
+          shopt -s nullglob
+          files=(.github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/action.yml .github/actions/*/action.yaml)
           # Written to a file first, so a failing grep stops the step; exit 1 (no line matched) is allowed.
           pins="${RUNNER_TEMP}/uv-pins"
-          grep -noE 'uv==[0-9A-Za-z._{}$]+|^ *UV_VERSION: *"[^"]*"' .github/workflows/*.yml > "$pins" || [ "$?" -eq 1 ]
+          grep -HnoE "${re_pin}|${re_bare}|${re_action}|${re_env}" "${files[@]}" > "$pins" || [ "$?" -eq 1 ]
           bad=0
           while IFS=: read -r f n pin; do
             case "$pin" in
-              "uv==${UV_VERSION}" | "uv==\${UV_VERSION}" | *"UV_VERSION: \"${UV_VERSION}\"") ;;
-              *) echo "::error file=${f},line=${n}::${pin} is not uv ${UV_VERSION}"; bad=1 ;;
+              "uv==${UV_VERSION}") continue ;;
+              "uv==\${UV_VERSION}")
+                grep -Eq "$re_env" "$f" && continue
+                pin="${pin} in a file that sets no UV_VERSION" ;;
+              UV_VERSION*) [ "${pin##*[:= \"\']}" = "$UV_VERSION" ] && continue ;;
             esac
+            echo "::error file=${f},line=${n}::${pin} is not uv ${UV_VERSION}"; bad=1
           done < "$pins"
           exit "$bad"
 
@@ -116,7 +133,8 @@ jobs:
           zizmor --version
           args=(--offline --format=github)
           if [ -f .github/zizmor.yml ]; then args+=(--config .github/zizmor.yml); fi
-          zizmor "${args[@]}" .github/workflows
+          # .github/actions too: the composite action there is handed the App key.
+          zizmor "${args[@]}" .github/workflows .github/actions
 
       - name: hadolint
         if: ${{ !cancelled() && steps.lint-tools.outcome == 'success' }}
