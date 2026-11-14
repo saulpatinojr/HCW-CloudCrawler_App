@@ -632,3 +632,15 @@ machine with CPython 3.15.2 and uv 0.13.8:
 | Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
 | Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2623 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The count is round three's; this change adds no test |
+
+Then round four of the workflow runtime check was brought into the branch (Copilot's review of this pull request
+noticed that the round-three check still accepted Python 3.15.0). It moves the check's Python floor to 3.15.2. On the
+same machine with CPython 3.15.2 and uv 0.13.8:
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2703 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The runtime check grows from 1049 to 1129 cases |
+| Same answers as the canonical copy | yes | 60,632 generated cases run through this copy and HCW-NetworkEyes_App's (main, round four) | 0 disagreements; the workflows of all 25 local HCW clones give the same findings through both |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |

@@ -108,13 +108,40 @@ once, merge one before rebasing the next.
     [HCW-CloudCrawler_AddOn#80](https://github.com/saulpatinojr/HCW-CloudCrawler_AddOn/pull/80)) and already runs
     3.15.2, so `core-update.yml` adopts that release as usual. The image already ran `python:3.15.2-slim-trixie`, so
     it does not change.
+- **The workflow runtime check is brought up to round four, and now holds Python to 3.15.2**
+  ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
+  `tests/unit/test_workflow_runtime_setup.py` (the test that fails a workflow step which runs Node.js or Python before
+  its job has set up the version HCW requires) now matches round four of the check, taken unchanged from the canonical
+  Python copy in HCW-NetworkEyes_App
+  ([HCW-NetworkEyes_App#403](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/403)), which works the same way
+  as the website's own check
+  ([HCW-HybridCloudWorks#1725](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1725)); only this
+  repository's lists are its own, and they do not change. The lab edition already runs the same round. What it means
+  in plain terms:
+  - **The floor moves to 3.15.2.** `PYTHON_FLOOR` (the lowest Python a set-up step may ask for) goes from 3.15.0 to
+    3.15.2, the same minimum the first entry above gives the packages. Before, the test still accepted a set-up step
+    that asked for 3.15.0 (Copilot's review of this pull request pointed this out). Now a set-up step that asks for
+    3.15.0 or 3.15.1, or a command named `python3.15.1`, is below the floor; a line-only `3.15` still means the newest
+    3.15 release and passes.
+  - **`coproc` is read.** `coproc` is bash's way to start a command in the background (`coproc node x.js`); the
+    command it starts now counts like any other.
+  - **A step's `shell:` is read the way the runner passes it on**, which is without a shell. So in
+    `shell: sudo env PATH="$PATH:/usr/bin" bash -e {0}`, env is handed the literal text `$PATH:/usr/bin` and the
+    step's `python3` is quietly the runner's own; that is now reported.
+  - **A `shell:` holding a GitHub expression** (a `${{ … }}` value GitHub fills in before the step runs) is read once
+    for each value of the job's matrix when it is a plain `${{ matrix.X }}`; any other expression cannot be read, so
+    the step is reported for both Node.js and Python.
+
+  None of these forms is used in this repository's workflows, so the check finds nothing new here and no workflow
+  changes. The test file grows from 1049 to 1129 cases. Test only: nothing reaches the lab edition, which already
+  has round four, so its `docs/whats-new-upstream.md` needs no entry.
 - **The workflow runtime check is refreshed to round three**
   ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
   `tests/unit/test_workflow_runtime_setup.py` is the test that fails when a workflow step runs Node.js or Python before
   its job has set up the version HCW requires (Node.js 26.11.0, Python 3.15.0 when this round was written), so the
   runner's own older versions cannot slip back in unnoticed. The Python floor HCW requires has since moved to 3.15.2
-  (the entry above); this round's check still compares against 3.15.0, and moving it to 3.15.2 is a later round of the
-  same check, not part of this one. Round three closes the gaps a third review of the check found. Its logic and test
+  (the first entry above), and the check moves with it in this same change, through round four (the entry above).
+  Round three closes the gaps a third review of the check found. Its logic and test
   cases are taken unchanged from the canonical Python copy in HCW-NetworkEyes_App
   ([HCW-NetworkEyes_App#399](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/399)), which gives the same
   answers as the website's JavaScript copy
