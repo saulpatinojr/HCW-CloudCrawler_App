@@ -1,10 +1,11 @@
 Hybrid Cloud Works Cloud Crawler (App edition) and the cloud-crawler-core engine
 Copyright (c) 2026 Hybrid Cloud Works. Licensed under MIT (see LICENSE).
 
-Engine: cloud-crawler-core (packages/cloud-crawler-core) is written in this repository. Each v* tag releases it as a
-wheel attached to this repository's GitHub Release (.github/workflows/publish-core.yml). The lab edition,
-saulpatinojr/HCW-CloudCrawler_AddOn, installs that wheel unchanged (docs/adr/0002-engine-moves-downstream-unchanged.md).
-The engine's package metadata declares MIT, the same licence as this repository.
+Engine: cloud-crawler-core (packages/cloud-crawler-core) is written in this repository. Each release tag of the form
+vMAJOR.MINOR.PATCH (for example v0.1.1) releases it as a wheel attached to this repository's GitHub Release
+(.github/workflows/publish-core.yml). The lab edition, saulpatinojr/HCW-CloudCrawler_AddOn, installs that wheel
+unchanged (docs/adr/0002-engine-moves-downstream-unchanged.md). The engine's package metadata declares MIT, the same
+licence as this repository.
 
 Azure MCP Server: the appliance is built around Microsoft's Azure MCP Server 3.0.0, npm package @azure/mcp@3.0.0
 (docs/adr/0001-pin-azure-mcp-server-3-0-0.md). This repository does not include or redistribute it: no copy of it is

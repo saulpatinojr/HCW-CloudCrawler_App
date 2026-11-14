@@ -16,7 +16,7 @@ once, merge one before rebasing the next.
 - **A `NOTICE` file at the root of the repository** (the owner's request of 2026-11-14). A NOTICE is the short
   plain-text file that sits beside `LICENSE` and says what the licence covers and where outside material comes from; the
   sibling repositories already have one. It says: the repository is MIT (see `LICENSE`); the engine,
-  `packages/cloud-crawler-core`, is written here, released as a wheel on each `v*` tag and installed unchanged by
+  `packages/cloud-crawler-core`, is written here, released as a wheel on each `vMAJOR.MINOR.PATCH` tag and installed unchanged by
   HCW-CloudCrawler_AddOn; Azure MCP Server 3.0.0 (`@azure/mcp@3.0.0`, MIT according to its npm metadata) is started
   at run time through `npx` and is neither copied into this repository nor built into the appliance image, while the
   contract snapshot `tests/contract/snapshots/azmcp-3.0.0-tools.json` is the server's own tool list (Microsoft's text,
