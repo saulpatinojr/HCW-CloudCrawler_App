@@ -4,9 +4,10 @@
 # before it has succeeded. A v* tag can never be moved or deleted, so nothing here is optimistic.
 #   build    (contents: read)  the tag, every package version, the changelog and the tagged commit must agree
 #                              (scripts/check-release-version.py); build the cloud-crawler-core wheel and sdist; verify
-#                              the wheel carries the detector registry, no cloud SDK import and no Azure endpoint; write
-#                              a CycloneDX SBOM (the engine's locked runtime dependencies) and the release notes; keep
-#                              all of it, with a sha256 list, as one workflow artifact.
+#                              the wheel carries the detector registry and the MIT licence text (byte for byte the
+#                              root LICENSE), no cloud SDK import and no Azure endpoint; write a CycloneDX SBOM (the
+#                              engine's locked runtime dependencies) and the release notes; keep all of it, with a
+#                              sha256 list, as one workflow artifact.
 #   attest   (id-token and attestations: write, no repository write)  attest provenance and the SBOM for the wheel and
 #                              the sdist, then verify the attestations (this workflow file, this ref, this commit).
 #   release  (contents: write; a tag only)  verify the attestations again against the downloaded files, create the
@@ -85,7 +86,7 @@ jobs:
           set -euo pipefail
           if [ "$EVENT_NAME" = "push" ]; then mode=(--tag "$REF_NAME"); else mode=(--rehearse); fi
           python scripts/check-release-version.py "${mode[@]}" --dist dist
-      - name: The wheel carries the engine, no cloud SDK import, no HTTP client and no Azure endpoint
+      - name: The wheel carries the engine and the licence, no cloud SDK import, no HTTP client and no Azure endpoint
         run: python -I scripts/verify-core-wheel.py 'dist/cloud_crawler_core-*.whl'
       - name: SBOM (CycloneDX) of the engine's locked runtime dependencies
         run: |

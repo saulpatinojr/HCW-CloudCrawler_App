@@ -21,12 +21,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 VERIFY = ROOT / "scripts" / "verify-core-wheel.py"
 
-pytestmark = pytest.mark.skipif(shutil.which("uv") is None, reason="uv not on PATH")
-
 
 @pytest.fixture(scope="module")
 def dist(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Build as publish-core.yml does: the sdist first, then the wheel from that sdist."""
+    """Build as publish-core.yml does: the sdist first, then the wheel from that sdist.
+
+    Only the tests that need a build skip without uv; the licence-copy drift test needs no uv and always runs."""
+    if shutil.which("uv") is None:
+        pytest.skip("uv not on PATH")
     out = tmp_path_factory.mktemp("dist")
     proc = subprocess.run(
         ["uv", "build", "--no-create-gitignore", "--package", "cloud-crawler-core", "--out-dir", str(out)],

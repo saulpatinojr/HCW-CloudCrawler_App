@@ -644,3 +644,26 @@ same machine with CPython 3.15.2 and uv 0.13.8:
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2703 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The runtime check grows from 1049 to 1129 cases |
 | Same answers as the canonical copy | yes | 60,632 generated cases run through this copy and HCW-NetworkEyes_App's (main, round four) | 0 disagreements; the workflows of all 25 local HCW clones give the same findings through both |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+
+## Ran for the licence text in the engine wheel and sdist
+
+Run on 2026-11-14 on the branch `claude/package-licence-1707`, from `main` at `9b32b20`, on Linux with CPython 3.15.2
+and uv 0.13.8 (the version the workflows install), after a pre-merge review of the pull request. The change ships the
+root `LICENSE` in the `cloud-crawler-core` wheel and sdist, and `scripts/verify-core-wheel.py`, the check the release
+runs on the wheel, refuses a wheel without it or with a copy that differs from the root `LICENSE`. The review moved the
+"uv not on PATH" skip in `tests/unit/test_core_wheel.py` from the whole file onto the `dist` fixture, so the test that
+the package's `LICENSE` is a copy of the root one runs even without uv, and added the licence to the description of the
+check in `publish-core.yml` (its header comment and the step's name) and in `README.md`. The step's name is not a
+required check (rulesets match job names) and nothing else refers to it. Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 95 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2710 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The 7 new tests in `tests/unit/test_core_wheel.py` build the wheel and sdist as `publish-core.yml` does, find the licence in both, and show the release check accepts the built wheel and refuses one without the licence, one whose licence is only the `MIT License` heading and one not declared MIT |
+| The drift test runs without uv | yes | `.venv/bin/python -m pytest -q --no-cov tests/unit/test_core_wheel.py` with `PATH=/usr/bin:/bin` (no uv), then the same on the file as it was before the review | After: 1 passed (the licence-copy test), 6 skipped (`uv not on PATH`). Before: 7 skipped |
+| actionlint | yes | `actionlint -color` (1.7.12, with `.github/actionlint.yaml` and shellcheck 0.11.0 on the `PATH`) | Exit 0, no findings |
+| zizmor | yes | `zizmor --offline --format=github --config .github/zizmor.yml .github/workflows .github/actions` (1.31.1) | Exit 0, no findings |
+| yamllint | yes | `yamllint -c .yamllint.yaml .github/workflows/publish-core.yml` | Exit 0 |
+| The release on GitHub | no | | Runs only on a dry run or a tag; the pull request runs the tests above |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
