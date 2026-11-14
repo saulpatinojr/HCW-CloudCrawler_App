@@ -128,6 +128,16 @@ once, merge one before rebasing the next.
   cases, the reviewer's 348 and the 66,583 earlier ones give 0 disagreements with the canonical copy. The AddOn
   (HCW-CloudCrawler_AddOn) gets the same change in its own pull request, with its own `docs/whats-new-upstream.md`
   entry; nothing it adopts from this repository (the engine wheel) changes, so this change adds no entry there.
+  Copilot's review of this pull request and of its sister pull requests then found six more ways past the check,
+  closed first in the two canonical copies (the website's JavaScript and HCW-NetworkEyes_App's Python) and copied here
+  unchanged: a `sudo` inside a script that `sudo` already runs (there `$PATH` is already sudo's own list of folders,
+  so `sudo bash -c 'sudo env PATH=$PATH node x'` still gets the runner's Node.js); a PATH replaced for one command
+  (`env PATH=/usr/bin python3 x`); the runner's interpreter named by its folder or by an older version
+  (`/usr/bin/python3`, `/usr/local/bin/node`, `python3.14`); one-line `case` clauses (`case "$k" in a) node x ;;
+  esac`); a `${{ matrix.* }}` in the workflow-level `env:`, which GitHub does not fill in there; and pipx under a
+  step's `shell:` that clears or changes `PIPX_DEFAULT_PYTHON` (`shell: env -u PIPX_DEFAULT_PYTHON bash -e {0}`). None
+  of these forms is used in this repository's workflows, so the check reports exactly what it did before, and the test
+  file grows to 977 cases. Details in `VALIDATION.md`.
 - **The workflows read the uv version as a shell variable** ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). In the three `uv` install steps of `ci.yml` and the one in `dependabot-lockfiles.yml`, `python -m pip install "uv==${{ env.UV_VERSION }}"` becomes `python -m pip install "uv==${UV_VERSION}"`. `UV_VERSION` is set once in the workflow's own `env:` block, so the version installed is the same; the difference is that GitHub no longer pastes the value into the script text before the shell runs it (a `${{ }}` expression is filled in first, which zizmor, the workflow security checker, reports as a possible template injection at its strictest setting). The other steps of the same file already wrote it this way. No job name changes.
 - **opentelemetry-api 1.45.2 fixes CVE-2026-126360.** The `pip-audit` check (it looks up every locked Python package in the public list of known security problems) failed on 2026-11-13 because the lock still held `opentelemetry-api` 1.45.1, for which CVE-2026-126360 was published with 1.45.2 as the fix. `uv lock --upgrade-package opentelemetry-api` moves only that package; nothing else in the lock changes, apart from the lock format number uv 0.13.7 writes (3 to 5), and `requirements.lock.txt` is exported again from it. Found during the workflow runtime-check work ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)), not tracked by an issue of its own.
 - The workflow runtime check is refreshed to round two

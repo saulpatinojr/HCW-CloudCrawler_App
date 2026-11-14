@@ -587,3 +587,17 @@ whose note now also names `scripts/check_uv_pins.py` (run with `python`, starts 
 | Documentation site links | yes | `uv run --locked --only-group docs python scripts/build-pages.py` (it renders this file and `CHANGELOG.md`) | 23 pages built; every internal link and fragment resolves |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
 | The workflows on GitHub | no | | They run on the pull request |
+
+Then, on the same branch, the six fixes from Copilot's review of the round-3 pull requests, taken from the canonical
+Python copy (`ef14b90` for a `sudo` inside a script `sudo` runs, `82b9258` for the other five) and the website's copy
+(`9281f4e8` and `e5ac25e6`), which made them first.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Lint and format | yes | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2551 passed, 1 deselected; coverage 98.22 percent. 977 of them are in `tests/unit/test_workflow_runtime_setup.py` (901 before the six fixes) |
+| The new tests fail on the code before | yes | The 70 new tests and the one changed case added to the file as it was before, then `pytest -k` on them | 49 of the 86 tests they touch fail |
+| Same logic as the canonical copy | yes | The Python syntax trees of this file and the canonical copy at `82b9258`, docstrings removed | The same, apart from this repository's lists, as before the change; the three new made-up workflows are written as adjacent strings |
+| Same answers as the canonical copy | yes | The 19,584 generated cases of this change (replaced PATH, runner paths and versions, one-line `case` clauses, the step's `shell:` for pipx, workflow-level matrix values), the 4,844 nested-sudo cases and the review's 348 inputs, through both copies | 0 disagreements |
+| Real workflows | yes | The check over the workflows of all nine HCW repositories, before and after | The same findings before and after, and the same as the canonical copy's, repository by repository |
