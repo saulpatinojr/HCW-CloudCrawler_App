@@ -45,7 +45,7 @@ once, merge one before rebasing the next.
   earlier failure, because the zizmor install makes a Python environment with `python3 -m venv` (zizmor comes from
   PyPI) and runs then too. Nothing here reaches the
   lab edition: it already runs these steps, and no engine, tool schema or release asset changed, so its
-  `docs/whats-new-upstream.md` needs no entry. What ran is in `VALIDATION.md`.
+  `docs/whats-new-upstream.md` needs no entry. What ran is in `VALIDATION.md`. The uv check and the three linters run first in the `lint` job, straight after setting up Python and before uv is installed (from Copilot's review of the MigrateOrchestrator_App change): before, they ran after `uv sync` and the repository's own scripts, so code in a pull request could have rewritten `.github` on disk before it was read.
 
 - `tests/unit/test_workflow_runtime_setup.py` fails when a workflow or composite-action step runs `node`, `npm`, `npx`,
   `python`, `pip` or `uv` on the runner before its job has run `actions/setup-node` or `actions/setup-python`, so the

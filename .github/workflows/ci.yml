@@ -26,23 +26,9 @@ jobs:
         # install below runs then too and makes zizmor's environment with python3.
         if: ${{ !cancelled() }}
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      - run: python -m pip install "uv==${UV_VERSION}"
-      - run: uv sync --frozen --all-packages
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - name: requirements.lock.txt matches uv.lock
-        run: bash scripts/check-lockfiles.sh
-      - name: versions.env and every FROM of the Dockerfile name the same base image digest
-        run: bash scripts/check-versions.sh
-      - name: Every place that names the release version agrees (a v* tag can never be corrected)
-        run: python scripts/check-release-version.py
-      - name: No client-secret credential path anywhere in the application
-        run: |
-          set -euo pipefail
-          if grep -rn "ClientSecretCredential\|CertificateCredential\|UsernamePasswordCredential" src packages; then
-            echo "::error::a client-secret credential path exists"; exit 1
-          fi
-          echo "no client-secret credential path"
+      # The uv check and the three linters run first, straight after setting up Python: no
+      # repository code (uv sync builds this project's packages, ruff and the scripts run) has
+      # run yet, so nothing in this pull request can rewrite .github on disk before it is read.
       # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). The workflows listed below must name it
       # (the pages, release and security ones literally, as the lab editions' do; dependabot-lockfiles.yml in its own env). Then every
       # workflow and composite action is read for another way of choosing uv: another version, operator, spacing or
@@ -152,6 +138,23 @@ jobs:
           fi
           printf 'linting %s\n' "${files[@]}"
           hadolint --failure-threshold warning --format tty "${files[@]}"
+      - run: python -m pip install "uv==${UV_VERSION}"
+      - run: uv sync --frozen --all-packages
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - name: requirements.lock.txt matches uv.lock
+        run: bash scripts/check-lockfiles.sh
+      - name: versions.env and every FROM of the Dockerfile name the same base image digest
+        run: bash scripts/check-versions.sh
+      - name: Every place that names the release version agrees (a v* tag can never be corrected)
+        run: python scripts/check-release-version.py
+      - name: No client-secret credential path anywhere in the application
+        run: |
+          set -euo pipefail
+          if grep -rn "ClientSecretCredential\|CertificateCredential\|UsernamePasswordCredential" src packages; then
+            echo "::error::a client-secret credential path exists"; exit 1
+          fi
+          echo "no client-secret credential path"
 
   test:
     runs-on: ubuntu-26.04
