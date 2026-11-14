@@ -331,6 +331,20 @@ once, merge one before rebasing the next.
   ruleset still requires one approving review, as `.github/workflows/repository-admin.yml` sets it; lowering it there
   and in the live ruleset is the owner's step.
 
+### Fixed
+
+- **The engine wheel and its source archive now carry the MIT licence text**
+  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). A wheel is
+  the ready-to-install file that a Python package is shipped as, and the sdist is its source archive; `publish-core.yml`
+  attaches both to each release, and the AddOn installs the wheel. Until now their metadata said
+  `License-Expression: MIT`, but neither file held the licence itself, which the MIT licence asks to travel with every
+  copy. The package folder now keeps a copy of the root `LICENSE`, `packages/cloud-crawler-core/pyproject.toml` lists it
+  under `license-files` (the standard way, [PEP 639](https://peps.python.org/pep-0639/)), and the wheel names it in a
+  `License-File` line. `scripts/verify-core-wheel.py`, the check the release runs on the wheel, now refuses a wheel
+  without it, and the new `tests/unit/test_core_wheel.py` builds both archives the way the release does on every pull
+  request and fails if the licence is missing or differs from the root one. The licence and the version are unchanged;
+  the AddOn gets the file with the next release it adopts.
+
 ### Security
 
 - The image scan's accepted-risk file (`.trivyignore.yaml`) accepts CVE-2026-119373, CVE-2026-119374 and

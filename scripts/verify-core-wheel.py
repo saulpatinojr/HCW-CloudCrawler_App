@@ -2,7 +2,9 @@
 
 The engine moves to the AddOn unchanged (ADR 0002), and the AddOn's boundary forbids any cloud SDK and any Azure
 endpoint in its image. So the wheel must carry the detector registry and the normalisers, import nothing but the
-standard library and pydantic, and name no Azure endpoint. Exit 1 with the reason otherwise.
+standard library and pydantic, and name no Azure endpoint. It must also carry the MIT licence text (PEP 639: under
+.dist-info/licenses/, named in METADATA), because the licence asks for it to travel with every copy. Exit 1 with the
+reason otherwise.
 """
 
 from __future__ import annotations
@@ -45,7 +47,15 @@ def main(pattern: str) -> int:
                     print(f"{name} references {endpoint}")
                     return 1
         metadata = next(n for n in names if n.endswith("METADATA"))
-        requires = [line for line in archive.read(metadata).decode().splitlines() if line.startswith("Requires-Dist:")]
+        metadata_lines = archive.read(metadata).decode().splitlines()
+        licence = metadata.removesuffix("METADATA") + "licenses/LICENSE"
+        if licence not in names or "License-File: LICENSE" not in metadata_lines:
+            print("the wheel does not carry the licence text (LICENSE under .dist-info/licenses/, License-File)")
+            return 1
+        if "MIT License" not in archive.read(licence).decode("utf-8"):
+            print(f"{licence} is not the MIT licence")
+            return 1
+        requires = [line for line in metadata_lines if line.startswith("Requires-Dist:")]
         if any("pydantic" not in line for line in requires):
             print(f"the wheel requires more than pydantic: {requires}")
             return 1
