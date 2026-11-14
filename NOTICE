@@ -1,0 +1,27 @@
+Hybrid Cloud Works Cloud Crawler (App edition) and the cloud-crawler-core engine
+Copyright (c) 2026 Hybrid Cloud Works. Licensed under MIT (see LICENSE).
+
+Engine: cloud-crawler-core (packages/cloud-crawler-core) is written in this repository. Each v* tag releases it as a
+wheel attached to this repository's GitHub Release (.github/workflows/publish-core.yml). The lab edition,
+saulpatinojr/HCW-CloudCrawler_AddOn, installs that wheel unchanged (docs/adr/0002-engine-moves-downstream-unchanged.md).
+The engine's package metadata declares MIT, the same licence as this repository.
+
+Azure MCP Server: the appliance is built around Microsoft's Azure MCP Server 3.0.0, npm package @azure/mcp@3.0.0
+(docs/adr/0001-pin-azure-mcp-server-3-0-0.md). This repository does not include or redistribute it: no copy of it is
+kept here, and the appliance image built from infrastructure/docker/Dockerfile contains neither it nor Node.js. It is
+started at run time through npx (src/cloud_crawler_appliance/mcp_host/contract.py), by the contract test and by the
+development host (CC_AZMCP_MODE=stdio), which download it from npm under its own licence; its npm metadata declares
+MIT. Its container image (mcr.microsoft.com/azure-sdk/azure-mcp) is pinned by ADR 0001 for a later image build; no
+workflow here pulls or publishes it today. Two kinds of file here come from that server:
+  - tests/contract/snapshots/azmcp-3.0.0-tools.json is the tool list the server reports (names, titles, descriptions
+    and input schemas), kept as the contract the tests check against.
+  - samples/azure-mcp/*.json follow the shape of the server's result records; their values are fictional and were
+    written by hand, not captured from a live server.
+
+Samples and test data are fictional: subscription 00000000-0000-0000-0000-000000000001 and hcw-sample-* names (the
+storage accounts, whose names Azure forbids a hyphen in, are hcwsamplest*). Nothing in samples/ was exported from a real
+tenant.
+
+Microsoft, Azure and Entra are trademarks of Microsoft Corporation. This project is not affiliated with or endorsed by
+Microsoft. Cloud Crawler is not production software, and every report bundle it produces says it is not an audit, not
+a compliance attestation and not a security assessment.

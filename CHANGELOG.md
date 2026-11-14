@@ -13,6 +13,18 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- **A `NOTICE` file at the root of the repository** (the owner's request of 2026-11-14). A NOTICE is the short
+  plain-text file that sits beside `LICENSE` and says what the licence covers and where outside material comes from; the
+  sibling repositories already have one. It says: the repository is MIT (see `LICENSE`); the engine,
+  `packages/cloud-crawler-core`, is written here, released as a wheel on each `v*` tag and installed unchanged by
+  HCW-CloudCrawler_AddOn; Azure MCP Server 3.0.0 (`@azure/mcp@3.0.0`, MIT according to its npm metadata) is started
+  at run time through `npx` and is neither copied into this repository nor built into the appliance image, while the
+  contract snapshot `tests/contract/snapshots/azmcp-3.0.0-tools.json` is the server's own tool list and the recordings in
+  `samples/azure-mcp` follow its result shape with fictional values; the samples are fictional; Microsoft, Azure and
+  Entra are Microsoft's trademarks and the project is not affiliated with Microsoft; and the bundles are not an audit.
+  The README's licence line now links it. Nothing in the engine wheel changes (the file is at the repository root, not
+  in the engine package), so the AddOn's `docs/whats-new-upstream.md` needs no entry.
+
 - **CI now checks the workflow files and the Dockerfile with the same three linters as the lab edition, and checks that
   every workflow installs the same uv**
   ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707), following
