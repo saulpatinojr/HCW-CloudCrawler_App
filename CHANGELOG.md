@@ -123,7 +123,7 @@ once, merge one before rebasing the next.
   to the `lint` job after the note was written, which is run with `python` (read by the check) and starts nothing.
   Checked here with uv 0.13.8 (details in `VALIDATION.md`): `uv sync --all-packages`, ruff,
   `bash scripts/check-lockfiles.sh` and `uv run pytest -q --cov=packages --cov=src` (2475 passed, 1 deselected; 98
-  percent coverage, 901 of the tests in this file, 699 before). The Python syntax tree of this file matches the
+  percent coverage, 901 of the tests in this file, 699 before). The Python syntax tree (the code's structure as Python reads it) of this file matches the
   canonical copy at `9b96396` once the docstrings and this repository's lists are set aside, and the 12,975 round-three
   cases, the reviewer's 348 and the 66,583 earlier ones give 0 disagreements with the canonical copy. The AddOn
   (HCW-CloudCrawler_AddOn) gets the same change in its own pull request, with its own `docs/whats-new-upstream.md`
