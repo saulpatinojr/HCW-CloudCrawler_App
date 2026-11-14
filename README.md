@@ -119,7 +119,7 @@ Prerequisites: Python 3.15.2 or later on the 3.15 line, `uv`, and Node.js 26 for
 contract test (it runs `npx @azure/mcp@3.0.0`; Node.js 22 or later works).
 uv 0.13.6 or newer downloads Python 3.15.2 or later for you (the workflows
 install uv 0.13.8). An older uv cannot download a 3.15 release the project
-accepts (3.15.2 or later), so with an older uv install Python 3.15 first, as
+accepts (3.15.2 or later), so with an older uv install Python 3.15.2 first, as
 [CONTRIBUTING.md](CONTRIBUTING.md#set-up-and-check-your-change) describes.
 
 ```bash
