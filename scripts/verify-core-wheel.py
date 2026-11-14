@@ -3,8 +3,8 @@
 The engine moves to the AddOn unchanged (ADR 0002), and the AddOn's boundary forbids any cloud SDK and any Azure
 endpoint in its image. So the wheel must carry the detector registry and the normalisers, import nothing but the
 standard library and pydantic, and name no Azure endpoint. It must also carry the MIT licence text (PEP 639: under
-.dist-info/licenses/, named in METADATA), because the licence asks for it to travel with every copy. Exit 1 with the
-reason otherwise.
+.dist-info/licenses/, named in METADATA, with License-Expression: MIT), byte for byte this repository's LICENSE, because
+the licence asks for it to travel with every copy. Exit 1 with the reason otherwise.
 """
 
 from __future__ import annotations
@@ -13,7 +13,10 @@ import glob
 import re
 import sys
 import zipfile
+from pathlib import Path
 
+# The licence the wheel must carry: this repository's own LICENSE (publish-core.yml runs this from the checkout).
+ROOT_LICENCE = Path(__file__).resolve().parents[1] / "LICENSE"
 ENDPOINTS = ("management.azure.com", "login.microsoftonline.com", "graph.microsoft.com")
 CLOUD_SDKS = r"^\s*(import|from)\s+(azure|msal|boto3|google\.cloud|httpx|requests|aiohttp|urllib3)\b"
 REQUIRED = (
@@ -52,8 +55,11 @@ def main(pattern: str) -> int:
         if licence not in names or "License-File: LICENSE" not in metadata_lines:
             print("the wheel does not carry the licence text (LICENSE under .dist-info/licenses/, License-File)")
             return 1
-        if "MIT License" not in archive.read(licence).decode("utf-8"):
-            print(f"{licence} is not the MIT licence")
+        if "License-Expression: MIT" not in metadata_lines:
+            print("the wheel's METADATA does not declare License-Expression: MIT")
+            return 1
+        if archive.read(licence) != ROOT_LICENCE.read_bytes():
+            print(f"{licence} is not this repository's LICENSE (the MIT licence text)")
             return 1
         requires = [line for line in metadata_lines if line.startswith("Requires-Dist:")]
         if any("pydantic" not in line for line in requires):

@@ -334,7 +334,7 @@ once, merge one before rebasing the next.
 ### Fixed
 
 - **The engine wheel and its source archive now carry the MIT licence text**
-  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). A wheel is
+  (found in the licensing review of the App repositories, 2026-11-14). A wheel is
   the ready-to-install file that a Python package is shipped as, and the sdist is its source archive; `publish-core.yml`
   attaches both to each release, and the AddOn installs the wheel. Until now their metadata said
   `License-Expression: MIT`, but neither file held the licence itself, which the MIT licence asks to travel with every

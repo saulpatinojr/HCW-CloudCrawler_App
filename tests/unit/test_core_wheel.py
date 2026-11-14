@@ -98,3 +98,43 @@ def test_release_gate_refuses_a_wheel_without_the_licence(dist: Path, tmp_path: 
     proc = _verify(stripped)
     assert proc.returncode == 1
     assert "does not carry the licence text" in proc.stdout
+
+
+def _rewrite(wheel: Path, out: Path, replace: dict[str, bytes]) -> Path:
+    """Copy the wheel, replacing the members whose names end with a key of ``replace``."""
+    target = out / wheel.name
+    with zipfile.ZipFile(wheel) as src, zipfile.ZipFile(target, "w") as dst:
+        for item in src.infolist():
+            data = src.read(item)
+            for suffix, new in replace.items():
+                if item.filename.endswith(suffix):
+                    data = new(data) if callable(new) else new
+            dst.writestr(item, data)
+    return target
+
+
+def test_release_gate_refuses_a_licence_that_is_only_the_mit_heading(dist: Path, tmp_path: Path) -> None:
+    """Copilot on #94: a file that says "MIT License" but not the MIT terms must not pass."""
+    wheel = _one(dist, "cloud_crawler_core-*.whl")
+    proc = _verify(
+        _rewrite(wheel, tmp_path, {".dist-info/licenses/LICENSE": b"MIT License\nThis is not the MIT text.\n"})
+    )
+    assert proc.returncode == 1
+    assert "is not this repository's LICENSE" in proc.stdout
+
+
+def test_release_gate_refuses_a_wheel_not_declared_mit(dist: Path, tmp_path: Path) -> None:
+    wheel = _one(dist, "cloud_crawler_core-*.whl")
+    proc = _verify(
+        _rewrite(
+            wheel,
+            tmp_path,
+            {
+                ".dist-info/METADATA": lambda data: data.replace(
+                    b"License-Expression: MIT", b"License-Expression: Apache-2.0"
+                )
+            },
+        )
+    )
+    assert proc.returncode == 1
+    assert "does not declare License-Expression: MIT" in proc.stdout
