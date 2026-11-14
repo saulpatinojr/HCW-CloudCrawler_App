@@ -3,8 +3,9 @@
 - **Status:** Accepted
 - **Date:** 2026-11-14
 - **Owners:** Workload owner
-- **Issue:** [saulpatinojr/HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)
-  (the licensing review of the App and AddOn repositories); the owner's answer "option 1" in the session of 2026-11-14
+- **Issue:** none. The owner gave this decision ("option 1") in a working session on 2026-11-14, after being shown
+  the table below; it is recorded on this record's pull request,
+  [#93](https://github.com/saulpatinojr/HCW-CloudCrawler_App/pull/93)
 
 ## Context
 
