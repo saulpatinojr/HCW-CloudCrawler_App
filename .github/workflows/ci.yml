@@ -26,50 +26,9 @@ jobs:
         # install below runs then too and makes zizmor's environment with python3.
         if: ${{ !cancelled() }}
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
-      # The uv check and the three linters run first, straight after setting up Python: no
+      # The three linters and then the uv check run first, straight after setting up Python: no
       # repository code (uv sync builds this project's packages, ruff and the scripts run) has
       # run yet, so nothing in this pull request can rewrite .github on disk before it is read.
-      # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). The workflows listed below must name it
-      # (the pages, release and security ones literally, as the lab editions' do; dependabot-lockfiles.yml in its own env). Then every
-      # workflow and composite action is read for another way of choosing uv: another version, operator, spacing or
-      # extra, an install with no version, astral-sh/setup-uv, or another UV_VERSION value. A version worked out
-      # while a job runs, or an install the patterns do not describe, is not seen.
-      - name: Every workflow uses the uv this workflow uses
-        run: |
-          set -euo pipefail
-          for f in .github/workflows/pages.yml .github/workflows/publish-core.yml .github/workflows/security.yml; do
-            [ -f "$f" ] || { echo "::error::${f} is gone; update the list in this step"; exit 1; }
-            grep -Fq "\"uv==${UV_VERSION}\"" "$f" || { echo "::error file=${f}::installs a uv other than ${UV_VERSION}"; exit 1; }
-          done
-          f=.github/workflows/dependabot-lockfiles.yml
-          [ -f "$f" ] || { echo "::error::${f} is gone; update the list in this step"; exit 1; }
-          grep -Fqx "  UV_VERSION: \"${UV_VERSION}\"" "$f" || { echo "::error file=${f}::UV_VERSION is not ${UV_VERSION}"; exit 1; }
-          # Every workflow and composite action is then read line by line for: uv with a version operator, any
-          # spacing or extras; pip, pipx or `uv tool` installing uv with no version; astral-sh/setup-uv; and
-          # UV_VERSION given a value that starts with a digit or `$` (block, flow, quoted or shell form).
-          q="[\"']?"
-          re_pin='\buv(\[[A-Za-z0-9,_-]*\])?[[:space:]]*(===?|~=|>=|<=|!=|[<>])[[:space:]]*[0-9A-Za-z._{}$]+'
-          re_bare="(pip3?|pipx|uv[[:space:]]+tool)[[:space:]]+install[[:space:]]+(-[^[:space:]]+[[:space:]]+)*${q}uv${q}([[:space:]]|\$)"
-          re_action='astral-sh/setup[-]uv[@]'
-          re_env="\\bUV_VERSION${q}[[:space:]]*[:=][[:space:]]*${q}[0-9\$][^\"'[:space:],}]*"
-          shopt -s nullglob
-          files=(.github/workflows/*.yml .github/workflows/*.yaml .github/actions/*/action.yml .github/actions/*/action.yaml)
-          # Written to a file first, so a failing grep stops the step; exit 1 (no line matched) is allowed.
-          pins="${RUNNER_TEMP}/uv-pins"
-          grep -HnoE "${re_pin}|${re_bare}|${re_action}|${re_env}" "${files[@]}" > "$pins" || [ "$?" -eq 1 ]
-          bad=0
-          while IFS=: read -r f n pin; do
-            case "$pin" in
-              "uv==${UV_VERSION}") continue ;;
-              "uv==\${UV_VERSION}")
-                grep -Eq "$re_env" "$f" && continue
-                pin="${pin} in a file that sets no UV_VERSION" ;;
-              UV_VERSION*) [ "${pin##*[:= \"\']}" = "$UV_VERSION" ] && continue ;;
-            esac
-            echo "::error file=${f},line=${n}::${pin} is not uv ${UV_VERSION}"; bad=1
-          done < "$pins"
-          exit "$bad"
-
       # Workflow and Dockerfile linters (HCW-HybridCloudWorks#1575): the
       # same three tools, versions and digests as the website's CI. CodeRabbit
       # used to run them and was removed on 2026-11-06. Each tool is a pinned
@@ -138,6 +97,14 @@ jobs:
           fi
           printf 'linting %s\n' "${files[@]}"
           hadolint --failure-threshold warning --format tty "${files[@]}"
+
+      # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). scripts/check_uv_pins.py (standard library
+      # only, so it runs before uv is installed) needs each workflow named here to install that uv, and fails on any
+      # other uv in a workflow or composite action; its docstring lists what it reads, and
+      # tests/unit/test_check_uv_pins.py tests it. Runs after an earlier failure too, so one run reports every finding.
+      - name: Every workflow uses the uv this workflow uses
+        if: ${{ !cancelled() }}
+        run: python scripts/check_uv_pins.py .github/workflows/pages.yml .github/workflows/publish-core.yml .github/workflows/security.yml .github/workflows/dependabot-lockfiles.yml
       - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --all-packages
       - run: uv run ruff check .
