@@ -748,4 +748,5 @@ pull request as the change.
 
 ## Contributing, security, license
 
-See `CONTRIBUTING.md`, `.github/SECURITY.md` and [LICENSE](LICENSE) (MIT).
+See `CONTRIBUTING.md`, `.github/SECURITY.md`, [LICENSE](LICENSE) (MIT) and [NOTICE](NOTICE) (the licence, where the
+engine is released, what this repository takes from Azure MCP Server, and the trademark statement).

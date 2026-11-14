@@ -16,5 +16,6 @@ accepted, record it here and link the issue.
 | [0004](0004-entra-token-validation-on-api-and-mcp.md) | Validate Microsoft Entra access tokens on /api and /mcp, and take the actor from the token | Accepted |
 | [0005](0005-terraform-evidence-is-read-through-a-provider-type-table.md) | Terraform state and plan are read through a provider-type table, and what Terraform cannot say stays unknown | Proposed |
 | [0006](0006-dependabot-pull-requests-regenerate-the-lockfile-export.md) | Dependabot edits uv.lock only, and a workflow regenerates the lockfile export on its pull requests | Proposed |
+| [0007](0007-the-repository-is-mit-licensed.md) | The repository and the cloud-crawler-core engine are MIT-licensed | Accepted |
 
-Next number: 0007.
+Next number: 0008.
