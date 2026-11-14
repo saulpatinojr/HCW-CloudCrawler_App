@@ -180,8 +180,12 @@ RUNNER_DEFAULT_ALLOWED: dict[str, str] = {}
 # `python` or `uv run python`, which the check reads, and start only git or gh; scripts/check-versions.sh runs sed
 # and awk only; scripts/scan-image.sh runs Trivy in a container; the composite action .github/actions/self-merging-pr
 # runs gh only; and the `test` job's pytest leaves out the `azmcp` tests (pyproject.toml's `-m 'not azmcp'`), the
-# only ones that start npx.
+# only ones that start npx. Of the linters ci.yml's lint job installs (2026-11-14), actionlint and hadolint are single
+# binaries that start no runtime; zizmor is a Python program, listed below.
 INDIRECT_RUNTIME: dict[str, str] = {
+    "ci.yml > lint > zizmor > python": (
+        "zizmor is a Python program, run from the environment the lint-tools step made with python3 (setup-python's)"
+    ),
     "ci.yml > contract > Azure MCP Server 3.0.0 tools/list matches the committed snapshot (ADR 0001) > node": (
         "the azmcp test starts Azure MCP Server 3.0.0 with npx (src/cloud_crawler_appliance/mcp_host/contract.py)"
     ),

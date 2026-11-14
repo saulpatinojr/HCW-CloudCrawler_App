@@ -1,0 +1,19 @@
+# zizmor configuration, read by the lint step in ci.yml
+# (HCW-HybridCloudWorks#1707, following #1575).
+#
+# self-repository: the rehearsal workflow runs this repository's own action
+# with `uses: ./.github/actions/self-merging-pr`. zizmor asks for GitHub's
+# newer `uses: $/...` form, which reads the action from the commit that is
+# running rather than from the checked-out folder. That is the better form,
+# but actionlint 1.7.12, the release this CI pins (the same one every HCW
+# repository pins), does not understand `$/` and fails the actionlint step
+# on it. The `./` form is safe here: the action is read from this
+# repository's own checkout, made one step earlier, and nothing is cloned
+# into that folder in between. Ignored for that one line only, so a new
+# `./` reference anywhere, or an edit that moves this one, is flagged again
+# (update the line number here once it is checked). Switch to `$/` and drop
+# this entry when actionlint is moved to a release that accepts it.
+rules:
+  self-repository:
+    ignore:
+      - rehearse-self-merging-pr.yml:47

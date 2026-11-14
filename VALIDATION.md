@@ -535,3 +535,28 @@ Azure.
 
 uv 0.13.8, like 0.13.7, prints a warning that `UV_NATIVE_TLS` is deprecated; that variable is set by this session's
 sandbox, and no workflow or script in this repository sets it.
+
+## Ran for the workflow linters and the uv pin check
+
+Run on 2026-11-14 on the branch `claude/ci-linters-1707`, from `main` at `9a5e1c9`, on Linux with CPython 3.15.2 and
+uv 0.13.8 (installed with `pip install uv==0.13.8` into a scratch virtual environment). The change adds actionlint,
+zizmor and hadolint, and a check that every workflow installs the uv `ci.yml` names, to the `lint` job
+([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707), following
+[issue #1575](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1575)). Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| The pinned linters are the published ones | yes | `sha256sum` on `actionlint_1.7.12_linux_amd64.tar.gz` and `hadolint-linux-x86_64` downloaded from their v1.7.12 and v2.14.0 releases, compared with each release's own checksum file; the PyPI JSON for `zizmor` 1.31.1 | `8aca8db9…a3d8`, `6bf22694…5a47` and `58e878eb…c410`, the same as the lab edition's `ci.yml` and as published |
+| The install step | yes | The step's script, run as written with `RUNNER_TEMP` set | Exit 0: both `sha256sum -c` lines `OK`, zizmor installed with `--require-hashes` |
+| actionlint | yes | `actionlint -color`, with `.github/actionlint.yaml` and shellcheck 0.11.0 on the `PATH` as on the runner | Exit 0, no findings |
+| zizmor | yes | `zizmor --offline --format=github --config .github/zizmor.yml .github/workflows` | Exit 0. With `--no-config` the one ignored finding (`self-repository`, `rehearse-self-merging-pr.yml:47`) is the only one, exit 12 |
+| The `$/` form zizmor asks for | yes | actionlint 1.7.12 on a scratch workflow with `uses: $/.github/actions/x` | actionlint fails: `specifying action "$/.github/actions/x" in invalid format because ref is missing`; so the line is ignored, not changed |
+| hadolint | yes | `hadolint --failure-threshold warning --format tty infrastructure/docker/Dockerfile` (the file list the step builds) | Exit 0, no findings |
+| The uv step passes | yes | The step's script, run as written with `UV_VERSION=0.13.8` | Exit 0 |
+| The uv step fails on a different uv | yes | The same script after a temporary change to `uv==0.13.7` in `pages.yml`, in `security.yml`, in only the second pin of `publish-core.yml` (line 188), and to `UV_VERSION: "0.13.7"` in `dependabot-lockfiles.yml`, each reverted before the next | Exit 1 each time, naming the file (and the line for the second pin); exit 0 again after the last revert |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 92 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Base image pins and release version | yes | `bash scripts/check-versions.sh`, `python scripts/check-release-version.py` | Exit 0 each |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2200 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+| The new steps on GitHub | no | | They run on the pull request |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |

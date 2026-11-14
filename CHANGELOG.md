@@ -13,6 +13,33 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- **CI now checks the workflow files and the Dockerfile with the same three linters as the lab edition, and checks that
+  every workflow installs the same uv**
+  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707), following
+  [HCW-HybridCloudWorks issue #1575](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1575)). A linter is a
+  tool that reads a file and reports mistakes without running it. The `lint` job in `ci.yml` (already a required check;
+  no job is added or renamed, and no workflow file is added, so the workflow set in `tests/unit/test_workflows.py` is
+  unchanged) gains these steps, copied from the lab edition's `ci.yml` with the same versions and digests:
+  **actionlint 1.7.12** (workflow mistakes, with shellcheck on their scripts), **zizmor 1.31.1** (workflow security)
+  and **hadolint 2.14.0** (`infrastructure/docker/Dockerfile`). Each is downloaded at its pinned version and its
+  SHA-256 (a fingerprint of the file) is checked before it runs; the three values were checked again against the
+  publishers' own checksum files and PyPI on 2026-11-14. `.github/actionlint.yaml`, the same file as the lab edition's,
+  tells actionlint that `ubuntu-26.04` is a GitHub-hosted runner. zizmor reported one low finding, which was already
+  there: `rehearse-self-merging-pr.yml` runs this repository's own action with `uses: ./...`, where GitHub now offers a
+  safer `uses: $/...` form
+  ([GitHub's announcement](https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/),
+  [zizmor's explanation](https://docs.zizmor.sh/audits/#self-repository)). The pinned actionlint does not understand
+  `$/` and fails on it, so that one line is ignored in the new `.github/zizmor.yml`, with the reason written there and
+  the step to undo it once actionlint is moved; zizmor still fails the step on every other finding of any severity, as
+  in the lab edition. A new step, **Every workflow uses the uv this workflow uses**, fails when `pages.yml`,
+  `publish-core.yml` or `security.yml` installs a uv other than `UV_VERSION` in `ci.yml`, when
+  `dependabot-lockfiles.yml`'s own `UV_VERSION` differs, or when any `uv==` anywhere under `.github/workflows` names
+  another version (so the second install in `publish-core.yml` is checked too). `setup-python` in the `lint` job now
+  also runs after an earlier failure, because the zizmor install needs Python and runs then too, and
+  `tests/unit/test_workflow_runtime_setup.py` lists the zizmor step as one that starts Python. Nothing here reaches the
+  lab edition: it already runs these steps, and no engine, tool schema or release asset changed, so its
+  `docs/whats-new-upstream.md` needs no entry. What ran is in `VALIDATION.md`.
+
 - `tests/unit/test_workflow_runtime_setup.py` fails when a workflow or composite-action step runs `node`, `npm`, `npx`,
   `python`, `pip` or `uv` on the runner before its job has run `actions/setup-node` or `actions/setup-python`, so the
   runner image's own, older Node.js or Python cannot come back unnoticed
