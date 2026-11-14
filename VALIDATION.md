@@ -604,3 +604,43 @@ which made them first.
 | Same logic as the canonical copy | yes | The Python syntax trees of this file and the canonical copy at `85fe01c`, docstrings removed | The same, apart from this repository's lists, as before the change; the new made-up workflows and refused texts are written as adjacent strings |
 | Same answers as the canonical copy | yes | The 49,200 generated cases of these changes (replaced, removed or cleared PATH, `command -p`, runner paths and versions, free-threaded names, one-line `case` clauses, the step's `shell:` for pipx and for a listed step, workflow-level matrix values, one-line `defaults:`), the 4,844 nested-sudo cases and the review's 348 inputs, through both copies | 0 disagreements; of the 348, one answer moved with the pre-PR review's fix and moved back with Copilot's second round (`pipx run --python python3.15t x` is reported again), the same in both copies |
 | Real workflows | yes | The check over the workflows of all nine HCW repositories, before and after | The same findings before and after, and the same as the canonical copy's, repository by repository |
+
+## Ran for the move to Python 3.15.2 as the minimum
+
+Run on 2026-11-14 on the branch `claude/python-3.15.2`, from `main` at `a270e1e`, on Linux with CPython 3.15.2 and
+uv 0.13.8 (the version the workflows install). The change moves `requires-python` in both `pyproject.toml` files from
+`>=3.15.1,<3.16` to `>=3.15.2,<3.16` (owner decision 2026-11-14: the latest stable 3.15 release). Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Lock | yes | `make lock` | 70 packages resolved; only the lock's `requires-python` line changed; no package version moved; `requirements.lock.txt` unchanged |
+| Which uv offers 3.15.2 | yes | `uvx uv@0.13.5 python list 3.15 --all-versions --only-downloads`, and the same with 0.13.6 | 0.13.5 offers 3.15.0 and 3.15.1; 0.13.6 adds 3.15.2 |
+| Setup | yes | `make setup` | Exit 0 with `uv python pin --no-project 3.15`; before that change, `uv python pin 3.15` stopped with "The requested Python version `3.15` is incompatible with the project `requires-python` value of `>=3.15.2, <3.16`" |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Base image pins and release version | yes | `bash scripts/check-versions.sh`, `python scripts/check-release-version.py` | Exit 0 each |
+| The engine wheel's range | yes | `uv build --no-create-gitignore --package cloud-crawler-core`, then `python scripts/verify-core-wheel.py` on the wheel | `Requires-Python: <3.16,>=3.15.2`; wheel verified, 24 files |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2273 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+| Image build | no | | Not run: the image's base is already `python:3.15.2-slim-trixie` and no file it contains changed |
+
+Then, after `main` at `23aa8ef` (round three of the workflow runtime check) was merged into the branch, on the same
+machine with CPython 3.15.2 and uv 0.13.8:
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2623 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The count is round three's; this change adds no test |
+
+Then round four of the workflow runtime check was brought into the branch (Copilot's review of this pull request
+noticed that the round-three check still accepted Python 3.15.0). It moves the check's Python floor to 3.15.2. On the
+same machine with CPython 3.15.2 and uv 0.13.8:
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2703 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The runtime check grows from 1049 to 1129 cases |
+| Same answers as the canonical copy | yes | 60,632 generated cases run through this copy and HCW-NetworkEyes_App's (main, round four) | 0 disagreements; the workflows of all 25 local HCW clones give the same findings through both |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
