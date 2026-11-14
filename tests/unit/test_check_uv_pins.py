@@ -249,6 +249,11 @@ FAILS: dict[str, tuple[Callable[[Path], None], str]] = {
         ),
         "dependabot-lockfiles.yml",
     ),
+    # An install command only where a command starts (Copilot on HCW-CloudCrawler_App#89).
+    "a listed workflow's only install is inside an echo": (
+        replace(W + "security.yml", 'python -m pip install "uv==0.13.8"', "echo 'pip install \"uv==0.13.8\"'"),
+        "security.yml",
+    ),
     # A wrong value is still reported wherever it is written, comments included.
     "another uv in a comment": (append(OTHER_FILE, '# pip install "uv==0.13.7"'), "other.yml"),
     "another UV_VERSION in a comment": (append(OTHER_FILE, '  # UV_VERSION: "0.13.7"'), "other.yml"),
@@ -271,6 +276,12 @@ PASSES: dict[str, Callable[[Path], None]] = {
     "shell redirection after uv": append(OTHER_FILE, STEP + "echo uv > tool.txt"),
     "setup-uv named in a comment": append(OTHER_FILE, "# astral-sh/setup-uv is pinned nowhere in scope"),
     "the uv image at this tag": append(OTHER_FILE, STEP + "docker run --rm ghcr.io/astral-sh/uv:0.13.8 --version"),
+    # A commented-out install installs nothing, so an unpinned one there is not an error (Copilot on
+    # HCW-CloudAssessor_App#104); a wrong pin in a comment still is (see FAILS).
+    "an unpinned install in a comment": append(OTHER_FILE, "# pip install uv   (an example, not a step)"),
+    "an install after && and in $( )": append(
+        OTHER_FILE, STEP + 'cd x && pip install "uv==0.13.8" && echo "$(pip install "uv==0.13.8")"'
+    ),
     "pip installs another package": append(OTHER_FILE, STEP + "pipx install --python python3.15 checkov==3.3.30"),
     "UV_VERSION set in env, with a stray comment beside it": append(
         W + "dependabot-lockfiles.yml", '# UV_VERSION: "0.13.8" (see env above)'

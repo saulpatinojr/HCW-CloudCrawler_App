@@ -51,7 +51,7 @@ once, merge one before rebasing the next.
   never sets it. These are reported wherever they are written, comments included. Other packages are left alone (`pyuv`, `uvicorn`, `uv-dynamic-versioning`), and so is `uv_==…`,
   which pip refuses as a name. What it cannot see: a version worked out while a job runs, or an install written in a
   way these patterns do not describe. `tests/unit/test_check_uv_pins.py` (also the same file in both repositories)
-  builds a small made-up repository for each of 49 changes that must fail and 19 that must pass, and runs the script
+  builds a small made-up repository for each of 50 changes that must fail and 21 that must pass, and runs the script
   on this repository with the file list `ci.yml` gives it. `setup-python` in the `lint` job now also runs after an
   earlier failure, because the zizmor install makes a Python environment with `python3 -m venv` (zizmor comes from
   PyPI) and runs then too. Nothing here reaches the

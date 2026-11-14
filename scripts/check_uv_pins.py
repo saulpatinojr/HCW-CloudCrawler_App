@@ -39,7 +39,12 @@ REQUIREMENT = re.compile(
     rf"(?<![A-Za-z0-9._/-])(?P<name>{NAME})\s*(?P<extras>\[[^\]]*\])?\s*"
     r"(?:(?P<op>===|==|~=|!=|>=|<=|<|>)\s*(?P<version>[0-9$][^\s\"'\\,;)\]]*)|@\s*(?P<at>[^\s\"'\\,;)\]]+))"
 )
-INSTALL = re.compile(r"(?<![A-Za-z0-9_-])(?:pip3?|pipx|uv\s+pip|uv\s+tool)\s+install\s+(?P<rest>.*)")
+# An install command where a command starts: the start of a line (after a YAML `- run:` or `run:` key), or after
+# `;`, `&`, `|`, `(`, `$(` or a backtick, optionally after `sudo` and `python -m`. So `echo 'pip install uv'` is text.
+INSTALL = re.compile(
+    r"(?:^\s*(?:-\s+)?(?:run:\s*)?|[;&|(`]\s*|\$\(\s*)(?:sudo\s+(?:-\S+\s+)*)?(?:python3?(?:\.\d+)?\s+-m\s+)?"
+    r"(?:pip3?|pipx|uv\s+pip|uv\s+tool)\s+install\s+(?P<rest>.*)"
+)
 BARE = re.compile(rf"(?P<name>{NAME})(?:\[[^\]]*\])?")
 SETUP_UV = re.compile(r"\buses:\s*[\"']?astral-sh/setup-uv\b", re.IGNORECASE)
 UV_IMAGE = re.compile(r"astral-sh/uv:(?P<tag>[^\s\"'@]+)", re.IGNORECASE)
@@ -141,8 +146,9 @@ def check_file(path: Path, rel: str, want: str) -> tuple[list[str], bool]:
                 error(n, f"{m.group(0)} uses UV_VERSION, which this file never sets")
             elif not (op == "==" and (version == want or version in SHELL_VAR)):
                 error(n, f"{m.group(0)} is not uv=={want}")
-        if m := INSTALL.search(line):
-            # One command (up to `;`, `&`, `|` or a comment), with spaces around an operator closed up (`uv == 1`).
+        if m := INSTALL.search(code(line)):
+            # A commented-out install installs nothing (Copilot on HCW-CloudAssessor_App#104). One command (up to
+            # `;`, `&`, `|` or a comment), with spaces around an operator closed up (`uv == 1`).
             command = re.split(r"[;&|#]", m["rest"], maxsplit=1)[0]
             command = re.sub(r"\s*(===|==|~=|!=|>=|<=|<|>|@)\s*", r"\1", command).strip()
             for token in re.split(r"\s+", command):
