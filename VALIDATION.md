@@ -623,3 +623,12 @@ uv 0.13.8 (the version the workflows install). The change moves `requires-python
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2273 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
 | Image build | no | | Not run: the image's base is already `python:3.15.2-slim-trixie` and no file it contains changed |
+
+Then, after `main` at `23aa8ef` (round three of the workflow runtime check) was merged into the branch, on the same
+machine with CPython 3.15.2 and uv 0.13.8:
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2623 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The count is round three's; this change adds no test |
