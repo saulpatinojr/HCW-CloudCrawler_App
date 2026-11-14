@@ -91,6 +91,22 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- **Python 3.15.2 is now the minimum.** The owner decided on 2026-11-14 that every Hybrid Cloud Works Python
+  repository requires the latest stable release of Python 3.15, which is 3.15.2 (released 2026-10-25). What moved:
+  - `requires-python` in both `pyproject.toml` files (the App and the engine `cloud-crawler-core`), from
+    `>=3.15.1,<3.16` to `>=3.15.2,<3.16`.
+  - `uv.lock` re-locked with `make lock` and uv 0.13.8, the version the workflows install. Only the lock's own Python
+    range changed: no package version moved, and `requirements.lock.txt` came out exactly as it was.
+  - `README.md`, `CONTRIBUTING.md` and `docs/quick-start.md` now say 3.15.2, and that letting uv download it needs
+    uv 0.13.6 or newer (0.13.5 offers only up to 3.15.1).
+  - `make setup` now runs `uv python pin --no-project 3.15`. `.python-version` still names the line only, `3.15`, but
+    uv refuses to pin that line against the new range (the line also covers 3.15.0 and 3.15.1), so `make setup`
+    stopped with "The requested Python version `3.15` is incompatible". `--no-project` skips only that check;
+    `uv sync` still picks an interpreter inside `>=3.15.2,<3.16`.
+  - **The AddOn.** The engine wheel's `Requires-Python` becomes `>=3.15.2,<3.16` from the next release (the published
+    v0.1.1 wheel is unchanged). The AddOn moves its own floor to 3.15.2 in a matching change and already runs 3.15.2,
+    so `core-update.yml` adopts that release as usual. The image already ran `python:3.15.2-slim-trixie`, so it does
+    not change.
 - **The workflows read the uv version as a shell variable** ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). In the three `uv` install steps of `ci.yml` and the one in `dependabot-lockfiles.yml`, `python -m pip install "uv==${{ env.UV_VERSION }}"` becomes `python -m pip install "uv==${UV_VERSION}"`. `UV_VERSION` is set once in the workflow's own `env:` block, so the version installed is the same; the difference is that GitHub no longer pastes the value into the script text before the shell runs it (a `${{ }}` expression is filled in first, which zizmor, the workflow security checker, reports as a possible template injection at its strictest setting). The other steps of the same file already wrote it this way. No job name changes.
 - **opentelemetry-api 1.45.2 fixes CVE-2026-126360.** The `pip-audit` check (it looks up every locked Python package in the public list of known security problems) failed on 2026-11-13 because the lock still held `opentelemetry-api` 1.45.1, for which CVE-2026-126360 was published with 1.45.2 as the fix. `uv lock --upgrade-package opentelemetry-api` moves only that package; nothing else in the lock changes, apart from the lock format number uv 0.13.7 writes (3 to 5), and `requirements.lock.txt` is exported again from it. Found during the workflow runtime-check work ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)), not tracked by an issue of its own.
 - The workflow runtime check is refreshed to round two

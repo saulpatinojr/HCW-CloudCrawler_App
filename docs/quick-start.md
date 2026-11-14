@@ -34,8 +34,8 @@ The steps work in PowerShell 7 and in Git Bash. Where a command differs, both ar
     You should see nothing; the prompt now ends in `HCW-CloudCrawler_App`.
 
 3. **Install the packages.** The first run can take a minute, because uv also downloads the Python version the project
-   pins ([how uv chooses Python](https://docs.astral.sh/uv/concepts/python-versions/)). That download needs uv 0.13.5 or
-   newer; with an older uv, install Python 3.15 first, or uv stops with `No interpreter found for Python >=3.15.1, <3.16`.
+   pins ([how uv chooses Python](https://docs.astral.sh/uv/concepts/python-versions/)). That download needs uv 0.13.6 or
+   newer; with an older uv, install Python 3.15 first, or uv stops with `No interpreter found for Python >=3.15.2, <3.16`.
 
     ```text
     uv sync --frozen --all-packages

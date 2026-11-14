@@ -565,3 +565,22 @@ zizmor and hadolint, and a check that every workflow installs the uv `ci.yml` na
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2273 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
 | The new steps on GitHub | no | | They run on the pull request |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+
+## Ran for the move to Python 3.15.2 as the minimum
+
+Run on 2026-11-14 on the branch `claude/python-3.15.2`, from `main` at `a270e1e`, on Linux with CPython 3.15.2 and
+uv 0.13.8 (the version the workflows install). The change moves `requires-python` in both `pyproject.toml` files from
+`>=3.15.1,<3.16` to `>=3.15.2,<3.16` (owner decision 2026-11-14: the latest stable 3.15 release). Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Lock | yes | `make lock` | 70 packages resolved; only the lock's `requires-python` line changed; no package version moved; `requirements.lock.txt` unchanged |
+| Which uv offers 3.15.2 | yes | `uvx uv@0.13.5 python list 3.15 --all-versions --only-downloads`, and the same with 0.13.6 | 0.13.5 offers 3.15.0 and 3.15.1; 0.13.6 adds 3.15.2 |
+| Setup | yes | `make setup` | Exit 0 with `uv python pin --no-project 3.15`; before that change, `uv python pin 3.15` stopped with "The requested Python version `3.15` is incompatible with the project `requires-python` value of `>=3.15.2, <3.16`" |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; all checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Base image pins and release version | yes | `bash scripts/check-versions.sh`, `python scripts/check-release-version.py` | Exit 0 each |
+| The engine wheel's range | yes | `uv build --no-create-gitignore --package cloud-crawler-core`, then `python scripts/verify-core-wheel.py` on the wheel | `Requires-Python: <3.16,>=3.15.2`; wheel verified, 24 files |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2273 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+| Image build | no | | Not run: the image's base is already `python:3.15.2-slim-trixie` and no file it contains changed |
