@@ -109,6 +109,36 @@ once, merge one before rebasing the next.
 
 ### Changed
 
+- **The workflow runtime check is brought up to round five, the last planned round: a step whose `shell:` is written but
+  empty now uses the job's or the workflow's default shell**
+  ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)).
+  `tests/unit/test_workflow_runtime_setup.py` (the test that fails a workflow step which runs Node.js or Python before
+  its job has set up the version HCW requires) now matches round five of the check, taken unchanged from the canonical
+  Python copy in HCW-NetworkEyes_App
+  ([HCW-NetworkEyes_App#405](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/405)), which works the same way as
+  the website's own check ([HCW-HybridCloudWorks#1726](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1726));
+  only this repository's lists are its own, and they do not change. What it means in plain terms:
+  - **An empty `shell:` on a step now counts as no shell of its own.** A step can carry a `shell:` line with nothing
+    useful in it: `shell:` alone, `~`, `null` (or `Null`, `NULL`), only a comment, `''` or `""`. GitHub's runner then
+    uses the job's `defaults.run.shell`, else the workflow's, exactly as if the line were not there (actions/runner,
+    `ScriptHandler.cs`). The check read such a step as using the runner's plain default shell instead, so a default such
+    as `sudo python3 {0}` (which runs the step with the runner's own Python, through sudo) went unreported. It is now
+    reported, and pipx is read under that default too.
+  - **A job whose own `defaults.run.shell` is null now uses the workflow's.** `shell:` with no value, `~`, `null` or
+    only a comment under a job's `defaults: run:` is YAML's "no value", so the workflow-level default applies, as the
+    website's copy reads it; this copy's line reader used to read it as the job's own empty shell. A quoted empty value
+    (`''` or `""`) is real text, so it still counts as the job's own empty shell (the runner's default). The reader also
+    reads a value that is only a comment as no value.
+  - **When the check changes from now on.** The owner decided on 2026-11-14 that round five is the last planned round.
+    After it, this check changes only when (1) a real HCW workflow trips it or would get past it, or (2) a reviewer
+    shows a way past it that a workflow could plausibly be written with. Any other edge case a reviewer raises is added
+    to the known-limits list in the test file's header, not to a new round.
+
+  None of these forms is used in this repository's workflows, so the check finds nothing new here and no workflow
+  changes. The test file grows from 1129 to 1134 cases (five new tests, in the same order as the canonical copy's). Test
+  only: no engine, catalog or release change, so nothing reaches the lab edition through a wheel; the lab edition
+  (HCW-CloudCrawler_AddOn) keeps its own copy of this test and gets the same change in its own pull request, with its
+  `docs/whats-new-upstream.md` entry there.
 - **Python 3.15.2 is now the minimum.** The owner decided on 2026-11-14 that every Hybrid Cloud Works Python
   repository requires the latest stable release of Python 3.15, which is 3.15.2 (released 2026-10-25). What moved:
   - `requires-python` in both `pyproject.toml` files (the App and the engine `cloud-crawler-core`), from

@@ -667,3 +667,25 @@ required check (rulesets match job names) and nothing else refers to it. Nothing
 | yamllint | yes | `yamllint -c .yamllint.yaml .github/workflows/publish-core.yml` | Exit 0 |
 | The release on GitHub | no | | Runs only on a dry run or a tag; the pull request runs the tests above |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+
+## Ran for round five of the workflow runtime check
+
+Run on 2026-11-14 on the branch `claude/runtime-round5-1707`, from `main` at `e9c1212`, on Linux with CPython 3.15.2
+and uv 0.13.8 (the version the workflows install). `tests/unit/test_workflow_runtime_setup.py` takes round five of the
+check from the canonical Python copy in HCW-NetworkEyes_App (merged as `6e7f5c0`,
+[HCW-NetworkEyes_App#405](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/405)), which is kept the same as the
+website's copy (merged as `5a7e7f4a`,
+[HCW-HybridCloudWorks#1726](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1726); issue
+[HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). Only this repository's
+lists differ, and one new test's one-line workflow, written as adjacent strings to fit 120 columns. Round five is the
+last planned round (owner decision 2026-11-14). Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; `Checked 67 packages`; all checks passed; 95 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2715 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The runtime check grows from 1129 to 1134 cases |
+| Same code as the canonical copy | yes | syntax trees compared with Python's `ast` module | Identical once the docstrings and the four lists are set aside; the same 114 test functions in the same order |
+| Same answers as the canonical copy | yes | 94,952 generated cases of round five and the rounds before it, run through this copy and HCW-NetworkEyes_App's at `6e7f5c0` | 0 disagreements (before this change: 10,084, all round-five forms); the 386 workflow and composite-action files of every HCW clone and worktree in this session give the same findings through both, and this repository reports nothing |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+| actionlint, zizmor, CI on GitHub | no | | No workflow changed; CI runs on the pull request |
