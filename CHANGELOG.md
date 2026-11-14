@@ -13,6 +13,54 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- **CI now checks the workflow files and the Dockerfile with the same three linters as the lab edition, and checks that
+  every workflow installs the same uv**
+  ([HCW-HybridCloudWorks issue #1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707), following
+  [HCW-HybridCloudWorks issue #1575](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1575)). A linter is a
+  tool that reads a file and reports mistakes without running it. The `lint` job in `ci.yml` (already a required check;
+  no job is added or renamed, and no workflow file is added, so the workflow set in `tests/unit/test_workflows.py` is
+  unchanged) gains these steps, copied from the lab edition's `ci.yml` with the same versions and digests:
+  **actionlint 1.7.12** (workflow mistakes, with shellcheck on their scripts), **zizmor 1.31.1** (workflow security,
+  on the workflows and on the composite action in `.github/actions`, which is handed the App key) and
+  **hadolint 2.14.0** (`infrastructure/docker/Dockerfile`). Each is downloaded at its pinned version and its
+  SHA-256 (a fingerprint of the file) is checked before it runs; the three values were checked again against the
+  publishers' own checksum files and PyPI on 2026-11-14. `.github/actionlint.yaml`, the same file as the lab edition's,
+  tells actionlint that `ubuntu-26.04` is a GitHub-hosted runner. zizmor reported one low finding, which was already
+  there: `rehearse-self-merging-pr.yml` runs this repository's own action with `uses: ./...`, where GitHub now offers a
+  safer `uses: $/...` form
+  ([GitHub's announcement](https://github.blog/changelog/2026-07-30-reference-same-repository-actions-with-self-repository-syntax/),
+  [zizmor's explanation](https://docs.zizmor.sh/audits/#self-repository)). The pinned actionlint does not understand
+  `$/` and fails on it, so that one line is ignored in the new `.github/zizmor.yml`, with the reason written there
+  (only a `printf` runs between the checkout and that line) and the step to undo it once actionlint accepts `$/`.
+  zizmor matches the ignore against the whole step, so moving the step down by a line can keep it ignored; the file
+  says to check the line number whenever the workflow changes. zizmor still fails the step on every other finding of
+  any severity, as in the lab edition. A new step, **Every workflow uses the uv this workflow uses**, runs a new script,
+  `scripts/check_uv_pins.py`. It uses only Python's standard library, because it runs before uv is installed, and it
+  is the same file in HCW-CloudAssessor_App. `UV_VERSION` in `ci.yml` is the one uv version. The step names the
+  workflows that must install it (`pages.yml`, `publish-core.yml`, `security.yml` and `dependabot-lockfiles.yml`); the
+  script fails if one of them is missing or does not install that uv. An install counts only as an argument of a `pip`,
+  `pipx`, `uv pip` or `uv tool` install command in a `run:` script, outside a comment, so `echo "uv==…"` or a
+  commented-out line does not count; and `uv==${UV_VERSION}` counts only in a file that sets `UV_VERSION` outside a
+  comment (a YAML key or a shell assignment). It then reads every `.yml` and `.yaml` file under
+  `.github/workflows` and every `action.yml` and `action.yaml` under `.github/actions`, at any depth, line by line (so
+  the second install in `publish-core.yml` is checked too), and fails on: uv pinned to anything but `==` and that
+  exact version (any operator, including `===`, `~=`, `!=`, `>=` and `uv@…`; any spacing; any extras; and the name in
+  any case or spelling pip reads as uv, such as `UV` or `Uv[foo.bar]`); pip, pipx, `uv pip` or `uv tool` installing
+  uv with no version; `uses: astral-sh/setup-uv`, or the `ghcr.io/astral-sh/uv` image at another tag; `UV_VERSION`
+  given another value in any YAML or shell form; and `${UV_VERSION}`, `$UV_VERSION` or `env.UV_VERSION` in a file that
+  never sets it. These are reported wherever they are written, comments included. Other packages are left alone (`pyuv`, `uvicorn`, `uv-dynamic-versioning`), and so is `uv_==…`,
+  which pip refuses as a name. What it cannot see: a version worked out while a job runs, or an install written in a
+  way these patterns do not describe. `tests/unit/test_check_uv_pins.py` (also the same file in both repositories)
+  builds a small made-up repository for each of 50 changes that must fail and 21 that must pass, and runs the script
+  on this repository with the file list `ci.yml` gives it. `setup-python` in the `lint` job now also runs after an
+  earlier failure, because the zizmor install makes a Python environment with `python3 -m venv` (zizmor comes from
+  PyPI) and runs then too. Nothing here reaches the
+  lab edition: it already runs these steps, and no engine, tool schema or release asset changed, so its
+  `docs/whats-new-upstream.md` needs no entry. What ran is in `VALIDATION.md`. The three linters and then the uv check
+  run first in the `lint` job, straight after setting up Python and before uv is installed (from Copilot's review of
+  the MigrateOrchestrator_App change): before, they ran after `uv sync` and the repository's own scripts, so code in a
+  pull request could have rewritten `.github` on disk before it was read.
+
 - `tests/unit/test_workflow_runtime_setup.py` fails when a workflow or composite-action step runs `node`, `npm`, `npx`,
   `python`, `pip` or `uv` on the runner before its job has run `actions/setup-node` or `actions/setup-python`, so the
   runner image's own, older Node.js or Python cannot come back unnoticed

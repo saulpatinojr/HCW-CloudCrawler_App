@@ -22,7 +22,89 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with: { persist-credentials: false }
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        # Also after an earlier failure (checkout is the only step before it), because the lint-tools
+        # install below runs then too and makes zizmor's environment with python3.
+        if: ${{ !cancelled() }}
         with: { python-version: "${{ env.PYTHON_VERSION }}" }
+      # The three linters and then the uv check run first, straight after setting up Python: no
+      # repository code (uv sync builds this project's packages, ruff and the scripts run) has
+      # run yet, so nothing in this pull request can rewrite .github on disk before it is read.
+      # Workflow and Dockerfile linters (HCW-HybridCloudWorks#1575): the
+      # same three tools, versions and digests as the website's CI. CodeRabbit
+      # used to run them and was removed on 2026-11-06. Each tool is a pinned
+      # release whose SHA-256 is written here; move a version and its digest
+      # together. Each linter runs even when the one before it failed, so one
+      # run shows every finding.
+      - name: Install actionlint, hadolint and zizmor (pinned, digests checked)
+        id: lint-tools
+        # Runs after an earlier failure in this job too, so one run reports the
+        # linters' findings beside whatever else failed.
+        if: ${{ !cancelled() }}
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          HADOLINT_VERSION: 2.14.0
+          HADOLINT_SHA256: 6bf226944684f56c84dd014e8b979d27425c0148f61b3bd99bcc6f39e9dc5a47
+          ZIZMOR_VERSION: 1.31.1
+          ZIZMOR_SHA256: 58e878eb2dbd2c6183c105e1ac28c14f7dd1eca44a783f1fe2a69647d012c410
+        run: |
+          set -euo pipefail
+          tools="${RUNNER_TEMP}/lint-tools"
+          mkdir -p "$tools"
+          cd "$tools"
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL --retry 3 --retry-all-errors -o "$tarball" "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${tarball}"
+          echo "${ACTIONLINT_SHA256}  ${tarball}" | sha256sum -c -
+          tar -xzf "$tarball" actionlint
+          curl -sSfL --retry 3 --retry-all-errors -o hadolint "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "${HADOLINT_SHA256}  hadolint" | sha256sum -c -
+          chmod 0755 actionlint hadolint
+          # zizmor in its own environment: one wheel, one hash, nothing else.
+          python3 -m venv zizmor-env
+          echo "zizmor==${ZIZMOR_VERSION} --hash=sha256:${ZIZMOR_SHA256}" > zizmor-requirements.txt
+          zizmor-env/bin/python -m pip install --disable-pip-version-check --no-deps --only-binary=:all: --require-hashes -r zizmor-requirements.txt
+          ln -s "$tools/zizmor-env/bin/zizmor" zizmor
+          echo "$tools" >> "$GITHUB_PATH"
+
+      - name: actionlint
+        if: ${{ !cancelled() && steps.lint-tools.outcome == 'success' }}
+        run: |
+          actionlint -version
+          actionlint -color
+
+      - name: zizmor
+        if: ${{ !cancelled() && steps.lint-tools.outcome == 'success' }}
+        run: |
+          zizmor --version
+          args=(--offline --format=github)
+          if [ -f .github/zizmor.yml ]; then args+=(--config .github/zizmor.yml); fi
+          # .github/actions too: the composite action there is handed the App key.
+          zizmor "${args[@]}" .github/workflows .github/actions
+
+      - name: hadolint
+        if: ${{ !cancelled() && steps.lint-tools.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          hadolint --version
+          # Written to a file first, so a failing git stops the step (inside
+          # `< <(...)` its failure would be lost and read as "none tracked").
+          list="${RUNNER_TEMP}/dockerfiles"
+          git ls-files -z -- ':(glob)**/Dockerfile' ':(glob)**/Dockerfile.*' ':(glob)**/*.Dockerfile' > "$list"
+          mapfile -d '' files < "$list"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "no Dockerfile is tracked; nothing to lint"
+            exit 0
+          fi
+          printf 'linting %s\n' "${files[@]}"
+          hadolint --failure-threshold warning --format tty "${files[@]}"
+
+      # UV_VERSION is the one uv version (HCW-HybridCloudWorks#1707). scripts/check_uv_pins.py (standard library
+      # only, so it runs before uv is installed) needs each workflow named here to install that uv, and fails on any
+      # other uv in a workflow or composite action; its docstring lists what it reads, and
+      # tests/unit/test_check_uv_pins.py tests it. Runs after an earlier failure too, so one run reports every finding.
+      - name: Every workflow uses the uv this workflow uses
+        if: ${{ !cancelled() }}
+        run: python scripts/check_uv_pins.py .github/workflows/pages.yml .github/workflows/publish-core.yml .github/workflows/security.yml .github/workflows/dependabot-lockfiles.yml
       - run: python -m pip install "uv==${UV_VERSION}"
       - run: uv sync --frozen --all-packages
       - run: uv run ruff check .
@@ -40,6 +122,7 @@ jobs:
             echo "::error::a client-secret credential path exists"; exit 1
           fi
           echo "no client-secret credential path"
+
   test:
     runs-on: ubuntu-26.04
     steps:
