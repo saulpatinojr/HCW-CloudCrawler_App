@@ -123,7 +123,9 @@ once, merge one before rebasing the next.
   to the `lint` job after the note was written, which is run with `python` (read by the check) and starts nothing.
   Checked here with uv 0.13.8 (details in `VALIDATION.md`): `uv sync --all-packages`, ruff,
   `bash scripts/check-lockfiles.sh` and `uv run pytest -q --cov=packages --cov=src` (2475 passed, 1 deselected; 98
-  percent coverage, 901 of the tests in this file, 699 before). The Python syntax tree (the code's structure as Python reads it) of this file matches the
+  percent coverage, 901 of the tests in this file, 699 before, at this pull request's first push; after the fixes below,
+  2623 passed and 1049 in that file). The Python syntax tree (the code's structure as Python reads it) of this file
+  matches the
   canonical copy at `9b96396` once the docstrings and this repository's lists are set aside, and the 12,975 round-three
   cases, the reviewer's 348 and the 66,583 earlier ones give 0 disagreements with the canonical copy. The AddOn
   (HCW-CloudCrawler_AddOn) gets the same change in its own pull request, with its own `docs/whats-new-upstream.md`
@@ -138,8 +140,15 @@ once, merge one before rebasing the next.
   (`case "$k" in a) node x ;; esac`); a `${{ matrix.* }}` in the workflow-level `env:`, which GitHub does not fill in
   there; pipx under a step's `shell:` that clears or changes `PIPX_DEFAULT_PYTHON` (`shell: env -u PIPX_DEFAULT_PYTHON
   bash -e {0}`); and free-threaded Python names (`python3.14t`), which were not read as Python at all and now are,
-  against the same floor. None of these forms is used in this repository's workflows, so the check reports exactly
-  what it did before, and the test file grows to 1017 cases. Details in `VALIDATION.md`.
+  against the same floor. Copilot's second round on these pull requests found six more, closed first in both canonical
+  copies the same way: a bare `python3t`, which is whatever free-threaded Python PATH finds; `env -i`
+  (`--ignore-environment`, `env -`), which clears PATH so the runner's own runtime is found; the last `PATH=` given to
+  env wins, so `env -i PATH=$PATH node x` keeps the set-up one; a step listed in `INDIRECT_RUNTIME` whose `shell:`
+  runs through sudo or replaces PATH; pipx given a bare name other than `python3.15` itself (`--python python3.15t`);
+  and a `defaults:` written as a one-line mapping, nested ones included (`defaults: {run: {shell: "python {0}"}}`),
+  which the workflow reader now reads whole, stopping only on one YAML refuses (a plain value holding a brace, or
+  braces and quotes that do not balance or do not match). None of these forms is used in this repository's workflows,
+  so the check reports exactly what it did before, and the test file grows to 1049 cases. Details in `VALIDATION.md`.
 - **The workflows read the uv version as a shell variable** ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). In the three `uv` install steps of `ci.yml` and the one in `dependabot-lockfiles.yml`, `python -m pip install "uv==${{ env.UV_VERSION }}"` becomes `python -m pip install "uv==${UV_VERSION}"`. `UV_VERSION` is set once in the workflow's own `env:` block, so the version installed is the same; the difference is that GitHub no longer pastes the value into the script text before the shell runs it (a `${{ }}` expression is filled in first, which zizmor, the workflow security checker, reports as a possible template injection at its strictest setting). The other steps of the same file already wrote it this way. No job name changes.
 - **opentelemetry-api 1.45.2 fixes CVE-2026-126360.** The `pip-audit` check (it looks up every locked Python package in the public list of known security problems) failed on 2026-11-13 because the lock still held `opentelemetry-api` 1.45.1, for which CVE-2026-126360 was published with 1.45.2 as the fix. `uv lock --upgrade-package opentelemetry-api` moves only that package; nothing else in the lock changes, apart from the lock format number uv 0.13.7 writes (3 to 5), and `requirements.lock.txt` is exported again from it. Found during the workflow runtime-check work ([HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)), not tracked by an issue of its own.
 - The workflow runtime check is refreshed to round two
