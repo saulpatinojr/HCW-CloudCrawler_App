@@ -686,6 +686,6 @@ last planned round (owner decision 2026-11-14). Nothing reached Azure.
 | Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2715 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. The runtime check grows from 1129 to 1134 cases |
 | Same code as the canonical copy | yes | syntax trees compared with Python's `ast` module | Identical once the docstrings and the four lists are set aside; the same 114 test functions in the same order |
-| Same answers as the canonical copy | yes | 94,952 generated cases of round five and the rounds before it, run through this copy and HCW-NetworkEyes_App's at `6e7f5c0` | 0 disagreements (before this change: 10,084, all round-five forms); the 386 workflow and composite-action files of every HCW clone and worktree in this session give the same findings through both, and this repository's report nothing |
+| Same answers as the canonical copy | yes | 94,952 generated cases of round five and the rounds before it, run through this copy and HCW-NetworkEyes_App's at `6e7f5c0` | 0 disagreements (before this change: 10,084, all round-five forms); the 386 workflow and composite-action files of every HCW clone and worktree in this session give the same findings through both, and this repository reports nothing |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
 | actionlint, zizmor, CI on GitHub | no | | No workflow changed; CI runs on the pull request |
