@@ -565,3 +565,42 @@ zizmor and hadolint, and a check that every workflow installs the uv `ci.yml` na
 | Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2273 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate |
 | The new steps on GitHub | no | | They run on the pull request |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+
+## Ran for round three of the workflow runtime check
+
+Run on 2026-11-14 on the branch `claude/runtime-check-round3-1707`, from `main` at `a270e1e`, on Linux with CPython
+3.15.2 and uv 0.13.8. The change replaces `tests/unit/test_workflow_runtime_setup.py` with round three of the check,
+taken from the canonical Python copy in `saulpatinojr/HCW-NetworkEyes_App` (merge commit `9b96396`,
+[HCW-NetworkEyes_App#399](https://github.com/saulpatinojr/HCW-NetworkEyes_App/pull/399)), which gives the same answers as the website's JavaScript copy (merged as `4be949f`,
+[HCW-HybridCloudWorks#1722](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1722); issue [HCW-HybridCloudWorks#1707](https://github.com/saulpatinojr/HCW-HybridCloudWorks/issues/1707)). It keeps this repository's lists,
+whose note now also names `scripts/check_uv_pins.py` (run with `python`, starts nothing). Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install | yes | `uv sync --all-packages` | Exit 0, `Checked 67 packages` |
+| Lint and format | yes | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2475 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. 901 of them are in `tests/unit/test_workflow_runtime_setup.py` (699 before), at this pull request's first push; after the fixes below, 2623 passed and 1049 in that file |
+| Same logic as the canonical copy | yes | The Python syntax trees of this file and the canonical copy at `9b96396` compared with the lists and docstrings left out, and the docstrings and comments compared word for word apart from the note naming the copy and the notes above the four lists; then the case sets below through both | Identical syntax trees and wording. 12,975 round-three cases (6,021 command readings, 6,861 `pipx` cases, 93 condition cases, each command and `pipx` case also with its two shell texts and, for commands, its `sudo` reading), the reviewer's 348 (118 command readings, 40 `sudo`, 74 `pipx`, 116 made-up workflows) and the 66,583 cases of round two: 0 disagreements |
+| New findings in this repository | yes | The check over `.github/workflows/*.yml` and `.github/actions/*/action.yml` (11 files) with the copy on `main` and with the new one, no exception list applied; then each `INDIRECT_RUNTIME` step's own `run:` text read by the new copy | None: the same (empty) unset-step, `pipx` and floor findings as before, and none of the three `INDIRECT_RUNTIME` steps is read on its own, so all three stay |
+| The new `lint` job is still covered | yes | The check on `ci.yml`'s text with the `if: ${{ !cancelled() }}` of the `lint` job's `setup-python` taken out (in memory, not on disk) | The check names `Install actionlint, hadolint and zizmor (pinned, digests checked)` and `Every workflow uses the uv this workflow uses`, as it should |
+| Documentation site links | yes | `uv run --locked --only-group docs python scripts/build-pages.py` (it renders this file and `CHANGELOG.md`) | 23 pages built; every internal link and fragment resolves |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
+| The workflows on GitHub | no | | They run on the pull request |
+
+Then, on the same branch, the six fixes from Copilot's review of the round-3 pull requests, the one from a review of
+those fixes and the six from Copilot's second round, taken from the canonical Python copy (`ef14b90` for a `sudo` inside
+a script `sudo` runs, `82b9258` for five more, `2de76af` for `env -u PATH`, `command -p` and free-threaded names,
+`55e94dd` and `85fe01c` for the second round) and the website's copy (`9281f4e8`, `e5ac25e6`, `ab74c787`, `c2fdfc0d` and
+`1e85a206`, merged in [HCW-HybridCloudWorks#1723](https://github.com/saulpatinojr/HCW-HybridCloudWorks/pull/1723)),
+which made them first.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Lint and format | yes | `uv run ruff check . && uv run ruff format --check .` | All checks passed; 94 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2623 passed, 1 deselected; coverage 98.22 percent. 1049 of them are in `tests/unit/test_workflow_runtime_setup.py` (901 before these fixes) |
+| The new tests fail on the code before | yes | The new tests and changed cases added to the file as it was before them, then `pytest` on them | The first six fixes' 70 new tests and one changed case: 49 of the 86 tests they touch fail. The review's 40 new tests and longer timing test: 25 of 41 fail (the timing test took about two minutes). Copilot's second round, 32 new tests and three changed cases: 19 of the file's 1049 tests fail |
+| Same logic as the canonical copy | yes | The Python syntax trees of this file and the canonical copy at `85fe01c`, docstrings removed | The same, apart from this repository's lists, as before the change; the new made-up workflows and refused texts are written as adjacent strings |
+| Same answers as the canonical copy | yes | The 49,200 generated cases of these changes (replaced, removed or cleared PATH, `command -p`, runner paths and versions, free-threaded names, one-line `case` clauses, the step's `shell:` for pipx and for a listed step, workflow-level matrix values, one-line `defaults:`), the 4,844 nested-sudo cases and the review's 348 inputs, through both copies | 0 disagreements; of the 348, one answer moved with the pre-PR review's fix and moved back with Copilot's second round (`pipx run --python python3.15t x` is reported again), the same in both copies |
+| Real workflows | yes | The check over the workflows of all nine HCW repositories, before and after | The same findings before and after, and the same as the canonical copy's, repository by repository |
