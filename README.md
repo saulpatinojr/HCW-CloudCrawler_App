@@ -440,8 +440,9 @@ order, and the release becomes public only as the very last step of the third:
 
 1. `build` (read-only): `scripts/check-release-version.py` checks the tag, the
    versions and the changelog (details below); the wheel and the sdist are built;
-   `scripts/verify-core-wheel.py` verifies the wheel (the engine, no cloud SDK, no
-   HTTP client, no Azure endpoint, pydantic as its only requirement); a CycloneDX
+   `scripts/verify-core-wheel.py` verifies the wheel (the engine, the MIT licence text
+   byte for byte as the root `LICENSE`, no cloud SDK, no HTTP client, no Azure
+   endpoint, pydantic as its only requirement); a CycloneDX
    SBOM (the engine's locked runtime dependencies), the release notes and a list of
    sha256 checksums are written. Everything is kept as one workflow artifact.
 2. `attest` (may sign, cannot write to the repository): attests provenance and the
