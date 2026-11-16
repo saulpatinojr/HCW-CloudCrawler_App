@@ -25,7 +25,7 @@ dev = [
 # Only the GitHub Pages build installs this group (`uv sync --locked --only-group docs`); it is not a default group,
 # so the image and the engine never see it.
 docs = [
-  "markdown-it-py==4.2.0",
+  "markdown-it-py==4.3.0",
 ]
 
 [build-system]
