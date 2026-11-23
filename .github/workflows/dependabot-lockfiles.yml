@@ -91,7 +91,7 @@ jobs:
       - name: Get a short-lived token of the HCW Main Admin App, for this repository only, contents only
         if: steps.export.outputs.changed == 'true'
         id: app
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           # no owner and no repositories input: the token covers this repository only (the App is on several)
           client-id: ${{ secrets.HCW_MAIN_ADMIN_CLIENT_ID }}
