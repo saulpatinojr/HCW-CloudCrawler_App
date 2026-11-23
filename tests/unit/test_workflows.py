@@ -306,7 +306,9 @@ def test_the_pages_build_runs_on_pull_requests_and_checks_the_links():
 
 def test_the_docs_group_is_the_only_new_dependency_and_is_not_a_default_group():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert config["dependency-groups"]["docs"] == ["markdown-it-py==4.2.0"]
+    # One package, pinned exactly; the version itself is Dependabot's to move.
+    docs = config["dependency-groups"]["docs"]
+    assert len(docs) == 1 and re.fullmatch(r"markdown-it-py==\d+\.\d+\.\d+", docs[0]), docs
     assert "default-groups" not in config.get("tool", {}).get("uv", {})
 
 
