@@ -689,3 +689,23 @@ last planned round (owner decision 2026-11-14). Nothing reached Azure.
 | Same answers as the canonical copy | yes | 94,952 generated cases of round five and the rounds before it, run through this copy and HCW-NetworkEyes_App's at `6e7f5c0` | 0 disagreements (before this change: 10,084, all round-five forms); the 386 workflow and composite-action files of every HCW clone and worktree in this session give the same findings through both, and this repository reports nothing |
 | Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |
 | actionlint, zizmor, CI on GitHub | no | | No workflow changed; CI runs on the pull request |
+
+## Ran for the provenance file on the release
+
+Run on 2026-11-24 on the branch `claude/ecstatic-einstein-4z5zkt-provenance`, from `main` at `dd55b55`, on Linux with
+CPython 3.15.2 and uv 0.13.8 (the version the workflows install). The change makes `publish-core.yml` attach the
+build provenance to the release as `cloud_crawler_core-<version>.intoto.jsonl` (a signed record of which workflow, tag
+and commit built the wheel and the sdist). No workflow was started, no tag was pushed and nothing was published.
+Nothing reached Azure.
+
+| Check | Ran | Command | Result |
+| --- | --- | --- | --- |
+| Install, lint and format | yes | `uv sync --all-packages`, `uv run ruff check .`, `uv run ruff format --check .` | Exit 0; `Checked 67 packages`; all checks passed; 95 files already formatted |
+| Lockfile export | yes | `bash scripts/check-lockfiles.sh` | `lockfile export matches uv.lock` |
+| Tests | yes | `uv run pytest -q --cov=packages --cov=src` | 2743 passed, 1 deselected; coverage 98.22 percent against the 96 percent gate. `tests/unit/test_release_publish.py` and `tests/unit/test_workflows.py` grow by 28 cases: the file as JSON lines, each refusal (missing, wrong name, wrong version, extra file, not provenance, not these files), and the workflow wiring |
+| The action's output | yes | `action.yml` and `src/main.ts` of `actions/attest` at the pinned commit `1e69f48acb82d1966a394da916b4c1698aa569d6`, fetched from `raw.githubusercontent.com` | The output is `bundle-path`. The step makes one attestation for all its subjects and appends it to that file as one line of JSON, so one step that attests the wheel and the sdist gives one bundle naming both |
+| The file against a real release | yes | The provenance bundle of `v0.1.1` (made by the tag run, read from GitHub's attestation API) written by `python -I scripts/release-publish.py write-provenance`, then `python -I scripts/release-publish.py verify-attestations ... --provenance-dir`, with the wheel and the sdist downloaded from the `v0.1.1` release page; gh 2.89.0 | One line written. Both files verified against the file with `--signer-workflow`, `--source-ref refs/tags/v0.1.1` and `--source-digest`, and the four store checks passed. The plain form `gh attestation verify <wheel> --repo saulpatinojr/HCW-CloudCrawler_App --bundle <file>.intoto.jsonl` exited 0. With one byte added to the sdist, the same command failed (`Error: verifying with issuer "sigstore.dev"`) |
+| Workflow syntax and security | yes | `actionlint` 1.7.12 and `zizmor` 1.31.1 `--offline --config .github/zizmor.yml .github/workflows .github/actions` | actionlint clean, without shellcheck (not installed in the session; CI runs it). zizmor: no findings (the one ignore already recorded) |
+| The workflow itself | no | `publish-core.yml` on GitHub | Not run: a session does not start a publishing workflow. Not seen, therefore: that the `provenance` step's `bundle-path` file is readable by the next step on a GitHub runner, the second artifact's upload and download, `gh attestation verify --bundle` with the runner's gh, and the release with four files. A dry run on `main` with "attest" ticked (after this is merged) exercises all of that except the attaching; the first tag after `v0.1.1` proves the rest |
+| The Scorecard score | no | | Scorecard was not run. The score is its documented rule applied by hand: an asset ending `.intoto.jsonl` on a release counts as provenance |
+| Azure MCP contract test | no | `make test-contract` | Not run: nothing it reads changed |

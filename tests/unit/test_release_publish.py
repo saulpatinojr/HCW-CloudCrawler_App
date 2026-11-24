@@ -6,6 +6,7 @@ every path is exercised without a network."""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
@@ -24,6 +25,7 @@ REF = f"refs/tags/{TAG}"
 WHEEL = "cloud_crawler_core-0.1.0-py3-none-any.whl"
 SDIST = "cloud_crawler_core-0.1.0.tar.gz"
 SBOM = "cloud-crawler-core.cdx.json"
+PROV = "cloud_crawler_core-0.1.0.intoto.jsonl"
 
 
 def _load():
@@ -38,13 +40,29 @@ rp = _load()
 REAL_SLEEP = rp.sleep
 
 
+def bundle(*contents: bytes, predicate: str = "https://slsa.dev/provenance/v1") -> dict:
+    """A Sigstore bundle as `actions/attest` writes it, reduced to the parts the script reads: the signed statement."""
+    subjects = [
+        {"name": f"file{n}", "digest": {"sha256": hashlib.sha256(c).hexdigest()}} for n, c in enumerate(contents)
+    ]
+    statement = {"_type": "https://in-toto.io/Statement/v1", "subject": subjects, "predicateType": predicate}
+    payload = base64.b64encode(json.dumps(statement).encode()).decode()
+    return {
+        "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+        "verificationMaterial": {"certificate": {"rawBytes": "AA=="}},
+        "dsseEnvelope": {"payload": payload, "payloadType": "application/vnd.in-toto+json", "signatures": []},
+    }
+
+
 def make_files(root: Path) -> Path:
-    """The downloaded `release-files` artifact."""
+    """The downloaded `release-files` artifact, with the provenance artifact beside it as the release job has it."""
     (root / "dist").mkdir(parents=True)
     (root / "sbom").mkdir()
+    (root / "provenance").mkdir()
     (root / "dist" / WHEEL).write_bytes(b"wheel bytes")
     (root / "dist" / SDIST).write_bytes(b"sdist bytes")
     (root / "sbom" / SBOM).write_text("{}", encoding="utf-8")
+    (root / "provenance" / PROV).write_text(json.dumps(bundle(b"wheel bytes", b"sdist bytes")) + "\n", encoding="utf-8")
     (root / "release-notes.md").write_text("### Added\n\n- The first release.\n", encoding="utf-8")
     return root
 
@@ -69,10 +87,13 @@ class FakeGitHub:
         self.reread_fails = options.pop("reread_fails", 0)  # reads of the draft by id that fail
         self.patch_error = options.pop("patch_error", None)  # for example "HTTP 404: Not Found"
         self.verify_results = options.pop("verify_results", [0])  # return codes of the attestation checks, in turn
+        self.bundle_result = options.pop("bundle_result", 0)  # return code of a check against the provenance file
         assert not options, options
 
     def __call__(self, *args: str):
         self.calls.append(args)
+        if args[:2] == ("attestation", "verify") and "--bundle" in args:
+            return _Done(self.bundle_result, "", "verifying with issuer failed" if self.bundle_result else "")
         if args[:2] == ("attestation", "verify"):
             code = self.verify_results.pop(0) if len(self.verify_results) > 1 else self.verify_results[0]
             return _Done(code, "", "HTTP 404: no attestations found" if code else "")
@@ -228,6 +249,145 @@ def test_the_attestation_wait_is_a_few_minutes_with_backoff_and_one_budget_for_t
     assert len(fake.calls) == (1 + len(rp.VERIFY_DELAYS)) + 3, "once the budget is spent each check tries once"
 
 
+# --- the provenance file ---------------------------------------------------------------------------------------------
+
+
+def test_the_provenance_file_is_the_attest_bundle_as_json_lines_named_for_the_version(files, tmp_path, capsys):
+    source = tmp_path / "attestation.json"
+    one = bundle(b"wheel bytes", b"sdist bytes")
+    source.write_text(json.dumps(one, indent=2), encoding="utf-8")  # pretty-printed: still one line when written
+    out = tmp_path / "out" / "provenance"
+    assert rp.write_provenance(source, files / "dist", out) == []
+    assert [p.name for p in out.iterdir()] == [PROV] and PROV.endswith(".intoto.jsonl")
+    text = (out / PROV).read_text(encoding="utf-8")
+    assert text.endswith("\n") and [json.loads(line) for line in text.splitlines()] == [one]
+    assert f"1 provenance bundle(s) naming {WHEEL}, {SDIST}" in capsys.readouterr().out
+
+
+def test_several_bundles_become_one_line_each(files, tmp_path):
+    source = tmp_path / "attestation.json"
+    both = [bundle(b"wheel bytes"), bundle(b"sdist bytes")]
+    source.write_text("".join(json.dumps(b, indent=1) + "\n" for b in both), encoding="utf-8")
+    assert rp.write_provenance(source, files / "dist", tmp_path / "out") == []
+    lines = (tmp_path / "out" / PROV).read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line) for line in lines] == both, "valid JSON lines: one bundle per line, nothing else"
+
+
+@pytest.mark.parametrize(
+    ("content", "words"),
+    [
+        ("", "the provenance is empty"),
+        ("<html>not found</html>", "the provenance is not JSON"),
+        (json.dumps({"hello": "world"}), "is not a Sigstore bundle with a signed statement"),
+        (json.dumps([bundle(b"wheel bytes", b"sdist bytes")]), "is not a Sigstore bundle with a signed statement"),
+        (json.dumps({"dsseEnvelope": {"payload": "not base64!"}}), "cannot be read"),
+        (
+            json.dumps(bundle(b"wheel bytes", b"sdist bytes", predicate="https://cyclonedx.org/bom")),
+            "is a 'https://cyclonedx.org/bom' statement, expected https://slsa.dev/provenance/v1",
+        ),
+        (json.dumps(bundle(b"wheel bytes")), f"the provenance does not name {SDIST} by its sha256"),
+        (json.dumps(bundle(b"other", b"files")), f"the provenance does not name {WHEEL}, {SDIST} by its sha256"),
+    ],
+)
+def test_a_bundle_that_is_not_the_provenance_of_these_files_is_never_written(files, tmp_path, content, words):
+    source = tmp_path / "attestation.json"
+    source.write_text(content, encoding="utf-8")
+    found = rp.write_provenance(source, files / "dist", tmp_path / "out")
+    assert len(found) == 1 and words in found[0]
+    assert not (tmp_path / "out").exists(), "no file is left behind to be attached by mistake"
+
+
+def test_no_bundle_no_dist_files_or_an_existing_file_writes_nothing(files, tmp_path):
+    assert "left no bundle" in rp.write_provenance(tmp_path / "absent.json", files / "dist", tmp_path / "out")[0]
+    assert "exactly one wheel and one sdist" in rp.write_provenance(tmp_path / "absent.json", tmp_path, tmp_path)[0]
+    source = tmp_path / "attestation.json"
+    source.write_text(json.dumps(bundle(b"wheel bytes", b"sdist bytes")), encoding="utf-8")
+    before = (files / "provenance" / PROV).read_bytes()
+    found = rp.write_provenance(source, files / "dist", files / "provenance")
+    assert "never replaced" in found[0] and (files / "provenance" / PROV).read_bytes() == before
+
+
+def test_the_provenance_file_is_verified_from_the_file_alone_with_the_same_strict_flags(files, monkeypatch, capsys):
+    fake = use(monkeypatch, FakeGitHub(files))
+    assert rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA, files / "provenance") == []
+    offline = [c for c in fake.calls if "--bundle" in c]
+    assert len(offline) == 2 and len(fake.calls) == 6, "the two files against the file, then the four store checks"
+    assert fake.calls[:2] == offline, "the file is checked first"
+    assert {Path(c[2]).name for c in offline} == {WHEEL, SDIST}
+    for call in offline:
+        assert call[call.index("--bundle") + 1] == str(files / "provenance" / PROV)
+        assert call[call.index("--predicate-type") + 1] == rp.PROVENANCE
+        assert call[call.index("--repo") + 1] == REPO
+        assert call[call.index("--signer-workflow") + 1] == f"{REPO}/{WORKFLOW}"
+        assert call[call.index("--source-ref") + 1] == REF and call[call.index("--source-digest") + 1] == SHA
+    assert f"verified {WHEEL} against the file {PROV}" in capsys.readouterr().out
+
+
+def test_a_provenance_file_that_does_not_verify_is_a_problem_and_is_not_waited_for(files, monkeypatch):
+    pauses: list[float] = []
+    monkeypatch.setattr(rp, "sleep", pauses.append)
+    fake = use(monkeypatch, FakeGitHub(files, bundle_result=1))
+    found = rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA, files / "provenance")
+    assert len(found) == 2 and all(
+        f"{PROV} does not verify" in p and "verifying with issuer failed" in p for p in found
+    )
+    assert pauses == [] and len(fake.calls) == 2, "the proof is on disk: nothing to wait for, and nothing else is tried"
+
+
+def _rename(files: Path) -> None:
+    (files / "provenance" / PROV).rename(files / "provenance" / "cloud-crawler-core.intoto.jsonl")
+
+
+def _add_stray(files: Path) -> None:
+    (files / "provenance" / "extra.intoto.jsonl").write_text("{}", encoding="utf-8")
+
+
+def _sbom_bundle(files: Path) -> None:
+    wrong = bundle(b"wheel bytes", b"sdist bytes", predicate="https://cyclonedx.org/bom")
+    (files / "provenance" / PROV).write_text(json.dumps(wrong), encoding="utf-8")
+
+
+def _other_files(files: Path) -> None:
+    (files / "provenance" / PROV).write_text(json.dumps(bundle(b"an earlier wheel", b"sdist bytes")), encoding="utf-8")
+
+
+PROVENANCE_REFUSALS = [
+    (lambda files: (files / "provenance" / PROV).unlink(), f"must hold exactly {PROV}"),
+    (lambda files: __import__("shutil").rmtree(files / "provenance"), f"must hold exactly {PROV}"),
+    (_rename, "found ['cloud-crawler-core.intoto.jsonl']"),
+    (_add_stray, "found ['cloud_crawler_core-0.1.0.intoto.jsonl', 'extra.intoto.jsonl']"),
+    (_sbom_bundle, "is a 'https://cyclonedx.org/bom' statement"),
+    (_other_files, f"the provenance does not name {WHEEL} by its sha256"),
+]
+
+
+@pytest.mark.parametrize(("spoil", "words"), PROVENANCE_REFUSALS)
+def test_a_missing_misnamed_extra_or_wrong_provenance_file_fails_the_verification(files, monkeypatch, spoil, words):
+    fake = use(monkeypatch, FakeGitHub(files))
+    spoil(files)
+    found = rp.verify_attestations(files / "dist", REPO, WORKFLOW, REF, SHA, files / "provenance")
+    assert len(found) == 1 and words in found[0]
+    assert fake.calls == [], "gh is not asked about a file that is not the provenance file"
+
+
+@pytest.mark.parametrize(("spoil", "words"), PROVENANCE_REFUSALS)
+def test_a_missing_misnamed_extra_or_wrong_provenance_file_publishes_nothing(files, monkeypatch, spoil, words):
+    fake = use(monkeypatch, FakeGitHub(files))
+    spoil(files)
+    found = rp.publish(REPO, TAG, files)
+    assert found and all("nothing was published" in p for p in found)
+    assert any(words in p or PROV in p for p in found)
+    assert fake.calls == [], "no listing, no draft: the release needs all four files before anything is created"
+
+
+def test_a_provenance_file_for_another_version_than_the_tag_publishes_nothing(files, monkeypatch):
+    fake = use(monkeypatch, FakeGitHub(files))
+    (files / "provenance" / PROV).rename(files / "provenance" / "cloud_crawler_core-0.0.9.intoto.jsonl")
+    found = rp.publish(REPO, TAG, files)
+    assert len(found) == 1 and "missing or empty, nothing was published" in found[0] and PROV in found[0]
+    assert fake.calls == []
+
+
 # --- publish: draft first, public last -----------------------------------------------------------------------------
 
 
@@ -244,7 +404,7 @@ def test_the_release_is_created_as_a_draft_checked_and_only_then_made_public(fil
     for flag in ("--draft", "--verify-tag"):
         assert flag in create
     assert "--clobber" not in create and "--latest" not in create
-    assert [Path(a).name for a in create[create.index("--notes-file") + 2 :]] == [WHEEL, SDIST, SBOM]
+    assert [Path(a).name for a in create[create.index("--notes-file") + 2 :]] == [WHEEL, SDIST, SBOM, PROV]
     assert fake.releases[0]["draft"] is False
     assert f"release {TAG} is public with" in capsys.readouterr().out
 
@@ -291,8 +451,8 @@ def test_a_draft_that_cannot_be_created_leaves_nothing_public(files, monkeypatch
     assert "PATCH" not in verbs(fake)
 
 
-@pytest.mark.parametrize("missing", [WHEEL, SDIST, SBOM])
-def test_a_draft_missing_one_of_the_three_files_is_never_published(files, monkeypatch, missing):
+@pytest.mark.parametrize("missing", [WHEEL, SDIST, SBOM, PROV])
+def test_a_draft_missing_one_of_the_four_files_is_never_published(files, monkeypatch, missing):
     fake = use(monkeypatch, FakeGitHub(files, drop=missing))
     found = rp.publish(REPO, TAG, files)
     assert any(f"asset {missing} is not on the release" in p for p in found)
@@ -313,7 +473,7 @@ def test_a_draft_with_an_extra_file_is_never_published(files, monkeypatch):
 
     fake.create = create_with_stray
     found = rp.publish(REPO, TAG, files)
-    assert any("asset stray.txt is on the release but is not one of the three expected files" in p for p in found)
+    assert any("asset stray.txt is on the release but is not one of the four expected files" in p for p in found)
     assert "PATCH" not in verbs(fake)
 
 
@@ -370,7 +530,7 @@ def test_a_github_that_reports_no_digest_does_not_block_the_release_but_says_so(
     assert rp.publish(REPO, TAG, files) == []
     out = capsys.readouterr().out
     assert "notice: GitHub reports no sha256 for " in out
-    for name in (WHEEL, SDIST, SBOM):
+    for name in (WHEEL, SDIST, SBOM, PROV):
         assert name in out
     assert "integrity rests on the sha256 list checked in this job and on the attestations" in out
 
@@ -509,6 +669,16 @@ def test_the_command_line_runs_both_steps_and_prints_annotations_under_actions(f
     use(monkeypatch, FakeGitHub(files))
     args = ["verify-attestations", "--dir", str(files / "dist"), "--repo", REPO, "--workflow", WORKFLOW]
     assert rp.main([*args, "--source-ref", REF, "--source-digest", SHA]) == 0
+    assert (
+        rp.main([*args, "--source-ref", REF, "--source-digest", SHA, "--provenance-dir", str(files / "provenance")])
+        == 0
+    )
+    source = files / "attestation.json"
+    source.write_text(json.dumps(bundle(b"wheel bytes", b"sdist bytes")), encoding="utf-8")
+    write = ["write-provenance", "--bundle", str(source), "--dir", str(files / "dist")]
+    assert rp.main([*write, "--out-dir", str(files / "fresh")]) == 0 and (files / "fresh" / PROV).is_file()
+    assert rp.main([*write, "--out-dir", str(files / "fresh")]) == 1, "a provenance file is never replaced"
+    capsys.readouterr()
     assert rp.main(["publish", "--repo", REPO, "--tag", TAG, "--dir", str(files)]) == 0
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert rp.main(["publish", "--repo", REPO, "--tag", TAG, "--dir", str(files)]) == 1

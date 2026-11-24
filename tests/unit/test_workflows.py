@@ -210,6 +210,32 @@ def test_attestations_use_actions_attest_and_not_its_deprecated_wrapper():
     assert all("release-files/dist/*" in s for s in attest)
 
 
+def test_the_provenance_is_written_to_a_file_in_the_attest_job_and_attached_by_the_release_job():
+    """The attest job may sign but cannot write to the repository, so the file travels as a workflow artifact."""
+    attest = job_steps("attest")
+    signed = next(n for n, s in enumerate(attest) if "actions/attest@" in s)
+    assert "        id: provenance\n" in attest[signed] and "sbom-path" not in attest[signed]
+    written = attest[signed + 1]
+    assert "write-provenance" in written, "written straight after the provenance step, before the SBOM is attested"
+    assert 'BUNDLE: "${{ steps.provenance.outputs.bundle-path }}"' in written and '--bundle "$BUNDLE"' in written
+    assert "--dir release-files/dist" in written and "--out-dir release-files/provenance" in written
+    assert "upload-artifact@" in attest[-1], "last: a re-run of a failed attest job never meets its own artifact"
+    for needle in (
+        "name: cloud-crawler-core-provenance",
+        "path: release-files/provenance/",
+        "if-no-files-found: error",
+    ):
+        assert needle in attest[-1], needle
+    release = job_steps("release")
+    fetched = next(n for n, s in enumerate(release) if "name: cloud-crawler-core-provenance" in s)
+    assert "actions/download-artifact@" in release[fetched] and "path: release-files/provenance" in release[fetched]
+    verify = next(n for n, s in enumerate(release) if "verify-attestations" in s)
+    assert fetched < verify < len(release) - 1, "downloaded, verified, and only then published"
+    body = text(RELEASE_FILE)
+    assert "jq " not in body, "the file is written by the tested script, not by a tool the runner may not have"
+    assert "secrets." not in body, "keyless: the signing certificate comes from the job's OIDC token, no stored key"
+
+
 def test_every_release_job_has_a_time_limit():
     for job in JOB_ORDER:
         assert re.search(r"(?m)^    timeout-minutes: \d+$", job_head(job)), (
@@ -258,6 +284,7 @@ def test_the_attestations_are_verified_strictly_in_the_attest_job_and_again_befo
         for flag in ('--workflow "$WORKFLOW_FILE"', '--source-ref "$SOURCE_REF"', '--source-digest "$SOURCE_DIGEST"'):
             assert flag in verify, f"{job}: {flag}"
         assert "--dir release-files/dist" in verify
+        assert "--provenance-dir release-files/provenance" in verify, f"{job}: the file the release attaches"
 
 
 def test_a_release_becomes_public_only_after_download_check_verify_and_the_draft_checks():
