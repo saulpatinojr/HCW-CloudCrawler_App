@@ -9,10 +9,17 @@
 #                              engine's locked runtime dependencies) and the release notes; keep all of it, with a
 #                              sha256 list, as one workflow artifact.
 #   attest   (id-token and attestations: write, no repository write)  attest provenance and the SBOM for the wheel and
-#                              the sdist, then verify the attestations (this workflow file, this ref, this commit).
-#   release  (contents: write; a tag only)  verify the attestations again against the downloaded files, create the
-#                              GitHub Release as a DRAFT with the wheel, sdist and SBOM, check that it holds exactly
-#                              those three files, and only then make it public (scripts/release-publish.py).
+#                              the sdist; write the signed provenance to a file,
+#                              cloud_crawler_core-<version>.intoto.jsonl (JSON lines: one Sigstore bundle per line,
+#                              the signed statement with its certificate and public log entry); verify the
+#                              attestations (this workflow file, this ref, this commit) and that file; keep the file
+#                              as a second workflow artifact, because this job cannot write to the repository.
+#   release  (contents: write; a tag only)  verify the attestations and the provenance file again against the
+#                              downloaded files, create the GitHub Release as a DRAFT with the wheel, sdist, SBOM and
+#                              provenance file, check that it holds exactly those four files, and only then make it
+#                              public (scripts/release-publish.py).
+# The provenance file is signed without any stored key: the attest job's short-lived OIDC token gets a signing
+# certificate that names this workflow, so there is no secret to keep or rotate.
 #   pypi     (id-token: write; a tag only, and only when the repository variable PYPI_ENABLED == 'true')
 #                              `uv publish --trusted-publishing always` exchanges the job's OIDC token with PyPI; no
 #                              registry token exists anywhere.
@@ -129,12 +136,18 @@ jobs:
         working-directory: release-files
         run: sha256sum --check --strict SHA256SUMS
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        id: provenance
         with: { subject-path: "release-files/dist/*" }
+      - name: Keep the signed provenance as a file for the release (JSON lines, one bundle per line)
+        env: { BUNDLE: "${{ steps.provenance.outputs.bundle-path }}" }
+        run: |
+          python -I scripts/release-publish.py write-provenance --bundle "$BUNDLE" --dir release-files/dist \
+            --out-dir release-files/provenance
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: "release-files/dist/*"
           sbom-path: "release-files/sbom/cloud-crawler-core.cdx.json"
-      - name: Verify the attestations (provenance, then SBOM) came from this workflow, this ref and this commit
+      - name: Verify the provenance file and the attestations came from this workflow, this ref and this commit
         env:
           GH_TOKEN: "${{ github.token }}"
           GH_REPO: "${{ github.repository }}"
@@ -143,7 +156,14 @@ jobs:
           SOURCE_DIGEST: "${{ github.sha }}"
         run: |
           python -I scripts/release-publish.py verify-attestations --dir release-files/dist --repo "$GH_REPO" \
-            --workflow "$WORKFLOW_FILE" --source-ref "$SOURCE_REF" --source-digest "$SOURCE_DIGEST"
+            --workflow "$WORKFLOW_FILE" --source-ref "$SOURCE_REF" --source-digest "$SOURCE_DIGEST" \
+            --provenance-dir release-files/provenance
+      # last, so that "Re-run failed jobs" never meets an artifact of this name from the failed attempt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cloud-crawler-core-provenance
+          path: release-files/provenance/
+          if-no-files-found: error
   release:
     needs: [build, attest]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -162,7 +182,10 @@ jobs:
       - name: The files are the ones that were built
         working-directory: release-files
         run: sha256sum --check --strict SHA256SUMS
-      - name: Verify the attestations of the downloaded files (this workflow, this tag, this commit)
+      # the provenance file is not in the sha256 list (it is made after the list); the next step checks its signature
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with: { name: cloud-crawler-core-provenance, path: release-files/provenance }
+      - name: Verify the provenance file and the attestations of the downloaded files (this workflow, tag and commit)
         env:
           GH_TOKEN: "${{ github.token }}"
           GH_REPO: "${{ github.repository }}"
@@ -171,8 +194,9 @@ jobs:
           SOURCE_DIGEST: "${{ github.sha }}"
         run: |
           python -I scripts/release-publish.py verify-attestations --dir release-files/dist --repo "$GH_REPO" \
-            --workflow "$WORKFLOW_FILE" --source-ref "$SOURCE_REF" --source-digest "$SOURCE_DIGEST"
-      - name: Create the release as a draft, check it holds exactly the three files, then make it public
+            --workflow "$WORKFLOW_FILE" --source-ref "$SOURCE_REF" --source-digest "$SOURCE_DIGEST" \
+            --provenance-dir release-files/provenance
+      - name: Create the release as a draft, check it holds exactly the four files, then make it public
         env: { GH_TOKEN: "${{ github.token }}", GH_REPO: "${{ github.repository }}", TAG: "${{ github.ref_name }}" }
         run: python -I scripts/release-publish.py publish --repo "$GH_REPO" --tag "$TAG" --dir release-files
   pypi:

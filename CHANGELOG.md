@@ -13,6 +13,39 @@ once, merge one before rebasing the next.
 
 ### Added
 
+- **The next release carries its build provenance as a file, `cloud_crawler_core-<version>.intoto.jsonl`** (the
+  owner's decision of 2026-11-23, "apps: files"; the design is the website's proposed decision record 0044,
+  "Signed releases"). Build provenance is a signed record of which workflow, tag and commit built a file. Every release
+  already had it, but only in GitHub's attestation store.
+  [OpenSSF Scorecard's Signed-Releases check](https://github.com/ossf/scorecard/blob/main/docs/checks.md#signed-releases)
+  (a public score for how a project protects its releases) reads only the names of the files attached to the five
+  newest releases and counts one ending `.intoto.jsonl` as provenance, so `v0.1.0` and `v0.1.1` score 0. From the next
+  release the same proof is attached beside the wheel, and anyone can check a download against it without asking
+  GitHub's store: `gh attestation verify <wheel> --repo saulpatinojr/HCW-CloudCrawler_App --bundle <file>.intoto.jsonl`
+  (the README, "Releasing the engine", has the full line). What changed:
+  - `publish-core.yml`, `attest` job: the provenance step has an id, and its `bundle-path` output (read from the
+    action's `action.yml` and `src/main.ts` at the pinned commit: one Sigstore bundle, written as one line, that names
+    both the wheel and the sdist) is written to the file by `scripts/release-publish.py write-provenance`. The file is
+    JSON lines: one bundle per line, each holding the signed statement, the signing certificate and the public log
+    entry. The job then verifies both files against it and keeps it as the workflow artifact
+    `cloud-crawler-core-provenance`, because this job cannot write to the repository. The job's permissions are
+    unchanged (`contents: read`, `id-token: write`, `attestations: write`).
+  - `publish-core.yml`, `release` job: downloads that artifact, verifies the wheel and the sdist against the file
+    again with the same strict flags (this workflow file, this tag, this commit), and attaches it. Its permissions are
+    unchanged (`contents: write`, `attestations: read`). `build` and `pypi` are untouched.
+  - `scripts/release-publish.py`: a release now holds exactly **four** files. Every earlier guard is kept (a draft
+    first, the exact list of names, the upload state and sha256 of each file, an existing release never touched, no
+    file ever replaced). New refusals, each before anything is created: no provenance file, a file under another name
+    or for another version, a second file beside it, a file that is not a provenance statement (for example the SBOM
+    attestation), and a file that does not name the wheel and the sdist by their sha256.
+  - Keyless: no stored key and no new secret. The signing certificate comes from the job's short-lived sign-in token.
+  - A dry run with "attest" ticked now also writes and verifies the file, so the one part it cannot rehearse is the
+    attaching itself. Nothing was published and no workflow was started for this change; the first release proves it.
+  - AddOn note (for `HCW-CloudCrawler_AddOn`'s `docs/whats-new-upstream.md`, not edited from here): from the first
+    release after `v0.1.1` the release carries a fourth asset, `cloud_crawler_core-<version>.intoto.jsonl`. The
+    wheel's name, address and contents do not change, and `core-update.yml` reads only the release's tag and fetches
+    the wheel by its exact address, so nothing in the AddOn has to change.
+
 - **Decision record 0007: this repository and the `cloud-crawler-core` engine are MIT-licensed** (the owner's
   decision of 2026-11-14). A decision record writes down a choice and why it was made. The licence was already MIT
   (`LICENSE`, both `pyproject.toml` files and `NOTICE` say so), but unlike the sibling repositories no record said it.

@@ -1,14 +1,19 @@
-"""The two steps of publish-core.yml that talk to GitHub about a release, kept here so that tests can run them.
+"""The steps of publish-core.yml that decide what a release holds, kept here so that tests can run them.
 
 Why this exists: a `v*` tag cannot be moved or deleted once it is pushed, so the steps that decide whether the files
 are really the attested ones, and whether a release becomes public, must not be untested shell inside a workflow.
 Stdlib only; it calls the GitHub CLI (`gh`), authenticated by `GH_TOKEN` in the workflow. Run it with `python -I`.
 
+* `write-provenance`: copy the provenance that `actions/attest` just signed (its `bundle-path` output, a Sigstore
+  bundle: the signed statement, the signing certificate and the public log entry) into the file the release
+  attaches, `cloud_crawler_core-<version>.intoto.jsonl`, one bundle per line. It is written only when every bundle
+  is a provenance statement that names the wheel and the sdist by their sha256.
 * `verify-attestations`: for the wheel and the sdist in a directory, `gh attestation verify` the provenance and the
   CycloneDX SBOM, and insist that the attestation came from THIS workflow file, on THIS ref, at THIS commit. Without
   those three, "some attestation for this file exists in this repository" would be enough, and a dry-run attestation
-  of the same bytes would satisfy a real release.
-* `publish`: create the GitHub Release as a DRAFT with the three files, re-read the draft by its id until the three
+  of the same bytes would satisfy a real release. With `--provenance-dir`, the provenance file is verified the same
+  way (`--bundle`), so the file a release attaches is proven to work before anything is published.
+* `publish`: create the GitHub Release as a DRAFT with the four files, re-read the draft by its id until the four
   files are `uploaded` (bounded), check that it holds exactly those files (names, upload state and, where GitHub
   reports one, the sha256; when it reports none, say so), and only then make it public. A release that
   already exists for the tag (draft or public) is never touched, and no file is ever replaced: the job stops and
@@ -21,6 +26,8 @@ Exit 0 on success, 1 with one line per problem (GitHub `::error::` annotations u
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import os
@@ -32,6 +39,10 @@ from pathlib import Path
 PROVENANCE = "https://slsa.dev/provenance/v1"
 SBOM = "https://cyclonedx.org/bom"
 SBOM_NAME = "cloud-crawler-core.cdx.json"
+# the name OpenSSF Scorecard's Signed-Releases check reads as provenance; the file is JSON lines, one Sigstore bundle
+# per line, and `gh attestation verify <file> --bundle <this file>` checks a download against it
+PROVENANCE_SUFFIX = ".intoto.jsonl"
+PROVENANCE_DIR = "provenance"
 LOOKUP_TRIES = 10
 LOOKUP_PAUSE_SECONDS = 3.0
 # a draft that is listed can still show stale or missing assets, or assets in state `open` (GitHub's states are
@@ -113,11 +124,121 @@ def verify_command(
     ]
 
 
-def verify_attestations(directory: Path, repo: str, workflow: str, source_ref: str, source_digest: str) -> list[str]:
+def dist_files(directory: Path) -> tuple[list[Path], str | None]:
+    """(the wheel and the sdist in `directory`, or the reason it does not hold exactly those two)."""
     files = sorted([*directory.glob("*.whl"), *directory.glob("*.tar.gz")])
     if len(files) != 2 or {f.suffix for f in files} != {".whl", ".gz"}:
-        return [f"{directory} must hold exactly one wheel and one sdist to verify, found {[f.name for f in files]}"]
+        return [], f"{directory} must hold exactly one wheel and one sdist to verify, found {[f.name for f in files]}"
+    return files, None
+
+
+def provenance_name(version: str) -> str:
+    return f"cloud_crawler_core-{version}{PROVENANCE_SUFFIX}"
+
+
+def version_of(files: list[Path]) -> str:
+    """The version in the sdist's name (`cloud_crawler_core-<version>.tar.gz`)."""
+    sdist = next(f for f in files if f.name.endswith(".tar.gz"))
+    return sdist.name.removesuffix(".tar.gz").rpartition("-")[2]
+
+
+def provenance_problems(text: str, files: list[Path]) -> tuple[list[dict], list[str]]:
+    """(the bundles in `text`, what is wrong with them as the provenance of `files`).
+
+    Nothing is trusted here that `gh attestation verify --bundle` does not check again with the signature; this is the
+    offline part: the text is one or more Sigstore bundles, each a signed provenance statement, and between them they
+    name every file by its sha256. It stops a file of the wrong kind (the SBOM attestation, an empty file, an error
+    page) from being attached under the provenance name."""
+    try:
+        values = decode_json_values(text)
+    except ValueError as error:
+        return [], [f"the provenance is not JSON: {error}"]
+    if not values:
+        return [], ["the provenance is empty"]
+    bundles: list[dict] = []
+    named: set[str] = set()
+    for number, value in enumerate(values, start=1):
+        envelope = value.get("dsseEnvelope") if isinstance(value, dict) else None
+        if not isinstance(envelope, dict) or not isinstance(envelope.get("payload"), str):
+            return [], [f"provenance bundle {number} is not a Sigstore bundle with a signed statement (dsseEnvelope)"]
+        try:
+            statement = json.loads(base64.b64decode(envelope["payload"], validate=True))
+        except (ValueError, binascii.Error) as error:
+            return [], [f"the statement in provenance bundle {number} cannot be read: {error}"]
+        if not isinstance(statement, dict) or statement.get("predicateType") != PROVENANCE:
+            kind = statement.get("predicateType") if isinstance(statement, dict) else None
+            return [], [f"provenance bundle {number} is a {kind!r} statement, expected {PROVENANCE}"]
+        for subject in statement.get("subject") or []:
+            digest = subject.get("digest") if isinstance(subject, dict) else None
+            if isinstance(digest, dict) and isinstance(digest.get("sha256"), str):
+                named.add(digest["sha256"])
+        bundles.append(value)
+    missing = [f.name for f in files if sha256_of(f) not in named]
+    if missing:
+        return bundles, [f"the provenance does not name {', '.join(missing)} by its sha256"]
+    return bundles, []
+
+
+def write_provenance(bundle: Path, directory: Path, out_dir: Path) -> list[str]:
+    """Write the attest step's bundle as `<out_dir>/cloud_crawler_core-<version>.intoto.jsonl`, one bundle a line."""
+    files, reason = dist_files(directory)
+    if reason:
+        return [reason]
+    if not bundle.is_file():
+        return [f"the attest step left no bundle at {bundle} (its bundle-path output), so there is no provenance file"]
+    bundles, problems = provenance_problems(bundle.read_bytes().decode("utf-8", errors="replace"), files)
+    if problems:
+        return problems
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / provenance_name(version_of(files))
+    if target.exists():
+        return [f"{target} already exists; a provenance file is never replaced"]
+    lines = [json.dumps(b, separators=(",", ":"), ensure_ascii=False) for b in bundles]
+    target.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    print(f"wrote {target}: {len(bundles)} provenance bundle(s) naming {', '.join(f.name for f in files)}")
+    return []
+
+
+def provenance_file(provenance_dir: Path, files: list[Path]) -> tuple[Path | None, list[str]]:
+    """(the provenance file for `files` in `provenance_dir`, or why it is not usable): the one file, by its name."""
+    expected = provenance_name(version_of(files))
+    present = sorted(p.name for p in provenance_dir.iterdir()) if provenance_dir.is_dir() else []
+    if present != [expected]:
+        return None, [f"{provenance_dir} must hold exactly {expected} (the provenance file), found {present}"]
+    path = provenance_dir / expected
+    _, problems = provenance_problems(path.read_bytes().decode("utf-8", errors="replace"), files)
+    return (None, [f"{expected}: {p}" for p in problems]) if problems else (path, [])
+
+
+def verify_attestations(
+    directory: Path,
+    repo: str,
+    workflow: str,
+    source_ref: str,
+    source_digest: str,
+    provenance_dir: Path | None = None,
+) -> list[str]:
+    files, reason = dist_files(directory)
+    if reason:
+        return [reason]
     problems: list[str] = []
+    if provenance_dir is not None:
+        # the file the release attaches: checked from the file alone (`--bundle`), with the same strict flags. It is
+        # not waited for, because nothing has to arrive: the proof is on disk
+        bundle, problems = provenance_file(provenance_dir, files)
+        for path in files if bundle else []:
+            command = verify_command(path, repo, PROVENANCE, workflow, source_ref, source_digest)
+            result = gh(*command, "--bundle", str(bundle))
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip().splitlines()
+                problems.append(
+                    f"{bundle.name} does not verify {path.name} as built by {workflow} on {source_ref} at "
+                    f"{source_digest[:12]}: {detail[-1] if detail else 'gh failed'}"
+                )
+            else:
+                print(f"verified {path.name} against the file {bundle.name}")
+        if problems:
+            return problems
     budget = VERIFY_BUDGET_SECONDS
     for path in files:
         for predicate in (PROVENANCE, SBOM):
@@ -157,6 +278,7 @@ def expected_files(directory: Path, tag: str) -> dict[str, Path]:
         wheel: directory / "dist" / wheel,
         sdist: directory / "dist" / sdist,
         SBOM_NAME: directory / "sbom" / SBOM_NAME,
+        provenance_name(version): directory / PROVENANCE_DIR / provenance_name(version),
     }
 
 
@@ -203,7 +325,7 @@ def assess(release: dict, expected: dict[str, Path], *, draft: bool) -> tuple[li
     for name in sorted(set(expected) - set(assets)):
         waiting.append(f"asset {name} is not on the release")
     for name in sorted(set(assets) - set(expected)):
-        wrong.append(f"asset {name} is on the release but is not one of the three expected files")
+        wrong.append(f"asset {name} is on the release but is not one of the four expected files")
     for name, asset in assets.items():
         if name not in expected:
             continue
@@ -239,7 +361,7 @@ def get_release(repo: str, release_id: int) -> tuple[dict | None, str | None]:
 
 
 def settle_draft(repo: str, release_id: int, expected: dict[str, Path]) -> tuple[dict | None, list[str]]:
-    """Re-read the draft by its id until its three files are `uploaded` (at most SETTLE_TRIES reads).
+    """Re-read the draft by its id until its four files are `uploaded` (at most SETTLE_TRIES reads).
 
     The listing can show a draft before its files are complete, so the listing's copy is never trusted. A problem that
     time cannot fix (a stray file, a different digest) ends the wait at once."""
@@ -267,6 +389,10 @@ def publish(repo: str, tag: str, directory: Path) -> list[str]:
     missing = [str(p) for p in (notes, *expected.values()) if not p.is_file() or p.stat().st_size == 0]
     if missing:
         return [f"missing or empty, nothing was published: {', '.join(missing)}"]
+    dist = [path for name, path in expected.items() if name.endswith((".whl", ".tar.gz"))]
+    _, problems = provenance_file(directory / PROVENANCE_DIR, dist)
+    if problems:
+        return [f"nothing was published: {problem}" for problem in problems]
 
     existing, reason = releases_for_tag(repo, tag)
     if reason:
@@ -338,13 +464,24 @@ def main(argv: list[str] | None = None) -> int:
     verify.add_argument("--workflow", required=True, help="path of the workflow file that must have signed")
     verify.add_argument("--source-ref", required=True, help="the ref the attestation must name (refs/tags/vX.Y.Z)")
     verify.add_argument("--source-digest", required=True, help="the commit the attestation must name")
+    verify.add_argument(
+        "--provenance-dir", type=Path, help="also verify the files against the .intoto.jsonl file in this directory"
+    )
+    write = commands.add_parser("write-provenance", help="write the attest step's bundle as the .intoto.jsonl file")
+    write.add_argument("--bundle", type=Path, required=True, help="the attest step's bundle-path output")
+    write.add_argument("--dir", type=Path, required=True, help="the directory holding the wheel and the sdist")
+    write.add_argument("--out-dir", type=Path, required=True, help="where the .intoto.jsonl file is written")
     release = commands.add_parser("publish", help="create the release as a draft, check it, then make it public")
     release.add_argument("--tag", required=True)
     release.add_argument("--repo", required=True, help="owner/name")
     release.add_argument("--dir", type=Path, required=True, help="the downloaded release-files artifact")
     args = parser.parse_args(argv)
     if args.command == "verify-attestations":
-        problems = verify_attestations(args.dir, args.repo, args.workflow, args.source_ref, args.source_digest)
+        problems = verify_attestations(
+            args.dir, args.repo, args.workflow, args.source_ref, args.source_digest, args.provenance_dir
+        )
+    elif args.command == "write-provenance":
+        problems = write_provenance(args.bundle, args.dir, args.out_dir)
     else:
         problems = publish(args.repo, args.tag, args.dir)
     report(problems)

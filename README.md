@@ -448,12 +448,17 @@ order, and the release becomes public only as the very last step of the third:
 2. `attest` (may sign, cannot write to the repository): attests provenance and the
    SBOM for the wheel and the sdist, then verifies the attestations. A new attestation can take a
    while to become readable, so the check retries with growing pauses for up to about four minutes in total.
+   It also saves the signed provenance as a file, `cloud_crawler_core-<version>.intoto.jsonl` (the provenance file:
+   proof of which workflow, tag and commit built the wheel and the sdist, one signed record per line), checks that
+   the file verifies both downloads, and keeps it as the workflow artifact `cloud-crawler-core-provenance`. Nothing
+   is signed with a stored key: the job's short-lived sign-in token gets a one-time signing certificate.
 3. `release` (the only job that can write to the repository, tag runs only):
-   re-checks the checksums, verifies the attestations again, creates the release as a
-   **draft** (not visible to the public) with the three files, re-reads the draft by its id until all three files are
+   re-checks the checksums, verifies the attestations and the provenance file again, creates the release as a
+   **draft** (not visible to the public) with the four files, re-reads the draft by its id until all four files are
    `uploaded` (GitHub's states are `uploaded` and `open`; it waits up to about two minutes), checks that the draft
    holds exactly `cloud_crawler_core-<version>-py3-none-any.whl`,
-   `cloud_crawler_core-<version>.tar.gz` and `cloud-crawler-core.cdx.json`, and only then
+   `cloud_crawler_core-<version>.tar.gz`, `cloud-crawler-core.cdx.json` and
+   `cloud_crawler_core-<version>.intoto.jsonl`, and only then
    makes it public. A failure before that last step leaves no public release.
 4. `pypi` (tag runs only): nothing is published to PyPI unless the repository
    variable `PYPI_ENABLED` is `true` (it is not set). No container image is published
@@ -473,6 +478,17 @@ The attestation check names the exact workflow file, the exact tag and the exact
 commit (`gh attestation verify ... --signer-workflow --source-ref --source-digest`).
 Without those, an attestation made by an earlier dry run of the same bytes would also
 pass.
+
+**The provenance file on the release (from the first release after `v0.1.1`).** The same provenance that GitHub keeps
+in its attestation store is also attached to the release as `cloud_crawler_core-<version>.intoto.jsonl`, so the proof
+sits next to the download and can be checked without asking GitHub for it. The name matters:
+[OpenSSF Scorecard's Signed-Releases check](https://github.com/ossf/scorecard/blob/main/docs/checks.md#signed-releases)
+(a public score for how a project protects its releases) reads only the names of the files on the five newest
+releases, and counts a file ending `.intoto.jsonl` as provenance. Proof kept only in GitHub's store does not count,
+which is why `v0.1.0` and `v0.1.1` score 0; the score is an average, so it rises with each new release. The file is
+not in the sha256 list (it is made after the list): it is covered by its own signature, which the `attest` and
+`release` jobs both check, and it holds only the provenance, not the SBOM attestation. The SBOM file
+`cloud-crawler-core.cdx.json` is not named in it either; only the wheel and the sdist are.
 
 **The check that cannot be skipped in a pull request** is
 `scripts/check-release-version.py`. On every pull request it fails when the engine's
@@ -509,7 +525,8 @@ in one pull request (`make lock` updates `uv.lock`).
    Open [the Actions page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/actions/workflows/publish-core.yml)
    and wait until **both** `build` and `attest` are green on the commit you are going to tag. The summary shows the release
    notes a tag would publish and the sha256 of the wheel, the sdist and the SBOM; the three files are kept in the artifact
-   `cloud-crawler-core-release-files`. The `attest` job is why this step is required: the attestation steps are the one
+   `cloud-crawler-core-release-files`, and the provenance file the dry run made (it names `refs/heads/main`, so it is
+   a rehearsal and is never attached to a release) in the artifact `cloud-crawler-core-provenance`. The `attest` job is why this step is required: the attestation steps are the one
    part nothing else can rehearse, and if they fail on the real tag, that tag is lost for good. The price is two permanent
    entries in the public signing log that name `refs/heads/main`; they cannot be mistaken for a release, because the tag
    run only accepts attestations for `refs/tags/v0.1.1`. Without `-f attest=true` only `build` runs, which is a
@@ -540,11 +557,24 @@ in one pull request (`make lock` updates `uv.lock`).
 4. **Check the result.** The run for the tag is green (all of `build`, `attest` and `release`), and
    [the release page](https://github.com/saulpatinojr/HCW-CloudCrawler_App/releases/tag/v0.1.1)
    lists three assets: `cloud_crawler_core-0.1.1-py3-none-any.whl`,
-   `cloud_crawler_core-0.1.1.tar.gz` and `cloud-crawler-core.cdx.json`. To check where a wheel came from:
+   `cloud_crawler_core-0.1.1.tar.gz` and `cloud-crawler-core.cdx.json`. A release made after `v0.1.1` lists a fourth,
+   the provenance file `cloud_crawler_core-<version>.intoto.jsonl`. To check where a wheel came from:
 
    ```bash
    gh attestation verify cloud_crawler_core-0.1.1-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.1
    ```
+
+   For a release that carries the provenance file, download the wheel and the `.intoto.jsonl` file into one folder and
+   check the wheel against the file (bash or PowerShell; it prints `Verification succeeded!`, and an error that starts
+   `Error: verifying with issuer` means the wheel is not the one that was built). The file name below is the one the
+   next release, `v0.1.2`, will carry; change the version to the release you downloaded:
+
+   ```bash
+   gh attestation verify cloud_crawler_core-0.1.2-py3-none-any.whl --repo saulpatinojr/HCW-CloudCrawler_App --bundle cloud_crawler_core-0.1.2.intoto.jsonl --signer-workflow saulpatinojr/HCW-CloudCrawler_App/.github/workflows/publish-core.yml --source-ref refs/tags/v0.1.2
+   ```
+
+   **Not run** in that form: no release carries the file yet. What was run is recorded in `VALIDATION.md`
+   ("The provenance file on the release").
 
 5. **Adopt it in the AddOn (first time only).** See the next section: the AddOn's `core-update.yml` does **not** pick up
    the first release by itself.
@@ -616,12 +646,14 @@ with the id of the tag run from `gh run list --repo saulpatinojr/HCW-CloudCrawle
 
 ```bash
 gh run download RUN --repo saulpatinojr/HCW-CloudCrawler_App -n cloud-crawler-core-release-files -D release-files
+gh run download RUN --repo saulpatinojr/HCW-CloudCrawler_App -n cloud-crawler-core-provenance -D release-files/provenance
 (cd release-files && sha256sum --check --strict SHA256SUMS)
-python scripts/release-publish.py verify-attestations --dir release-files/dist --repo saulpatinojr/HCW-CloudCrawler_App --workflow .github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0 --source-digest "$(git rev-parse 'v0.1.0^{commit}')"
+python scripts/release-publish.py verify-attestations --dir release-files/dist --repo saulpatinojr/HCW-CloudCrawler_App --workflow .github/workflows/publish-core.yml --source-ref refs/tags/v0.1.0 --source-digest "$(git rev-parse 'v0.1.0^{commit}')" --provenance-dir release-files/provenance
 python scripts/release-publish.py publish --repo saulpatinojr/HCW-CloudCrawler_App --tag v0.1.0 --dir release-files
 ```
 
-The last command is the same code the workflow runs: draft first, the three files checked, then public. If GitHub answers
+The second download is the provenance file, which exists only for a tag run made after `v0.1.1` (the script refuses to
+publish without it). The last command is the same code the workflow runs: draft first, the four files checked, then public. If GitHub answers
 with a message about workflows, run `gh auth refresh -s workflow` and try again. Nothing here changes the tag.
 
 **Last resort: lifting the tag rule.** That a `v*` tag cannot be moved or deleted is a *repository rule* (the ruleset
